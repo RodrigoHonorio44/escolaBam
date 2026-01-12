@@ -1,0 +1,15 @@
+@import "tailwindcss";
+
+/* Força o Tailwind a ler todos os arquivos JSX na pasta src */
+@source "../src/**/*.{js,jsx,ts,tsx}";
+
+@theme {
+  --color-primary: #1E3A8A;
+  --color-secondary: #64748B;
+  --color-urgente: #DC2626;
+}
+
+/* Teste visual forçado: Se o fundo não ficar cinza, o CSS não carregou */
+body {
+  background-color: #f3f4f6;
+}
