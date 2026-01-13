@@ -5,30 +5,30 @@ import {
   ClipboardList, 
   Stethoscope,
   ChevronRight,
-  LogOut
+  LogOut,
+  Users,
+  Briefcase
 } from "lucide-react";
 
 // 🏠 Importações das páginas
 import HomeEnfermeiro from "../../pages/HomeEnfermeiro"; 
 import AtendimentoEnfermagem from "../../pages/atendimento/AtendimentoEnfermagem";
 import HistoricoAtendimentos from "../../pages/atendimento/HistoricoAtendimentos";
-import CadastroPaciente from "../../pages/cadastros/CadastroPaciente";
 import FormCadastroAluno from "../../pages/cadastros/FormCadastroAluno";
 import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionario";
 
 const DashboardEnfermeiro = ({ user, onLogout }) => {
-  // Estado que controla qual tela aparece
   const [activeTab, setActiveTab] = useState("home");
+  // Estado para controlar qual sub-aba de cadastro está ativa
+  const [cadastroMode, setCadastroMode] = useState("aluno"); 
 
-  // Itens do Menu Lateral
   const menuItems = [
     { id: "home", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { id: "atendimento", label: "Atendimento", icon: <Stethoscope size={18} /> },
-    { id: "cadastro_paciente", label: "Pacientes", icon: <UserPlus size={18} /> },
+    { id: "pacientes", label: "Pacientes", icon: <UserPlus size={18} /> }, 
     { id: "historico", label: "Histórico", icon: <ClipboardList size={18} /> },
   ];
 
-  // Gerenciador de Roteamento Interno
   const renderContent = () => {
     switch (activeTab) {
       case "home":
@@ -37,52 +37,66 @@ const DashboardEnfermeiro = ({ user, onLogout }) => {
             user={user} 
             onIniciarAtendimento={() => setActiveTab("atendimento")} 
             onAbrirHistorico={() => setActiveTab("historico")}
-            onAbrirCadastros={() => setActiveTab("cadastro_paciente")}
+            onAbrirCadastros={() => setActiveTab("pacientes")}
           />
         );
       case "atendimento":
         return <AtendimentoEnfermagem user={user} onVoltar={() => setActiveTab("home")} />;
-      
       case "historico":
         return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       
-      case "cadastro_paciente":
+      case "pacientes":
         return (
-          <CadastroPaciente 
-            onVoltar={() => setActiveTab("home")} 
-            onNovoAluno={() => setActiveTab("novo_aluno")}
-            onNovoFuncionario={() => setActiveTab("novo_funcionario")}
-          />
+          <div className="space-y-6">
+            {/* Seletor Dinâmico de Formulário */}
+            <div className="flex bg-slate-200/50 p-1.5 rounded-[20px] max-w-[400px] mx-auto mb-8">
+              <button 
+                onClick={() => setCadastroMode("aluno")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] font-black text-[10px] uppercase tracking-widest transition-all ${
+                  cadastroMode === "aluno" 
+                  ? "bg-blue-600 text-white shadow-lg" 
+                  : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Users size={14} /> Aluno
+              </button>
+              <button 
+                onClick={() => setCadastroMode("funcionario")}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] font-black text-[10px] uppercase tracking-widest transition-all ${
+                  cadastroMode === "funcionario" 
+                  ? "bg-slate-900 text-white shadow-lg" 
+                  : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <Briefcase size={14} /> Funcionário
+              </button>
+            </div>
+
+            {/* Renderização Condicional do Form */}
+            {cadastroMode === "aluno" ? (
+              <FormCadastroAluno onVoltar={() => setActiveTab("home")} />
+            ) : (
+              <FormCadastroFuncionario onVoltar={() => setActiveTab("home")} />
+            )}
+          </div>
         );
       
-      case "novo_aluno":
-        return <FormCadastroAluno onVoltar={() => setActiveTab("cadastro_paciente")} />;
-      
-      case "novo_funcionario":
-        return <FormCadastroFuncionario onVoltar={() => setActiveTab("cadastro_paciente")} />;
-      
       default:
-        // Caso ocorra erro de ID, volta para a home em vez de dar tela branca
         return <HomeEnfermeiro user={user} onIniciarAtendimento={() => setActiveTab("atendimento")} />;
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[999] flex h-screen w-screen bg-slate-50 overflow-hidden text-slate-900">
-      
-      {/* --- SIDEBAR --- */}
+    <div className="fixed inset-0 z-[999] flex h-screen w-screen bg-slate-50 overflow-hidden text-slate-900 font-sans">
       <aside className="w-64 bg-[#0A1629] text-white flex flex-col shrink-0 shadow-2xl border-r border-white/5">
         <div className="p-6 flex-1">
-          {/* Logo RodhonMedSys */}
           <div className="flex items-center gap-3 mb-10 px-2">
             <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-500/20">
               <Stethoscope size={20} className="text-white" />
             </div>
             <div className="flex flex-col">
                <span className="text-[10px] font-bold tracking-[0.3em] text-blue-400 uppercase leading-none">Rodhon</span>
-               <h2 className="text-xl font-black tracking-tighter uppercase italic">
-                Med<span className="text-blue-500">Sys</span>
-              </h2>
+               <h2 className="text-xl font-black tracking-tighter uppercase italic">Med<span className="text-blue-500">Sys</span></h2>
             </div>
           </div>
 
@@ -109,31 +123,24 @@ const DashboardEnfermeiro = ({ user, onLogout }) => {
           </nav>
         </div>
 
-        {/* Rodapé: Usuário e Sair */}
+        {/* Rodapé do Usuário */}
         <div className="p-4 border-t border-white/5 bg-black/20">
           <div className="flex items-center gap-3 mb-4 px-2">
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-black text-white text-xs italic shadow-inner shrink-0">
               {user?.displayName?.substring(0, 2).toUpperCase() || "EF"}
             </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="text-[10px] font-black uppercase italic truncate text-white">
-                {user?.displayName || "Enfermeiro"}
-              </span>
-              <span className="text-[8px] text-blue-400 font-bold uppercase tracking-widest">Módulo Enfermagem</span>
+            <div className="flex flex-col overflow-hidden text-white uppercase italic font-black text-[10px]">
+              <span className="truncate">{user?.displayName || "Enfermeiro"}</span>
+              <span className="text-[8px] text-blue-400 tracking-widest not-italic">Módulo Enfermagem</span>
             </div>
           </div>
-
-          <button 
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all group"
-          >
+          <button onClick={onLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-400 hover:bg-red-500/10 transition-all group">
             <LogOut size={18} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] italic">Sair do Sistema</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Sair</span>
           </button>
         </div>
       </aside>
 
-      {/* --- ÁREA DE CONTEÚDO --- */}
       <main className="flex-1 overflow-y-auto bg-slate-50 relative">
         <div className="p-8 md:p-12 max-w-7xl mx-auto">
           {renderContent()}

@@ -16,10 +16,13 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
 
-    try {
+    // Definimos a lógica de login dentro de uma função para o toast.promise
+    const loginLogic = async () => {
+      // 1. Autenticação no Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
+      // 2. Busca de Perfil no Firestore
       const userRef = doc(db, "usuarios", user.uid); 
       const userSnap = await getDoc(userRef);
       const userData = userSnap.exists() ? userSnap.data() : null;
@@ -27,6 +30,7 @@ const Login = () => {
       const sessionId = Date.now().toString();
       localStorage.setItem("current_session_id", sessionId);
 
+      // 3. Verificação de Usuário Root (Rodrigo)
       if (user.email === "rodrigohono21@gmail.com") {
         if (!userData) {
           await setDoc(userRef, {
@@ -46,35 +50,61 @@ const Login = () => {
           });
         }
         navigate('/');
-        return;
+        return "ACESSO MESTRE LIBERADO"; 
       }
 
-      if (!userData) throw new Error("Acesso negado: Perfil não encontrado.");
+      // 4. Verificações de Segurança para Usuários Comuns
+      if (!userData) throw new Error("PERFIL NÃO LOCALIZADO NO SISTEMA");
       
       const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
-      if (isBloqueado) throw new Error("Acesso suspenso pelo administrador.");
+      if (isBloqueado) throw new Error("ACESSO SUSPENSO PELO ADMINISTRADOR");
 
+      // 5. Atualização de Sessão
       await updateDoc(userRef, {
         currentSessionId: sessionId,
         ultimoLogin: serverTimestamp()
       });
 
       navigate('/');
-      
-    } catch (err) {
-      toast.error(err.message || "Erro ao entrar no sistema.");
-    } finally {
-      setLoading(false);
-    }
+      return `BEM-VINDO, ${userData.nome.split(' ')[0].toUpperCase()}`;
+    };
+
+    // Execução do Toast com Promessa
+    toast.promise(loginLogic(), {
+      loading: 'VERIFICANDO CREDENCIAIS...',
+      success: (data) => data,
+      error: (err) => {
+        // Tradução de Erros do Firebase
+        if (err.code === 'auth/invalid-credential') return "E-MAIL OU SENHA INCORRETOS";
+        if (err.code === 'auth/user-not-found') return "USUÁRIO NÃO CADASTRADO";
+        if (err.code === 'auth/too-many-requests') return "ACESSO BLOQUEADO TEMPORARIAMENTE";
+        return err.message.toUpperCase();
+      },
+    }, {
+      style: {
+        minWidth: '250px',
+        background: '#0f172a',
+        color: '#fff',
+        borderRadius: '12px',
+        fontSize: '11px',
+        fontWeight: '900',
+        letterSpacing: '1px',
+        border: '1px solid rgba(255,255,255,0.1)'
+      },
+      success: {
+        iconTheme: { primary: '#3b82f6', secondary: '#fff' },
+      },
+    });
+
+    setLoading(false);
   };
 
   return (
     <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
-      <Toaster position="top-right" />
+      <Toaster position="top-center" />
       
-      {/* LADO ESQUERDO: Branding e Impacto */}
+      {/* LADO ESQUERDO: Branding */}
       <div className="hidden lg:flex lg:w-[55%] bg-[#0f172a] relative p-16 flex-col justify-between overflow-hidden">
-        {/* Elementos Decorativos (Blur) */}
         <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-blue-600/20 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-100 h-100 bg-indigo-600/20 rounded-full blur-[100px]"></div>
 
@@ -111,15 +141,14 @@ const Login = () => {
         </div>
       </div>
 
-      {/* LADO DIREITO: Login Form */}
+      {/* LADO DIREITO: Form */}
       <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 relative">
         <div className="w-full max-w-105 space-y-10">
-          
           <div className="text-center lg:text-left">
             <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">
               RODHON<span className="text-blue-600">SYSTEM</span>
             </h2>
-            <p className="text-slate-500 font-bold text-sm">Bem-vindo. Identifique-se para continuar.</p>
+            <p className="text-slate-500 font-bold text-sm">Identifique-se para continuar.</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -156,7 +185,7 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 disabled:shadow-none"
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300"
             >
               {loading ? <Loader2 className="animate-spin" size={20} /> : 'Acessar Painel'}
             </button>
