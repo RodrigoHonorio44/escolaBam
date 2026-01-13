@@ -75,8 +75,8 @@ const Login = () => {
       {/* LADO ESQUERDO: Branding e Impacto */}
       <div className="hidden lg:flex lg:w-[55%] bg-[#0f172a] relative p-16 flex-col justify-between overflow-hidden">
         {/* Elementos Decorativos (Blur) */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-600/20 rounded-full blur-[100px]"></div>
+        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-blue-600/20 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-100 h-100 bg-indigo-600/20 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10">
           <div className="flex items-center gap-3 mb-16">
@@ -84,14 +84,14 @@ const Login = () => {
               <GraduationCap className="text-white" size={32} />
             </div>
             <div>
-              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic">Anísio Teixeira</h3>
+              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic"> E.M.  Anísio Teixeira</h3>
               <p className="text-blue-400 text-[10px] font-black tracking-[0.3em] uppercase">Unidade Escolar</p>
             </div>
           </div>
 
           <h1 className="text-8xl font-black text-white leading-[0.9] tracking-tighter italic uppercase">
             SISTEMA <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">DE SAÚDE</span>
+            <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-indigo-400">DE SAÚDE</span>
           </h1>
           <p className="mt-6 text-slate-400 max-w-md font-medium text-lg leading-relaxed">
             Plataforma inteligente para gestão de prontuários e atendimentos em unidades escolares.
@@ -113,7 +113,7 @@ const Login = () => {
 
       {/* LADO DIREITO: Login Form */}
       <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 relative">
-        <div className="w-full max-w-[420px] space-y-10">
+        <div className="w-full max-w-105 space-y-10">
           
           <div className="text-center lg:text-left">
             <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">

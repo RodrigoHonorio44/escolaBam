@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { db } from '../firebase/firebaseConfig'; // Nome padronizado
+import { db } from '../../firebase/firebaseConfig'; // Nome padronizado
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { Link } from 'react-router-dom'; // Importado para navegação
 import { 
   Users, ShieldCheck, Activity, Calendar, 

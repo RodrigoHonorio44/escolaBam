@@ -30,14 +30,8 @@ export const AuthProvider = ({ children }) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
             
-            // 🚨 VALIDAÇÃO DE SESSÃO ÚNICA (KICK-OUT)
+            // 🚨 1. VALIDAÇÃO DE SESSÃO ÚNICA (KICK-OUT)
             const localSession = localStorage.getItem("current_session_id");
-            
-            // Só expulsa se:
-            // 1. O banco tiver um ID de sessão
-            // 2. Eu tiver um ID local (já terminei o login)
-            // 3. Os IDs forem diferentes
-            // 4. O usuário NÃO for o Rodrigo (Root) - Isso evita você se auto-expulsar nos testes
             if (
               data.currentSessionId && 
               localSession && 
@@ -46,16 +40,19 @@ export const AuthProvider = ({ children }) => {
             ) {
               console.warn("⚠️ Sessão encerrada: login detectado em outro local.");
               handleLogout();
-              return; // Para a execução aqui
+              return;
             }
 
+            // 🚨 2. ATUALIZAÇÃO DE DADOS (INCLUINDO STATUS)
+            // Quando o status mudar para 'bloqueado', o userData mudará.
+            // O PrivateRoute no App.js fará o redirecionamento.
             setUserData({ 
               uid: currentUser.uid, 
               email: currentUser.email, 
               ...data 
             });
+
           } else {
-            // Caso o documento ainda não exista (ex: erro no cadastro)
             setUserData({ 
               uid: currentUser.uid, 
               email: currentUser.email, 

@@ -11,8 +11,10 @@ import TrocarSenha from './components/auth/TrocarSenha';
 import Bloqueado from './pages/Bloqueado'; 
 import Expirado from './pages/Expirado';
 
+// 🚨 ATUALIZADO: Importando o DashboardMain do novo caminho em components
+import DashboardMain from './components/dashboards/DashboardMain';
+
 // Páginas de Negócio
-import Dashboard from './pages/Dashboard';
 import CadastrarUsuario from './pages/cadastros/CadastrarUsuario';
 import GestaoUsuarios from './pages/Admin/GestaoUsuarios';
 import ControleLicencas from './pages/Admin/ControleLicencas';
@@ -31,16 +33,12 @@ const PrivateRoute = ({ children }) => {
     );
   }
   
-  // 1. Não logado
   if (!user) return <Navigate to="/login" replace />;
 
-  // 2. Trava de Primeiro Acesso (🚨 CORRIGIDO AQUI)
-  // Se o campo primeiroAcesso for true, ele não deixa ver nada e manda pra TrocarSenha
   if (user?.primeiroAcesso === true) {
     return <TrocarSenha />;
   }
 
-  // 3. Trava de Bloqueio
   const estaBloqueado = 
     user?.status === "bloqueado" || 
     user?.licencaStatus === "bloqueado" || 
@@ -50,7 +48,6 @@ const PrivateRoute = ({ children }) => {
     return <Navigate to="/bloqueado" replace />;
   }
 
-  // 4. Trava de Expiração de Tempo
   if (user?.role !== 'root' && user?.dataExpiracao) {
     const hoje = new Date();
     const dataExp = new Date(user.dataExpiracao);
@@ -72,8 +69,6 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/bloqueado" element={<Bloqueado />} />
           <Route path="/expirado" element={<Expirado />} />
-          
-          {/* 🚨 NOVA ROTA: Adicionada explicitamente caso queira navegar via URL */}
           <Route path="/trocar-senha" element={<TrocarSenha />} />
           
           {/* ROTAS PROTEGIDAS */}
@@ -86,7 +81,9 @@ function App() {
             }
           >
             <Route element={<Layout />}>
-              <Route index element={<Dashboard />} />
+              {/* 🚨 ATUALIZADO: Usando o DashboardMain como index */}
+              <Route index element={<DashboardMain />} />
+              
               <Route path="cadastrar-usuario" element={<CadastrarUsuario />} />
               <Route path="usuarios" element={<GestaoUsuarios />} />
               <Route path="licencas" element={<ControleLicencas />} /> 
