@@ -18,60 +18,73 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
+    let isMounted = true;
     let unsubscribeDoc = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      if (unsubscribeDoc) unsubscribeDoc();
+      // Limpa listener anterior se existir
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = null;
+      }
 
       if (currentUser) {
-        const userRef = doc(db, "usuarios", currentUser.uid);
-        
-        unsubscribeDoc = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            
-            // 🚨 1. VALIDAÇÃO DE SESSÃO ÚNICA (KICK-OUT)
-            const localSession = localStorage.getItem("current_session_id");
-            if (
-              data.currentSessionId && 
-              localSession && 
-              data.currentSessionId !== localSession &&
-              currentUser.email !== "rodrigohono21@gmail.com"
-            ) {
-              console.warn("⚠️ Sessão encerrada: login detectado em outro local.");
-              handleLogout();
-              return;
+        try {
+          const userRef = doc(db, "usuarios", currentUser.uid);
+          
+          unsubscribeDoc = onSnapshot(userRef, {
+            next: (docSnap) => {
+              if (!isMounted) return;
+
+              if (docSnap.exists()) {
+                const data = docSnap.data();
+                const localSession = localStorage.getItem("current_session_id");
+
+                // Validação de Sessão Única
+                if (
+                  data.currentSessionId && 
+                  localSession && 
+                  data.currentSessionId !== localSession &&
+                  currentUser.email !== "rodrigohono21@gmail.com"
+                ) {
+                  handleLogout();
+                  return;
+                }
+
+                setUserData({ 
+                  uid: currentUser.uid, 
+                  email: currentUser.email, 
+                  ...data 
+                });
+              } else {
+                setUserData({ 
+                  uid: currentUser.uid, 
+                  email: currentUser.email, 
+                  role: 'visitante' 
+                });
+              }
+              setLoading(false);
+            },
+            error: (error) => {
+              console.error("Erro no Firestore Snapshot:", error);
+              if (isMounted) setLoading(false);
             }
-
-            // 🚨 2. ATUALIZAÇÃO DE DADOS (INCLUINDO STATUS)
-            // Quando o status mudar para 'bloqueado', o userData mudará.
-            // O PrivateRoute no App.js fará o redirecionamento.
-            setUserData({ 
-              uid: currentUser.uid, 
-              email: currentUser.email, 
-              ...data 
-            });
-
-          } else {
-            setUserData({ 
-              uid: currentUser.uid, 
-              email: currentUser.email, 
-              role: 'visitante' 
-            });
-          }
-          setLoading(false);
-        }, (error) => {
-          console.error("Erro ao monitorar usuário:", error);
-          setLoading(false);
-        });
+          });
+        } catch (err) {
+          console.error("Erro ao configurar snapshot:", err);
+          if (isMounted) setLoading(false);
+        }
 
       } else {
-        setUserData(null);
-        setLoading(false);
+        if (isMounted) {
+          setUserData(null);
+          setLoading(false);
+        }
       }
     });
 
     return () => {
+      isMounted = false;
       unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
     };
