@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-// 🚨 CAMINHO DO FIREBASE: Ajustado conforme solicitado
 import { db } from '../firebase/firebaseConfig'; 
-import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy, limit } from 'firebase/firestore';
 import { 
   Users, 
   Clock, 
@@ -9,22 +8,21 @@ import {
   PlusCircle, 
   Search,
   ArrowUpRight,
-  Calendar
+  Calendar,
+  Activity
 } from 'lucide-react';
 
-const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirCadastros }) => {
+const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirCadastros, onAbrirPastaDigital }) => {
   const [metricas, setMetricas] = useState({ atendidoshoje: 0, totalPacientes: 0 });
   const [ultimosAtendimentos, setUltimosAtendimentos] = useState([]);
 
   useEffect(() => {
-    if (!user?.escolaId) return;
-
+    // Filtro para o dia atual (YYYY-MM-DD)
     const hoje = new Date().toISOString().split('T')[0];
     
-    // Query para atendimentos do dia
+    // 1. Escuta em tempo real dos atendimentos de HOJE
     const qAtendimentos = query(
-      collection(db, "atendimentos"),
-      where("escolaId", "==", user.escolaId),
+      collection(db, "atendimentos_enfermagem"),
       where("dataAtendimento", "==", hoje),
       orderBy("createdAt", "desc")
     );
@@ -34,14 +32,11 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
       setUltimosAtendimentos(snapshot.docs.map(doc => ({ 
         id: doc.id, 
         ...doc.data() 
-      })).slice(0, 5));
+      })).slice(0, 5)); // Pega os 5 mais recentes
     });
 
-    // Query para total de pacientes
-    const qPacientes = query(
-      collection(db, "pacientes"), 
-      where("escolaId", "==", user.escolaId)
-    );
+    // 2. Escuta em tempo real do total de alunos
+    const qPacientes = query(collection(db, "alunos"));
 
     const unsubPacientes = onSnapshot(qPacientes, (snapshot) => {
       setMetricas(prev => ({ ...prev, totalPacientes: snapshot.size }));
@@ -51,10 +46,9 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
       unsubAtendimentos();
       unsubPacientes();
     };
-  }, [user?.escolaId]);
+  }, []);
 
   return (
-    /* A div principal agora é apenas um container de espaço, sem sidebars ou menus laterais */
     <div className="space-y-8 animate-in fade-in duration-700">
       
       {/* HEADER DE BOAS-VINDAS */}
@@ -64,7 +58,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
             Dashboard
           </h1>
           <p className="text-slate-500 font-medium">
-            Unidade: <span className="text-blue-600 font-bold">{user?.escolaId || 'Carregando...'}</span>
+            Olá, <span className="text-blue-600 font-bold">{user?.displayName || 'Enfermeiro'}</span>
           </p>
         </div>
         
@@ -87,9 +81,11 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
         {/* Card 1: Iniciar Atendimento */}
         <button 
           onClick={onIniciarAtendimento}
-          className="bg-slate-900 group hover:bg-blue-600 p-8 rounded-[40px] text-white transition-all shadow-xl shadow-slate-200 flex flex-col justify-between h-48 relative overflow-hidden text-left"
+          className="bg-[#0F172A] group hover:bg-blue-600 p-8 rounded-[40px] text-white transition-all shadow-xl flex flex-col justify-between h-48 relative overflow-hidden text-left"
         >
-          <PlusCircle className="text-blue-400 group-hover:text-white transition-colors" size={40} />
+          <div className="bg-blue-600 group-hover:bg-white p-3 rounded-2xl w-fit transition-colors">
+            <PlusCircle className="text-white group-hover:text-blue-600 transition-colors" size={24} />
+          </div>
           <div className="relative z-10">
             <h3 className="text-2xl font-black leading-none uppercase italic">Iniciar<br/>Atendimento</h3>
             <p className="text-slate-400 group-hover:text-blue-100 text-[10px] font-bold uppercase mt-2 tracking-widest">Triagem rápida</p>
@@ -109,7 +105,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
             <span className="text-[10px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full uppercase italic">Hoje</span>
           </div>
           <div>
-            <h3 className="text-5xl font-black text-slate-800 italic">{metricas.atendidoshoje}</h3>
+            <h3 className="text-5xl font-black text-slate-800 italic tracking-tighter">{metricas.atendidoshoje}</h3>
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Atendimentos Concluídos</p>
           </div>
         </div>
@@ -123,7 +119,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
             <Users size={24} />
           </div>
           <div>
-            <h3 className="text-5xl font-black text-slate-800 italic">{metricas.totalPacientes}</h3>
+            <h3 className="text-5xl font-black text-slate-800 italic tracking-tighter">{metricas.totalPacientes}</h3>
             <p className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Alunos na Unidade</p>
           </div>
         </div>
@@ -131,33 +127,34 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
 
       {/* SEÇÃO INFERIOR */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Lista de Registros */}
+        
+        {/* Lista de Registros Recentes */}
         <div className="lg:col-span-2 bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-slate-50 flex justify-between items-center">
             <h4 className="font-black text-slate-800 uppercase italic flex items-center gap-2">
-              <Clock className="text-blue-600" size={20} /> Últimos Registros
+              <Clock className="text-blue-600" size={20} /> Últimos Atendimentos
             </h4>
           </div>
           <div className="divide-y divide-slate-50">
             {ultimosAtendimentos.length > 0 ? ultimosAtendimentos.map(atend => (
               <div key={atend.id} className="p-6 hover:bg-slate-50/50 transition-all flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-500 text-xs text-center uppercase">
-                    {atend.pacienteNome?.substring(0, 2) || "??"}
+                  <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-blue-600">
+                    <Activity size={20} />
                   </div>
                   <div>
-                    <p className="font-bold text-slate-700 uppercase text-sm">{atend.pacienteNome}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase truncate max-w-[200px]">
-                      {atend.queixaPrincipal || 'Sem queixa registrada'}
+                    <p className="font-bold text-slate-700 uppercase text-sm">{atend.nomePaciente}</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase truncate max-w-[250px]">
+                      {atend.relatoCurto || 'Atendimento de rotina'}
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className={`text-xs font-black italic ${atend.classificacao === 'Urgente' ? 'text-red-500' : 'text-emerald-500'}`}>
-                    {atend.statusAtendimento || 'Finalizado'}
+                  <p className={`text-xs font-black italic ${atend.encaminhadoHospital === 'sim' ? 'text-orange-500' : 'text-emerald-500'}`}>
+                    {atend.encaminhadoHospital === 'sim' ? 'ENCAMINHADO' : 'FINALIZADO'}
                   </p>
                   <p className="text-[9px] text-slate-400 font-bold uppercase">
-                    {atend.horaAtendimento || 'Agora'}
+                    {atend.horario}
                   </p>
                 </div>
               </div>
@@ -169,25 +166,29 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
           </div>
         </div>
 
-        {/* Card de Busca Lateral */}
-        <div className="bg-slate-900 p-8 rounded-[40px] shadow-xl flex flex-col justify-between">
+        {/* Card de Busca Unificada (Pasta Digital) */}
+        <div className="bg-[#0A1629] p-8 rounded-[40px] shadow-xl flex flex-col justify-between">
           <div>
-            <h4 className="text-white font-black uppercase italic mb-2">Busca de Prontuário</h4>
-            <p className="text-slate-400 text-xs mb-6 font-medium leading-relaxed">Localize o histórico clínico pelo nome ou CPF.</p>
-            <div className="relative">
-              <Search className="absolute left-4 top-4 text-slate-500" size={18} />
-              <input 
-                type="text" 
-                placeholder="BUSCAR PACIENTE..."
-                className="w-full bg-slate-800 border-none rounded-2xl p-4 pl-12 text-white font-bold text-xs outline-none focus:ring-2 focus:ring-blue-600 transition-all"
-              />
-            </div>
+            <h4 className="text-white font-black uppercase italic mb-2 flex items-center gap-2">
+              <Search size={18} className="text-blue-500" /> Pasta Digital
+            </h4>
+            <p className="text-slate-400 text-xs mb-6 font-medium leading-relaxed">
+              Acesse o histórico clínico completo de qualquer aluno ou funcionário.
+            </p>
+            
+            <button 
+              onClick={onAbrirPastaDigital}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black uppercase italic text-xs py-4 rounded-2xl transition-all shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2"
+            >
+              Abrir Consulta <ArrowUpRight size={14} />
+            </button>
           </div>
-          <div className="mt-8 p-4 bg-blue-600/10 border border-blue-500/20 rounded-2xl">
-            <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mb-1">Status do Servidor</p>
+
+          <div className="mt-8 p-4 bg-white/5 border border-white/10 rounded-2xl">
+            <p className="text-blue-400 text-[10px] font-black uppercase tracking-widest mb-1">Integridade do Sistema</p>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-              <p className="text-white/70 text-[11px]">Banco de dados sincronizado</p>
+              <p className="text-white/70 text-[11px] font-medium">Sincronizado com Cloud</p>
             </div>
           </div>
         </div>

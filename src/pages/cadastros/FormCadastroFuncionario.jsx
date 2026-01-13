@@ -5,7 +5,7 @@ import {
   Briefcase, 
   Save, 
   Calendar, 
-  User, // Ícone universal para substituir o VenusMars
+  User, 
   Loader2, 
   CreditCard, 
   ShieldAlert, 
@@ -25,8 +25,15 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
 
   const onSubmit = async (data) => {
     const saveAction = async () => {
+      // --- LÓGICA DE UNIFICAÇÃO ---
+      const nomeLimpo = data.nome.trim();
+      const nomeParaBusca = nomeLimpo.toUpperCase();
+
       const payload = {
         ...data,
+        nome: nomeLimpo,
+        nomeBusca: nomeParaBusca, // CHAVE DE LIGAÇÃO PARA O PRONTUÁRIO
+        tipoPerfil: 'funcionario', // Identificador de categoria
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
         dataCadastro: new Date().toISOString()
       };

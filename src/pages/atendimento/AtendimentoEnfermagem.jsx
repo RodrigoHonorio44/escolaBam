@@ -11,9 +11,8 @@ import toast, { Toaster } from 'react-hot-toast';
 const AtendimentoEnfermagem = ({ user, onVoltar }) => {
   const [loading, setLoading] = useState(false);
   const [tipoAtendimento, setTipoAtendimento] = useState('local');
-  const [perfilPaciente, setPerfilPaciente] = useState('aluno'); // 'aluno' ou 'funcionario'
+  const [perfilPaciente, setPerfilPaciente] = useState('aluno');
 
-  // Função para gerar número do BAM aleatório
   const gerarBAM = () => {
     const ano = new Date().getFullYear();
     const aleatorio = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -43,7 +42,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
 
   const [formData, setFormData] = useState(getInitialState());
 
-  // Atualiza o horário automaticamente enquanto o nome estiver vazio
   useEffect(() => {
     if (!loading && formData.nomePaciente === '') {
       const timer = setInterval(() => {
@@ -62,9 +60,18 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
     const loadingToast = toast.loading("Registrando atendimento...");
 
     try {
+      // --- LÓGICA DE UNIFICAÇÃO PARA A PASTA DIGITAL ---
+      const nomeLimpo = formData.nomePaciente.trim();
+      const nomeBusca = nomeLimpo.toUpperCase(); 
+
       const payload = {
         ...formData,
+        nomePaciente: nomeLimpo,
+        nomePacienteBusca: nomeBusca, // CHAVE PARA O HISTÓRICO UNIFICADO
         perfilPaciente,
+        // Campo resumo para a "Timeline" da pasta
+        relatoCurto: tipoAtendimento === 'local' ? formData.motivoAtendimento : formData.motivoEncaminhamento,
+        dataAtendimento: formData.data, // Usado para ordenar o histórico
         encaminhadoHospital: tipoAtendimento === 'hospital' ? 'sim' : 'não',
         statusAtendimento: tipoAtendimento === 'hospital' ? 'Encaminhado/Em Aberto' : 'Finalizado',
         escola: "E. M. Anísio Teixeira", 
@@ -80,7 +87,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
       
       toast.success(`BAM ${formData.bam} salvo com sucesso!`, { id: loadingToast });
       
-      // Reseta e gera novo número automaticamente
       setFormData(getInitialState());
       setTipoAtendimento('local');
     } catch (error) {
@@ -132,9 +138,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
           </div>
         </div>
 
-        {/* SELETORES: QUEM E ONDE */}
+        {/* SELETORES */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
-          {/* Perfil do Paciente */}
           <div className="bg-slate-100 p-2 rounded-[25px] flex shadow-inner border border-slate-200">
             <button type="button" onClick={() => setPerfilPaciente('aluno')} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all ${perfilPaciente === 'aluno' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-400'}`}>
               <GraduationCap size={18} /> ALUNO
@@ -144,7 +149,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
             </button>
           </div>
 
-          {/* Tipo de Atendimento */}
           <div className="bg-slate-100 p-2 rounded-[25px] flex shadow-inner border border-slate-200">
             <button type="button" onClick={() => setTipoAtendimento('local')} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all ${tipoAtendimento === 'local' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>
               <Home size={18} /> LOCAL
@@ -204,7 +208,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
           </div>
         </div>
 
-        {/* ÁREA CLÍNICA DINÂMICA */}
+        {/* ÁREA CLÍNICA */}
         {tipoAtendimento === 'local' ? (
           <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
             <div className="flex items-center gap-2 text-slate-800 border-b border-slate-100 pb-4">
@@ -263,8 +267,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
           </div>
         )}
 
+        {/* ASSINATURA E SALVAR */}
         <div className="pt-10 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
-          {/* ASSINATURA AUTOMÁTICA DO FIREBASE */}
           <div className="flex items-center gap-3 bg-slate-50 px-6 py-4 rounded-2xl border border-slate-200 w-full md:w-auto">
             <UserCheck size={20} className="text-blue-600" />
             <div className="flex flex-col">

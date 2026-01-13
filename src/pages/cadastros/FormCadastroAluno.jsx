@@ -20,9 +20,15 @@ const FormCadastroAluno = ({ onVoltar }) => {
 
   const onSubmit = async (data) => {
     const saveAction = async () => {
+      // --- LÓGICA DE UNIFICAÇÃO ---
+      const nomeLimpo = data.nome.trim();
+      const nomeParaBusca = nomeLimpo.toUpperCase();
+
       await addDoc(collection(db, "alunos"), {
         ...data,
-        nomeUpperCase: data.nome.toUpperCase(),
+        nome: nomeLimpo,
+        nomeBusca: nomeParaBusca, // CHAVE DE LIGAÇÃO PARA A PASTA DIGITAL
+        tipoPerfil: 'aluno',      // Identificador de categoria
         dataCadastro: new Date().toISOString(),
         createdAt: serverTimestamp(),
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus
@@ -47,9 +53,10 @@ const FormCadastroAluno = ({ onVoltar }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200">
+    <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200 animate-in fade-in duration-500">
       <Toaster position="top-center" />
       
+      {/* Header */}
       <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-6">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-3 rounded-2xl shadow-lg text-white">
@@ -62,7 +69,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
         </div>
         <button 
           onClick={onVoltar}
-          className="text-[10px] font-black text-slate-400 hover:text-slate-600 uppercase tracking-widest transition-colors"
+          className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors flex items-center gap-2"
         >
           [ Voltar ]
         </button>
@@ -75,7 +82,8 @@ const FormCadastroAluno = ({ onVoltar }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
           <input 
             {...register("nome")} 
-            className="w-full px-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            placeholder="Nome completo do aluno"
             required 
           />
         </div>
@@ -88,7 +96,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
           <input 
             type="number"
             {...register("idade")} 
-            className="w-full px-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             placeholder="Ex: 12"
             required 
           />
@@ -101,7 +109,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
           </label>
           <select 
             {...register("sexo")} 
-            className="w-full px-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm appearance-none cursor-pointer"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm cursor-pointer"
             required
           >
             <option value="">Selecione...</option>
@@ -130,7 +138,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
             {...register("cartaoSus")} 
             disabled={naoSabeSus}
             placeholder={naoSabeSus ? "NÃO INFORMADO" : "000 0000 0000 0000"}
-            className={`w-full px-4 py-3.5 border-2 rounded-2xl outline-none font-bold transition-all shadow-sm ${
+            className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all shadow-sm ${
               naoSabeSus 
               ? "bg-slate-100 border-slate-200 text-slate-400 italic" 
               : "bg-slate-50 border-transparent text-slate-700 focus:border-blue-600 focus:bg-white"
@@ -145,7 +153,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
           </label>
           <input 
             {...register("turma")} 
-            className="w-full px-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             placeholder="Ex: 6º Ano A"
             required 
           />
@@ -156,7 +164,8 @@ const FormCadastroAluno = ({ onVoltar }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Responsável</label>
           <input 
             {...register("responsavel")} 
-            className="w-full px-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            placeholder="Pai, Mãe ou Tutor"
             required 
           />
         </div>
@@ -168,7 +177,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
           </label>
           <input 
             {...register("contato")} 
-            className="w-full px-4 py-3.5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             placeholder="(00) 00000-0000" 
           />
         </div>
@@ -180,18 +189,18 @@ const FormCadastroAluno = ({ onVoltar }) => {
           </label>
           <textarea 
             {...register("historicoMedico")} 
-            className="w-full px-4 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm resize-none" 
+            className="w-full px-5 py-5 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm resize-none" 
             rows="3"
-            placeholder="Alergias, remédios, restrições..."
+            placeholder="Descreva alergias, remédios de uso contínuo ou restrições importantes..."
           ></textarea>
         </div>
 
         <button 
           type="submit" 
           disabled={isSubmitting}
-          className="md:col-span-2 mt-4 bg-blue-600 text-white py-5 rounded-[20px] font-black uppercase tracking-[0.2em] italic text-xs shadow-xl hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300"
+          className="md:col-span-2 mt-4 bg-blue-600 text-white py-5 rounded-[22px] font-black uppercase tracking-[0.2em] italic text-xs shadow-xl hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300"
         >
-          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Salvar Aluno</>}
+          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Finalizar Cadastro Aluno</>}
         </button>
       </form>
     </div>

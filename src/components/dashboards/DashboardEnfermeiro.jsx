@@ -7,7 +7,8 @@ import {
   ChevronRight,
   LogOut,
   Users,
-  Briefcase
+  Briefcase,
+  FolderSearch // Novo ícone para a Pasta Digital
 } from "lucide-react";
 
 // 🏠 Importações das páginas
@@ -16,17 +17,18 @@ import AtendimentoEnfermagem from "../../pages/atendimento/AtendimentoEnfermagem
 import HistoricoAtendimentos from "../../pages/atendimento/HistoricoAtendimentos";
 import FormCadastroAluno from "../../pages/cadastros/FormCadastroAluno";
 import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionario";
+import PastaDigital from "../PastaDigital"; // Certifique-se de que o caminho está correto
 
 const DashboardEnfermeiro = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState("home");
-  // Estado para controlar qual sub-aba de cadastro está ativa
   const [cadastroMode, setCadastroMode] = useState("aluno"); 
 
   const menuItems = [
     { id: "home", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { id: "atendimento", label: "Atendimento", icon: <Stethoscope size={18} /> },
-    { id: "pacientes", label: "Pacientes", icon: <UserPlus size={18} /> }, 
-    { id: "historico", label: "Histórico", icon: <ClipboardList size={18} /> },
+    { id: "pasta_digital", label: "Pasta Digital", icon: <FolderSearch size={18} /> }, // Nova aba
+    { id: "pacientes", label: "Cadastros", icon: <UserPlus size={18} /> }, 
+    { id: "historico", label: "BAMs Antigos", icon: <ClipboardList size={18} /> },
   ];
 
   const renderContent = () => {
@@ -38,18 +40,24 @@ const DashboardEnfermeiro = ({ user, onLogout }) => {
             onIniciarAtendimento={() => setActiveTab("atendimento")} 
             onAbrirHistorico={() => setActiveTab("historico")}
             onAbrirCadastros={() => setActiveTab("pacientes")}
+            onAbrirPastaDigital={() => setActiveTab("pasta_digital")} // Link para a nova função
           />
         );
+      
       case "atendimento":
         return <AtendimentoEnfermagem user={user} onVoltar={() => setActiveTab("home")} />;
+      
+      case "pasta_digital":
+        return <PastaDigital onVoltar={() => setActiveTab("home")} />;
+      
       case "historico":
         return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       
       case "pacientes":
         return (
-          <div className="space-y-6">
+          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Seletor Dinâmico de Formulário */}
-            <div className="flex bg-slate-200/50 p-1.5 rounded-[20px] max-w-[400px] mx-auto mb-8">
+            <div className="flex bg-slate-200/50 p-1.5 rounded-[20px] max-w-[400px] mx-auto mb-8 shadow-inner">
               <button 
                 onClick={() => setCadastroMode("aluno")}
                 className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-[15px] font-black text-[10px] uppercase tracking-widest transition-all ${
@@ -88,6 +96,7 @@ const DashboardEnfermeiro = ({ user, onLogout }) => {
 
   return (
     <div className="fixed inset-0 z-[999] flex h-screen w-screen bg-slate-50 overflow-hidden text-slate-900 font-sans">
+      {/* SIDEBAR LATERA */}
       <aside className="w-64 bg-[#0A1629] text-white flex flex-col shrink-0 shadow-2xl border-r border-white/5">
         <div className="p-6 flex-1">
           <div className="flex items-center gap-3 mb-10 px-2">
@@ -141,7 +150,8 @@ const DashboardEnfermeiro = ({ user, onLogout }) => {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-slate-50 relative">
+      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+      <main className="flex-1 overflow-y-auto bg-slate-50 relative scroll-smooth">
         <div className="p-8 md:p-12 max-w-7xl mx-auto">
           {renderContent()}
         </div>
