@@ -246,6 +246,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
                 <select required className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none" value={formData.destinoHospital} onChange={(e) => setFormData({...formData, destinoHospital: e.target.value})}>
                   <option value="">Selecione...</option>
                   <option value="Hospital Conde Modesto Leal">Hospital Conde Modesto Leal</option>
+                  <option value="Hospital Municipal Dr. Ernesto Che Guevara">Hospital Municipal Dr. Ernesto Che Guevara</option>
                   <option value="UPA Inoã">UPA Inoã</option>
                   <option value="UPA Santa Rita">UPA Santa Rita</option>
                   <option value="Samu">Samu / Resgate</option>

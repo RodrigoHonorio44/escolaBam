@@ -3,26 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/firebaseConfig'; 
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Lock, Mail, Loader2, GraduationCap, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Loader2, GraduationCap, ShieldCheck, X, MessageSquare, LifeBuoy } from 'lucide-react'; // Adicionei ícones aqui
 import toast, { Toaster } from 'react-hot-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSupport, setShowSupport] = useState(false); // Estado para o Modal
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
-    // Definimos a lógica de login dentro de uma função para o toast.promise
     const loginLogic = async () => {
-      // 1. Autenticação no Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      // 2. Busca de Perfil no Firestore
       const userRef = doc(db, "usuarios", user.uid); 
       const userSnap = await getDoc(userRef);
       const userData = userSnap.exists() ? userSnap.data() : null;
@@ -30,7 +28,6 @@ const Login = () => {
       const sessionId = Date.now().toString();
       localStorage.setItem("current_session_id", sessionId);
 
-      // 3. Verificação de Usuário Root (Rodrigo)
       if (user.email === "rodrigohono21@gmail.com") {
         if (!userData) {
           await setDoc(userRef, {
@@ -53,13 +50,11 @@ const Login = () => {
         return "ACESSO MESTRE LIBERADO"; 
       }
 
-      // 4. Verificações de Segurança para Usuários Comuns
       if (!userData) throw new Error("PERFIL NÃO LOCALIZADO NO SISTEMA");
       
       const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
       if (isBloqueado) throw new Error("ACESSO SUSPENSO PELO ADMINISTRADOR");
 
-      // 5. Atualização de Sessão
       await updateDoc(userRef, {
         currentSessionId: sessionId,
         ultimoLogin: serverTimestamp()
@@ -69,12 +64,10 @@ const Login = () => {
       return `BEM-VINDO, ${userData.nome.split(' ')[0].toUpperCase()}`;
     };
 
-    // Execução do Toast com Promessa
     toast.promise(loginLogic(), {
       loading: 'VERIFICANDO CREDENCIAIS...',
       success: (data) => data,
       error: (err) => {
-        // Tradução de Erros do Firebase
         if (err.code === 'auth/invalid-credential') return "E-MAIL OU SENHA INCORRETOS";
         if (err.code === 'auth/user-not-found') return "USUÁRIO NÃO CADASTRADO";
         if (err.code === 'auth/too-many-requests') return "ACESSO BLOQUEADO TEMPORARIAMENTE";
@@ -100,8 +93,48 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
+    <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans relative">
       <Toaster position="top-center" />
+
+      {/* MODAL DE SUPORTE TÉCNICO */}
+      {showSupport && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl relative">
+            <button 
+              onClick={() => setShowSupport(false)}
+              className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="p-10 text-center">
+              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-3 shadow-lg shadow-blue-600/20">
+                <LifeBuoy className="text-white" size={32} />
+              </div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter mb-2">Suporte Técnico</h3>
+              <p className="text-slate-500 text-sm font-medium mb-8">Escolha um canal para falar com o desenvolvedor do sistema.</p>
+
+              <div className="space-y-3">
+                <a 
+                  href="https://wa.me/5521975966330?text=Olá!%20Preciso%20de%20suporte%20no%20sistema%20Rodhon%20MedSys." 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:scale-[1.02] transition-transform shadow-lg shadow-green-500/20"
+                >
+                  <MessageSquare size={16} fill="currentColor" /> WhatsApp Direto
+                </a>
+
+                <a 
+                  href="mailto:rodrigohono21@gmail.com" 
+                  className="flex items-center justify-center gap-3 w-full bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors"
+                >
+                  <Mail size={16} /> rodrigohono21@gmail.com
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* LADO ESQUERDO: Branding */}
       <div className="hidden lg:flex lg:w-[55%] bg-[#0f172a] relative p-16 flex-col justify-between overflow-hidden">
@@ -194,7 +227,13 @@ const Login = () => {
           <div className="pt-10 border-t border-slate-100">
              <div className="flex justify-between items-center">
                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">© 2026 Rodhon Inc.</p>
-                <a href="#" className="text-[9px] text-blue-600 font-black uppercase tracking-widest hover:underline">Suporte Técnico</a>
+                {/* BOTÃO ATUALIZADO ABAIXO */}
+                <button 
+                  onClick={() => setShowSupport(true)} 
+                  className="text-[9px] text-blue-600 font-black uppercase tracking-widest hover:underline cursor-pointer"
+                >
+                  Suporte Técnico
+                </button>
              </div>
           </div>
         </div>

@@ -11,7 +11,7 @@ const Footer = () => {
             © {currentYear} <span className="text-blue-600">Rodhon</span> System
           </p>
           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter italic">
-            Gestão Integrada Hospitalar • Maricá, RJ
+            Gestão Integrada Escolar • Maricá, RJ
           </p>
         </div>
 
