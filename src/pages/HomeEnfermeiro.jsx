@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-// 🚨 CORRIGIDO: Caminho do Firebase para quando o arquivo está em src/pages
+// 🚨 CAMINHO DO FIREBASE: Ajustado conforme solicitado
 import { db } from '../firebase/firebaseConfig'; 
 import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { 
@@ -12,7 +12,6 @@ import {
   Calendar
 } from 'lucide-react';
 
-// Adicionei onAbrirHistorico e onAbrirCadastros nas props
 const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirCadastros }) => {
   const [metricas, setMetricas] = useState({ atendidoshoje: 0, totalPacientes: 0 });
   const [ultimosAtendimentos, setUltimosAtendimentos] = useState([]);
@@ -22,6 +21,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
 
     const hoje = new Date().toISOString().split('T')[0];
     
+    // Query para atendimentos do dia
     const qAtendimentos = query(
       collection(db, "atendimentos"),
       where("escolaId", "==", user.escolaId),
@@ -37,6 +37,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
       })).slice(0, 5));
     });
 
+    // Query para total de pacientes
     const qPacientes = query(
       collection(db, "pacientes"), 
       where("escolaId", "==", user.escolaId)
@@ -50,9 +51,10 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
       unsubAtendimentos();
       unsubPacientes();
     };
-  }, [user.escolaId]);
+  }, [user?.escolaId]);
 
   return (
+    /* A div principal agora é apenas um container de espaço, sem sidebars ou menus laterais */
     <div className="space-y-8 animate-in fade-in duration-700">
       
       {/* HEADER DE BOAS-VINDAS */}
@@ -62,7 +64,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
             Dashboard
           </h1>
           <p className="text-slate-500 font-medium">
-            Unidade: <span className="text-blue-600 font-bold">{user?.escolaId || 'Não Vinculada'}</span>
+            Unidade: <span className="text-blue-600 font-bold">{user?.escolaId || 'Carregando...'}</span>
           </p>
         </div>
         
@@ -95,13 +97,13 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
           <ArrowUpRight className="absolute top-8 right-8 text-white/10 group-hover:text-white/20 transition-all" size={80} />
         </button>
 
-        {/* Card 2: Atendidos Hoje - AGORA CLICÁVEL PARA HISTÓRICO */}
+        {/* Card 2: Atendidos Hoje */}
         <div 
           onClick={onAbrirHistorico}
-          className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm flex flex-col justify-between h-48 cursor-pointer hover:border-blue-300 transition-all"
+          className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm flex flex-col justify-between h-48 cursor-pointer hover:border-blue-300 group transition-all"
         >
           <div className="flex justify-between items-start">
-            <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl">
+            <div className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl group-hover:bg-emerald-600 group-hover:text-white transition-colors">
               <CheckCircle2 size={24} />
             </div>
             <span className="text-[10px] font-black text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full uppercase italic">Hoje</span>
@@ -112,12 +114,12 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
           </div>
         </div>
 
-        {/* Card 3: Alunos - AGORA CLICÁVEL PARA CADASTROS */}
+        {/* Card 3: Alunos */}
         <div 
           onClick={onAbrirCadastros}
-          className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm flex flex-col justify-between h-48 cursor-pointer hover:border-blue-300 transition-all"
+          className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm flex flex-col justify-between h-48 cursor-pointer hover:border-blue-300 group transition-all"
         >
-          <div className="bg-blue-50 text-blue-600 p-3 rounded-2xl w-fit">
+          <div className="bg-blue-50 text-blue-600 p-3 rounded-2xl w-fit group-hover:bg-blue-600 group-hover:text-white transition-colors">
             <Users size={24} />
           </div>
           <div>
@@ -129,6 +131,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
 
       {/* SEÇÃO INFERIOR */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Lista de Registros */}
         <div className="lg:col-span-2 bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-8 border-b border-slate-50 flex justify-between items-center">
             <h4 className="font-black text-slate-800 uppercase italic flex items-center gap-2">
@@ -139,8 +142,8 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
             {ultimosAtendimentos.length > 0 ? ultimosAtendimentos.map(atend => (
               <div key={atend.id} className="p-6 hover:bg-slate-50/50 transition-all flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-500 text-xs">
-                    {atend.pacienteNome?.substring(0, 2).toUpperCase()}
+                  <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-500 text-xs text-center uppercase">
+                    {atend.pacienteNome?.substring(0, 2) || "??"}
                   </div>
                   <div>
                     <p className="font-bold text-slate-700 uppercase text-sm">{atend.pacienteNome}</p>
@@ -166,6 +169,7 @@ const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirHistorico, onAbrirC
           </div>
         </div>
 
+        {/* Card de Busca Lateral */}
         <div className="bg-slate-900 p-8 rounded-[40px] shadow-xl flex flex-col justify-between">
           <div>
             <h4 className="text-white font-black uppercase italic mb-2">Busca de Prontuário</h4>
