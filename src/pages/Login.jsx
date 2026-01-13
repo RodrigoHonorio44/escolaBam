@@ -1,16 +1,16 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/firebaseConfig'; 
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Lock, Mail, Loader2, GraduationCap, ShieldCheck, X, MessageSquare, LifeBuoy } from 'lucide-react'; // Adicionei ícones aqui
+import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { collection, query, where, getDocs, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Lock, Mail, Loader2, GraduationCap, ShieldCheck, X, MessageSquare, LifeBuoy } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showSupport, setShowSupport] = useState(false); // Estado para o Modal
+  const [showSupport, setShowSupport] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -18,30 +18,33 @@ const Login = () => {
     setLoading(true);
 
     const loginLogic = async () => {
+      // 1. Autenticação no Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      const userRef = doc(db, "usuarios", user.uid); 
-      const userSnap = await getDoc(userRef);
-      const userData = userSnap.exists() ? userSnap.data() : null;
+      // 2. BUSCA DINÂMICA: Procurar na coleção 'usuarios' pelo campo 'email'
+      const usuariosRef = collection(db, "usuarios");
+      const q = query(usuariosRef, where("email", "==", user.email));
+      const querySnapshot = await getDocs(q);
 
       const sessionId = Date.now().toString();
       localStorage.setItem("current_session_id", sessionId);
 
+      // 3. Lógica para o Usuário Root (Rodrigo Honório)
       if (user.email === "rodrigohono21@gmail.com") {
-        if (!userData) {
-          await setDoc(userRef, {
+        const rootRef = doc(db, "usuarios", user.uid);
+        if (querySnapshot.empty) {
+          await setDoc(rootRef, {
             nome: "Rodrigo Honório",
             email: user.email,
             role: "root",
             status: "ativo",
             statusLicenca: "ativa",
             currentSessionId: sessionId,
-            dataExpiracao: "2039-12-31T23:59:59Z",
             ultimoLogin: serverTimestamp()
           });
         } else {
-          await updateDoc(userRef, {
+          await updateDoc(querySnapshot.docs[0].ref, {
             currentSessionId: sessionId,
             ultimoLogin: serverTimestamp()
           });
@@ -50,14 +53,27 @@ const Login = () => {
         return "ACESSO MESTRE LIBERADO"; 
       }
 
-      if (!userData) throw new Error("PERFIL NÃO LOCALIZADO NO SISTEMA");
-      
-      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
-      if (isBloqueado) throw new Error("ACESSO SUSPENSO PELO ADMINISTRADOR");
+      // 4. Verificação para usuários comuns (Ex: Rodrigo Simas)
+      if (querySnapshot.empty) {
+        await signOut(auth); // Desloga se não houver documento no Firestore
+        throw new Error("USUÁRIO NÃO CADASTRADO NO BANCO DE DADOS");
+      }
 
-      await updateDoc(userRef, {
+      const userDoc = querySnapshot.docs[0];
+      const userData = userDoc.data();
+
+      // 5. Verificação de Status
+      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
+      if (isBloqueado) {
+        await signOut(auth);
+        throw new Error("ACESSO SUSPENSO PELO ADMINISTRADOR");
+      }
+
+      // 6. Atualização de Sessão e Último Login
+      await updateDoc(userDoc.ref, {
         currentSessionId: sessionId,
-        ultimoLogin: serverTimestamp()
+        ultimoLogin: serverTimestamp(),
+        primeiroAcesso: false
       });
 
       navigate('/');
@@ -147,7 +163,7 @@ const Login = () => {
               <GraduationCap className="text-white" size={32} />
             </div>
             <div>
-              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic"> E.M.  Anísio Teixeira</h3>
+              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic"> E.M. Anísio Teixeira</h3>
               <p className="text-blue-400 text-[10px] font-black tracking-[0.3em] uppercase">Unidade Escolar</p>
             </div>
           </div>
@@ -227,7 +243,6 @@ const Login = () => {
           <div className="pt-10 border-t border-slate-100">
              <div className="flex justify-between items-center">
                 <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">© 2026 Rodhon Inc.</p>
-                {/* BOTÃO ATUALIZADO ABAIXO */}
                 <button 
                   onClick={() => setShowSupport(true)} 
                   className="text-[9px] text-blue-600 font-black uppercase tracking-widest hover:underline cursor-pointer"
