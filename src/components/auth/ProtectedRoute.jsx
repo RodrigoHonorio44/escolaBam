@@ -5,7 +5,6 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
-  // Enquanto o Firebase verifica se existe uma sessão ativa
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center">
@@ -14,16 +13,27 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
     );
   }
 
-  // Se não estiver logado, manda para o login
+  // 1. Se não estiver logado, manda para o login
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // Se a rota exige papéis específicos (ex: ['admin_saas']) e o user não tem
+  // 2. VERIFICAÇÃO DE BLOQUEIO (Adicione isto aqui!)
+  // Se o status for bloqueado, ele não pode ver NADA dentro das rotas protegidas
+  if (user.licencaStatus === 'bloqueado') {
+    return <Navigate to="/bloqueio" replace />;
+  }
+
+  // 3. Se o usuário precisa trocar a senha (Primeiro Acesso)
+  if (user.primeiroAcesso === true) {
+    // Se você tiver uma rota de troca de senha, mande para lá. 
+    // Caso contrário, o componente TrocarSenha será renderizado pelo App.jsx
+  }
+
+  // 4. Verificação de Papéis (Roles)
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // Se estiver tudo OK, renderiza a página
   return children;
 };

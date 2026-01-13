@@ -1,6 +1,6 @@
 import { auth, db } from '../firebase/firebaseConfig';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
 export const loginService = async (email, password) => {
   try {
@@ -10,26 +10,28 @@ export const loginService = async (email, password) => {
     // 1. Gera um ID de sessão único para este acesso
     const newSessionId = `sess_${Date.now()}`;
     
-    // 2. Salva no LocalStorage deste PC
-    localStorage.setItem('sessionId', newSessionId);
+    // 2. Salva no LocalStorage deste PC (Padrão para verificação de sessão única)
+    localStorage.setItem('current_session_id', newSessionId);
 
-    // 3. Atualiza no Firestore para "derrubar" outros PCs
-    const userRef = doc(db, "users", user.uid);
+    // 🚨 CORREÇÃO: Mudado de "users" para "usuarios"
+    const userRef = doc(db, "usuarios", user.uid);
     
-    // Verifica se o usuário existe no banco antes de atualizar
+    // 3. Verifica se o usuário existe no banco correto antes de atualizar
     const userSnap = await getDoc(userRef);
     if (!userSnap.exists()) {
-      throw new Error("Usuário não cadastrado no banco de dados.");
+      // Se ele não existir em 'usuarios', o login é bloqueado
+      throw new Error("Perfil não encontrado na base de dados 'usuarios'.");
     }
 
+    // 4. Atualiza no Firestore para o Dashboard e para o controle de sessão
     await updateDoc(userRef, {
       currentSessionId: newSessionId,
-      lastLogin: new Date().toISOString()
+      ultimoLogin: serverTimestamp() // Usando timestamp oficial do Firebase
     });
 
     return user;
   } catch (error) {
-    console.error("Erro no login:", error.message);
+    console.error("Erro no loginService:", error.message);
     throw error;
   }
 };

@@ -4,7 +4,8 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
-const firebaseConfig = {
+// ADICIONADO 'export' para que os outros serviços possam ler estas chaves
+export const firebaseConfig = {
   apiKey: "AIzaSyB5Ivo0ibsVjChKbcK4Ko02-JWcKNQhN48",
   authDomain: "bamescolar.firebaseapp.com",
   projectId: "bamescolar",

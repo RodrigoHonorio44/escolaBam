@@ -1,166 +1,195 @@
 import { useState } from 'react';
-import { db, auth } from '../../firebase/firebaseConfig';
-import { doc, setDoc } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { UserPlus, Shield, Building2, Briefcase, CheckCircle2, Star } from 'lucide-react';
+import { cadastrarUsuarioService } from '../../services/authService';
+import toast, { Toaster } from 'react-hot-toast'; 
+import { 
+  UserPlus, Building2, Briefcase, CheckCircle2, 
+  Star, CalendarDays, Loader2, ShieldCheck, Stethoscope 
+} from 'lucide-react';
 
 const CadastrarUsuario = () => {
+  const [loading, setLoading] = useState(false);
+  
   const [formData, setFormData] = useState({
     nome: '', 
     email: '', 
     senha: '', 
     role: 'enfermeiro', 
-    prazo: '30',
-    escolaId: 'Escola Municipal Anísio Teixeira'
+    prazo: '365'
   });
 
   const [modulos, setModulos] = useState({
-    financeiro: false,
-    pacientes: true,
-    estoque: false,
-    relatorios: false
+    atendimento: true,
+    triagem: true,
+    estoque_medicamentos: false,
+    relatorios_saude: false
   });
 
   const selecionarPlano = (plano) => {
     if (plano === 'basico') {
-      setModulos({ financeiro: false, pacientes: true, estoque: false, relatorios: false });
+      setModulos({ atendimento: true, triagem: true, estoque_medicamentos: false, relatorios_saude: false });
     } else if (plano === 'premium') {
-      setModulos({ financeiro: true, pacientes: true, estoque: true, relatorios: true });
+      setModulos({ atendimento: true, triagem: true, estoque_medicamentos: true, relatorios_saude: true });
     }
   };
 
   const handleCadastro = async (e) => {
     e.preventDefault();
+    
+    // 1. VALIDAÇÃO DE NOME COMPLETO (Trava de Sobrenome)
+    const nomeLimpo = formData.nome.trim();
+    const partesDoNome = nomeLimpo.split(/\s+/); // Divide o nome pelos espaços
+    
+    if (partesDoNome.length < 2) {
+      toast.error("Por favor, insira o nome e pelo menos um sobrenome.", {
+        style: { background: '#ef4444', color: '#fff', fontWeight: 'bold' }
+      });
+      return;
+    }
+
+    setLoading(true);
+
     try {
-      // 1. Cria o usuário no Firebase Auth com a senha padrão definida pelo Admin
-      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.senha);
-      const uid = userCredential.user.uid;
-      
       const expira = new Date();
       expira.setDate(expira.getDate() + parseInt(formData.prazo));
-      const modulosAtivos = Object.keys(modulos).filter(key => modulos[key]);
 
-      // 2. Salva no Firestore com a flag 'primeiroAcesso' para forçar a troca de senha
-      await setDoc(doc(db, "users", uid), {
-        nome: formData.nome,
+      // 2. MONTAGEM DOS DADOS (Blindagem de Unidade Escolar)
+      const dadosParaCadastro = {
+        nome: nomeLimpo,
         email: formData.email,
+        password: formData.senha,
         role: formData.role,
-        licencaStatus: 'ativo',
-        dataExpiracao: expira.toISOString(),
-        modulos: modulosAtivos,
-        primeiroAcesso: true, // 🚩 ESSENCIAL: Força o redirecionamento no primeiro login
-        lastAccess: new Date().toISOString(),
-        escolaId: formData.escolaId,
-        dataCriacao: new Date().toISOString()
-      });
+        escolaId: "E. M. Anísio Teixeira", // <--- TRAVADO PARA NÃO SALVAR HOSPITAL
+        prazo: formData.prazo,
+        dataExpiracao: expira.toISOString().split('T')[0],
+        modulos: Object.keys(modulos).filter(key => modulos[key]),
+        primeiroAcesso: true,
+        status: 'ativo',
+        statusLicenca: 'ativa',
+        createdAt: new Date().toISOString()
+      };
 
-      alert("Usuário criado! Ele deverá trocar a senha no primeiro acesso.");
+      await cadastrarUsuarioService(dadosParaCadastro);
+
+      toast.success(`Acesso liberado: ${nomeLimpo}`, {
+        duration: 4000,
+        position: 'top-right',
+        style: { background: '#1e40af', color: '#fff', borderRadius: '20px' }
+      });
+      
       setFormData({ ...formData, nome: '', email: '', senha: '' });
+
     } catch (error) { 
-      alert("Erro ao cadastrar: " + error.message); 
+      toast.error("Erro ao cadastrar: " + error.message); 
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-black text-slate-800 tracking-tight">Novo Acesso SaaS</h1>
-        <p className="text-slate-500 font-medium">Defina a senha padrão e os módulos do novo funcionário.</p>
+    <div className="max-w-6xl mx-auto p-4 md:p-8 font-sans animate-in fade-in duration-500">
+      <Toaster /> 
+      
+      <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div>
+          <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase flex items-center gap-3">
+            <Stethoscope size={40} className="text-blue-600" /> Gestão de Acessos
+          </h1>
+          <p className="text-slate-500 font-medium tracking-tight">Credenciamento de profissionais de saúde</p>
+        </div>
+        <div className="bg-blue-600/10 px-4 py-2 rounded-2xl border border-blue-200">
+           <span className="text-blue-700 text-[10px] font-black uppercase tracking-widest italic">Rodhon System v2.0</span>
+        </div>
       </div>
 
       <form onSubmit={handleCadastro} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-800">
-              <UserPlus className="text-blue-600" /> Identificação do Usuário
+          <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 relative overflow-hidden">
+            <h2 className="text-xl font-black mb-8 flex items-center gap-3 text-slate-800 uppercase italic">
+              <UserPlus className="text-blue-600" size={24} /> Identificação
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
               <div className="md:col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block font-sans">Nome Completo</label>
-                <input required className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-slate-700" 
-                  placeholder="Nome do funcionário" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Nome Completo</label>
+                <input 
+                  required 
+                  className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300" 
+                  placeholder="Ex: Rodrigo Honório" 
+                  value={formData.nome} 
+                  onChange={e => setFormData({...formData, nome: e.target.value})} 
+                />
+                <p className="text-[9px] text-slate-400 mt-2 ml-1 font-bold uppercase italic">* Obrigatório nome e sobrenome</p>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block font-sans">Cargo / Função</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Cargo / Função</label>
                 <div className="relative">
                   <Briefcase className="absolute left-4 top-4 text-slate-400" size={18} />
-                  <select className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 appearance-none"
+                  <select className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-700 appearance-none cursor-pointer"
                     value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                    <option value="enfermeiro">Enfermeiro</option>
-                    <option value="enfermeira">Enfermeira</option>
-                    <option value="diretor">Diretor</option>
-                    <option value="diretora">Diretora</option>
-                    <option value="psicologa">Psicóloga</option>
-                    <option value="administrativo">Administrativo</option>
+                    <option value="enfermeiro">Enfermeiro(a)</option>
+                    <option value="tecnico_enfermagem">Técnico(a) Enfermagem</option>
+                    <option value="medico">Médico(a)</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block font-sans">Unidade Escolar</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Unidade Escolar</label>
                 <div className="relative">
-                  <Building2 className="absolute left-4 top-4 text-slate-400" size={18} />
-                  <select className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 appearance-none"
-                    value={formData.escolaId} onChange={e => setFormData({...formData, escolaId: e.target.value})}>
-                    <option value="Escola Municipal Anísio Teixeira">E. M. Anísio Teixeira</option>
-                    <option value="Hosp. Conde Modesto Leal">Hosp. Conde Modesto Leal</option>
-                  </select>
+                  <Building2 className="absolute left-4 top-4 text-blue-600" size={18} />
+                  <input readOnly className="w-full p-4 pl-12 bg-blue-50 text-blue-700 border-none rounded-2xl font-black outline-none cursor-not-allowed"
+                    value="E. M. ANÍSIO TEIXEIRA" />
                 </div>
               </div>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block font-sans">E-mail de Login</label>
-                <input required type="email" className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-slate-700" 
-                  placeholder="email@escola.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-              </div>
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-8 mt-2">
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">E-mail Corporativo</label>
+                  <input required type="email" autoComplete="off" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-700" 
+                    placeholder="acesso@rhodhon.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                </div>
 
-              <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block font-sans">Senha Padrão (Admin)</label>
-                <input required type="password" className="w-full p-4 bg-slate-50 rounded-2xl border border-transparent focus:border-blue-500 focus:bg-white outline-none transition-all font-bold text-slate-700 shadow-inner" 
-                  placeholder="Senha que você criou" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} />
+                <div>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Senha Provisória</label>
+                  <input required type="password" minLength={6} autoComplete="new-password" className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-700" 
+                    placeholder="Mínimo 6 caracteres" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* LADO DIREITO - ASSINATURA */}
         <div className="space-y-6">
-          <div className="bg-slate-900 p-8 rounded-[32px] shadow-xl shadow-blue-900/20 text-white">
-            <h2 className="text-xl font-black mb-6 flex items-center gap-2">
-              <Shield className="text-blue-400" /> Plano & Módulos
+          <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl shadow-blue-900/30 text-white border border-white/5 relative overflow-hidden">
+            <h2 className="text-xl font-black mb-8 flex items-center gap-3 italic uppercase relative z-10">
+              <ShieldCheck className="text-blue-400" size={24} /> Assinatura
             </h2>
 
-            <div className="flex gap-2 mb-8 bg-slate-800 p-1.5 rounded-2xl">
-              <button type="button" onClick={() => selecionarPlano('basico')} className="flex-1 text-[9px] font-black p-3 rounded-xl transition-all hover:bg-slate-700 uppercase tracking-widest font-sans">Básico</button>
-              <button type="button" onClick={() => selecionarPlano('premium')} className="flex-1 text-[9px] font-black p-3 rounded-xl bg-blue-600 text-white uppercase tracking-widest flex items-center justify-center gap-1 shadow-lg shadow-blue-600/20 font-sans">
-                <Star size={12} fill="white" /> Premium
-              </button>
+            <div className="mb-6 relative z-10">
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 mb-2 block">Validade do Acesso</label>
+              <select className="w-full p-4 bg-slate-800 rounded-2xl border-2 border-slate-700 outline-none font-bold text-sm appearance-none cursor-pointer"
+                value={formData.prazo} onChange={e => setFormData({...formData, prazo: e.target.value})}>
+                <option value="30">30 dias</option>
+                <option value="180">180 dias</option>
+                <option value="365">365 dias</option>
+              </select>
             </div>
 
-            <div className="space-y-3 mb-8">
+            <div className="space-y-2 mb-8 relative z-10">
               {Object.keys(modulos).map(m => (
-                <label key={m} className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${modulos[m] ? 'bg-blue-600/10 border-blue-500/50' : 'bg-slate-800 border-transparent'}`}>
-                  <span className="text-xs font-bold capitalize tracking-wide font-sans">{m}</span>
+                <label key={m} className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${modulos[m] ? 'bg-blue-600/10 border-blue-500/50' : 'bg-slate-800/30 border-transparent'}`}>
+                  <span className="text-[10px] font-black uppercase tracking-widest opacity-80">{m.replace('_', ' ')}</span>
                   <input type="checkbox" className="hidden" checked={modulos[m]} onChange={() => setModulos({...modulos, [m]: !modulos[m]})} />
-                  {modulos[m] ? <CheckCircle2 size={18} className="text-blue-400" /> : <div className="w-[18px] h-[18px] rounded-full border-2 border-slate-600" />}
+                  {modulos[m] ? <CheckCircle2 size={16} className="text-blue-400" /> : <div className="w-[16px] h-[16px] rounded-full border border-slate-600" />}
                 </label>
               ))}
             </div>
 
-            <div className="mb-8">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 block font-sans text-left">Período de Validade</label>
-              <select className="w-full p-4 bg-slate-800 rounded-2xl border-none outline-none font-bold text-sm"
-                value={formData.prazo} onChange={e => setFormData({...formData, prazo: e.target.value})}>
-                <option value="30">30 Dias (Mensal)</option>
-                <option value="90">90 Dias (Trimestral)</option>
-                <option value="365">1 Ano (Anual)</option>
-              </select>
-            </div>
-
-            <button className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-5 rounded-[24px] shadow-lg shadow-blue-600/40 transition-all uppercase tracking-[0.2em] text-xs font-sans">
-              Ativar Acesso
+            <button type="submit" disabled={loading} className={`w-full flex items-center justify-center gap-3 py-6 rounded-[24px] font-black uppercase text-[11px] tracking-[0.2em] transition-all
+                ${loading ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-600/40'}`}>
+              {loading ? <Loader2 className="animate-spin" size={20} /> : 'Liberar Acesso'}
             </button>
           </div>
         </div>

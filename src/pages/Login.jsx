@@ -1,84 +1,136 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { loginService } from '../api/authService';
-import { Lock, Mail, Stethoscope } from 'lucide-react';
+import { auth, db } from '../firebase/firebaseConfig'; 
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { Lock, Mail, Loader2, GraduationCap, ShieldCheck } from 'lucide-react';
+import toast, { Toaster } from 'react-hot-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setLoading(true);
+
     try {
-      await loginService(email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      const user = userCredential.user;
+
+      const userRef = doc(db, "usuarios", user.uid); 
+      const userSnap = await getDoc(userRef);
+      const userData = userSnap.exists() ? userSnap.data() : null;
+
+      const sessionId = Date.now().toString();
+      localStorage.setItem("current_session_id", sessionId);
+
+      if (user.email === "rodrigohono21@gmail.com") {
+        if (!userData) {
+          await setDoc(userRef, {
+            nome: "Rodrigo Honório",
+            email: user.email,
+            role: "root",
+            status: "ativo",
+            statusLicenca: "ativa",
+            currentSessionId: sessionId,
+            dataExpiracao: "2039-12-31T23:59:59Z",
+            ultimoLogin: serverTimestamp()
+          });
+        } else {
+          await updateDoc(userRef, {
+            currentSessionId: sessionId,
+            ultimoLogin: serverTimestamp()
+          });
+        }
+        navigate('/');
+        return;
+      }
+
+      if (!userData) throw new Error("Acesso negado: Perfil não encontrado.");
+      
+      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
+      if (isBloqueado) throw new Error("Acesso suspenso pelo administrador.");
+
+      await updateDoc(userRef, {
+        currentSessionId: sessionId,
+        ultimoLogin: serverTimestamp()
+      });
+
       navigate('/');
+      
     } catch (err) {
-      setError('Falha na identificação. Verifique seus dados.');
+      toast.error(err.message || "Erro ao entrar no sistema.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="h-screen w-full flex flex-col md:flex-row overflow-hidden bg-white">
+    <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans">
+      <Toaster position="top-right" />
       
-      {/* LADO ESQUERDO: INFOMATIVO (AZUL) */}
-      <div className="hidden md:flex md:w-[45%] bg-blue-600 p-16 flex-col justify-center text-white relative">
-        <div className="absolute -top-20 -left-20 w-96 h-96 bg-white/10 rounded-full blur-3xl"></div>
+      {/* LADO ESQUERDO: Branding e Impacto */}
+      <div className="hidden lg:flex lg:w-[55%] bg-[#0f172a] relative p-16 flex-col justify-between overflow-hidden">
+        {/* Elementos Decorativos (Blur) */}
+        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-600/20 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-10 bg-white/10 w-fit p-4 rounded-2xl backdrop-blur-md border border-white/20">
-            <Stethoscope size={40} strokeWidth={1.5} />
+          <div className="flex items-center gap-3 mb-16">
+            <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-600/20">
+              <GraduationCap className="text-white" size={32} />
+            </div>
             <div>
-              <h3 className="font-bold text-lg leading-tight tracking-tight uppercase">Conde Modesto Leal</h3>
-              <p className="text-xs font-medium opacity-70">HMCML UNIDADE DE TI</p>
+              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic">Anísio Teixeira</h3>
+              <p className="text-blue-400 text-[10px] font-black tracking-[0.3em] uppercase">Unidade Escolar</p>
             </div>
           </div>
 
-          <h1 className="text-7xl font-[1000] leading-[0.85] mb-8 tracking-tighter uppercase italic">
-            PATRIMÔNIO <br /> 
-            <span className="text-blue-200/80">& CHAMADOS</span>
+          <h1 className="text-8xl font-black text-white leading-[0.9] tracking-tighter italic uppercase">
+            SISTEMA <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">DE SAÚDE</span>
           </h1>
-
-          <p className="text-xl opacity-90 leading-relaxed max-w-md font-medium">
-            Plataforma inteligente para gestão de ativos e suporte técnico hospitalar.
+          <p className="mt-6 text-slate-400 max-w-md font-medium text-lg leading-relaxed">
+            Plataforma inteligente para gestão de prontuários e atendimentos em unidades escolares.
           </p>
+        </div>
+
+        <div className="relative z-10 flex items-center gap-8 text-slate-500">
+           <div className="flex flex-col">
+              <span className="text-white font-bold text-2xl">2026</span>
+              <span className="text-[10px] uppercase tracking-widest font-black">Versão Atualizada</span>
+           </div>
+           <div className="h-10 w-px bg-slate-800"></div>
+           <div className="flex items-center gap-2">
+              <ShieldCheck className="text-blue-500" size={20} />
+              <span className="text-[10px] uppercase tracking-widest font-black">Acesso Criptografado</span>
+           </div>
         </div>
       </div>
 
-      {/* LADO DIREITO: FORMULÁRIO (ESTRUTURA CORRIGIDA) */}
-      <div className="flex-1 flex flex-col justify-between items-center p-8 bg-slate-50">
-        
-        {/* LOGO SUPERIOR (FORA DO CARD) */}
-        <div className="mt-4 text-center">
-            <h2 className="text-3xl font-[1000] italic tracking-tighter text-slate-900 leading-none">
-                RODHON<span className="text-blue-600">SYSTEM</span>
+      {/* LADO DIREITO: Login Form */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 relative">
+        <div className="w-full max-w-[420px] space-y-10">
+          
+          <div className="text-center lg:text-left">
+            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">
+              RODHON<span className="text-blue-600">SYSTEM</span>
             </h2>
-            <p className="text-[10px] tracking-[0.4em] text-slate-400 font-black uppercase mt-1">Technology Solutions</p>
-        </div>
-
-        {/* CARD DO FORMULÁRIO (CENTRALIZADO) */}
-        <div className="w-full max-w-[460px] bg-white p-10 md:p-12 rounded-[50px] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100">
-          <div className="text-center mb-10">
-            <span className="text-[11px] font-black tracking-[0.2em] text-slate-300 uppercase">Identificação de Usuário</span>
+            <p className="text-slate-500 font-bold text-sm">Bem-vindo. Identifique-se para continuar.</p>
           </div>
 
-          {error && (
-            <div className="bg-red-50 text-red-600 p-4 rounded-2xl mb-8 text-sm font-bold border border-red-100 text-center animate-in fade-in slide-in-from-top-2">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-500 uppercase ml-2 tracking-wider">E-mail Corporativo</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Corporativo</label>
               <div className="relative group">
-                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
                 <input
                   type="email"
-                  className="w-full pl-14 pr-6 py-5 bg-slate-100/80 border-none rounded-[22px] focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-slate-800 font-bold placeholder:text-slate-400"
-                  placeholder="rodrigohono21@gmail.com"
+                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm"
+                  placeholder="nome@exemplo.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -87,12 +139,12 @@ const Login = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-[11px] font-black text-slate-500 uppercase ml-2 tracking-wider">Senha</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha de Acesso</label>
               <div className="relative group">
-                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
                 <input
                   type="password"
-                  className="w-full pl-14 pr-6 py-5 bg-slate-100/80 border-none rounded-[22px] focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-slate-800 font-bold"
+                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -103,18 +155,19 @@ const Login = () => {
 
             <button
               type="submit"
-              className="w-full bg-blue-600 text-white py-5 rounded-[22px] font-black text-sm uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl shadow-blue-600/10 active:scale-[0.98] mt-4"
+              disabled={loading}
+              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 disabled:shadow-none"
             >
-              Acessar Sistema
+              {loading ? <Loader2 className="animate-spin" size={20} /> : 'Acessar Painel'}
             </button>
           </form>
-        </div>
 
-        {/* FOOTER (NO FUNDO) */}
-        <div className="mb-4">
-            <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em] text-center">
-                © 2026 RODHON SYSTEM | Unidade Hospitalar
-            </p>
+          <div className="pt-10 border-t border-slate-100">
+             <div className="flex justify-between items-center">
+                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">© 2026 Rodhon Inc.</p>
+                <a href="#" className="text-[9px] text-blue-600 font-black uppercase tracking-widest hover:underline">Suporte Técnico</a>
+             </div>
+          </div>
         </div>
       </div>
     </div>

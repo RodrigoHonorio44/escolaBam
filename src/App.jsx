@@ -1,30 +1,66 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Layout from './components/Layout/Layout'; 
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-
-// Contexto de Autenticação
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// Importação das Páginas de Administração
+// Layout e Guardião
+import Layout from './components/Layout/Layout'; 
+import GuardiaoSessao from './components/GuardiaoSessao';
+
+// Páginas de Acesso e Segurança
+import Login from './pages/Login';
+import TrocarSenha from './components/auth/TrocarSenha';
+import Bloqueado from './pages/Bloqueado'; 
+import Expirado from './pages/Expirado';
+
+// Páginas de Negócio
+import Dashboard from './pages/Dashboard';
 import CadastrarUsuario from './pages/cadastros/CadastrarUsuario';
 import GestaoUsuarios from './pages/Admin/GestaoUsuarios';
-import ControleLicencas from './pages/Admin/ControleLicencas'; // Importação nova
+import ControleLicencas from './pages/Admin/ControleLicencas';
 
-// Componente para proteger rotas
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
   
   if (loading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 gap-4">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-blue-600"></div>
-        <span className="font-bold text-slate-400 uppercase tracking-widest text-xs">Verificando...</span>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-blue-600 mb-4 shadow-lg shadow-blue-100"></div>
+        <p className="font-black text-[10px] text-slate-400 uppercase tracking-widest animate-pulse italic">
+          Sincronizando Segurança Rodhon...
+        </p>
       </div>
     );
   }
   
-  return user ? children : <Navigate to="/login" />;
+  // 1. Não logado
+  if (!user) return <Navigate to="/login" replace />;
+
+  // 2. Trava de Primeiro Acesso (🚨 CORRIGIDO AQUI)
+  // Se o campo primeiroAcesso for true, ele não deixa ver nada e manda pra TrocarSenha
+  if (user?.primeiroAcesso === true) {
+    return <TrocarSenha />;
+  }
+
+  // 3. Trava de Bloqueio
+  const estaBloqueado = 
+    user?.status === "bloqueado" || 
+    user?.licencaStatus === "bloqueado" || 
+    user?.statusLicenca === "bloqueada";
+
+  if (estaBloqueado && user?.role !== 'root') {
+    return <Navigate to="/bloqueado" replace />;
+  }
+
+  // 4. Trava de Expiração de Tempo
+  if (user?.role !== 'root' && user?.dataExpiracao) {
+    const hoje = new Date();
+    const dataExp = new Date(user.dataExpiracao);
+    
+    if (dataExp < hoje) {
+      return <Navigate to="/expirado" replace />;
+    }
+  }
+  
+  return children;
 };
 
 function App() {
@@ -32,35 +68,35 @@ function App() {
     <AuthProvider> 
       <BrowserRouter>
         <Routes>
-          {/* Rota Pública */}
+          {/* ROTAS PÚBLICAS */}
           <Route path="/login" element={<Login />} />
-
-          {/* Rotas Protegidas (Dentro do Layout com Sidebar e Header) */}
+          <Route path="/bloqueado" element={<Bloqueado />} />
+          <Route path="/expirado" element={<Expirado />} />
+          
+          {/* 🚨 NOVA ROTA: Adicionada explicitamente caso queira navegar via URL */}
+          <Route path="/trocar-senha" element={<TrocarSenha />} />
+          
+          {/* ROTAS PROTEGIDAS */}
           <Route 
             path="/" 
             element={
               <PrivateRoute>
-                <Layout />
+                <GuardiaoSessao />
               </PrivateRoute>
             }
           >
-            {/* Index carrega a Dashboard */}
-            <Route index element={<Dashboard />} />
-            
-            {/* Gestão de Acessos e Funcionários */}
-            <Route path="cadastrar-usuario" element={<CadastrarUsuario />} />
-            <Route path="usuarios" element={<GestaoUsuarios />} />
-            
-            {/* Controle de Licenças (Componente Novo) */}
-            <Route path="licencas" element={<ControleLicencas />} /> 
-            
-            {/* Rotas Administrativas Extras */}
-            <Route path="admin/unidades" element={<div className="p-8 font-bold text-slate-400">Gerenciamento de Unidades em Breve</div>} />
-            <Route path="admin/config" element={<div className="p-8 font-bold text-slate-400">Painel de Configurações Master</div>} />
+            <Route element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="cadastrar-usuario" element={<CadastrarUsuario />} />
+              <Route path="usuarios" element={<GestaoUsuarios />} />
+              <Route path="licencas" element={<ControleLicencas />} /> 
+              
+              <Route path="admin/unidades" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Unidades Escolares</div>} />
+              <Route path="admin/config" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Configurações Master</div>} />
+            </Route>
           </Route>
 
-          {/* Redireciona qualquer rota desconhecida para o início */}
-          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

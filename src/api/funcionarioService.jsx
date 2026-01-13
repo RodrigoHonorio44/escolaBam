@@ -1,5 +1,5 @@
 import { db, auth } from '../firebase/firebaseConfig';
-import { collection, addDoc, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 
 export const funcionarioService = {
@@ -7,31 +7,32 @@ export const funcionarioService = {
   async cadastrar(dados) {
     try {
       // 1. Cria o usuário no Firebase Authentication (Login)
-      // Nota: A senha temporária padrão aqui é 'mudar123', você pode ajustar.
+      // Usamos a senha vinda do formulário ou a padrão
       const userCredential = await createUserWithEmailAndPassword(
         auth, 
         dados.email, 
-        "mudar123" 
+        dados.password || "mudar123" 
       );
       
       const uid = userCredential.user.uid;
 
-      // 2. Salva os detalhes do perfil no Firestore usando o UID do Auth como ID do documento
-      // Usamos setDoc em vez de addDoc para que o ID do documento seja igual ao UID
-      await setDoc(doc(db, "users", uid), {
+      // 🚨 CORREÇÃO: Salvando na coleção "usuarios" e garantindo escolaId correto
+      await setDoc(doc(db, "usuarios", uid), {
         nome: dados.nome,
         email: dados.email,
         role: dados.role,
-        escolaId: dados.escolaId || 'escola_padrao', // ID da licença SaaS
-        dataCadastro: new Date().toISOString(),
-        licencaStatus: 'ativo',
-        currentSessionId: ''
+        // Garante que salve a escola correta ou a unidade Anísio Teixeira
+        escolaId: dados.escolaId || 'E. M. Anísio Teixeira', 
+        dataCadastro: serverTimestamp(),
+        status: 'ativo',
+        statusLicenca: 'ativa',
+        currentSessionId: '',
+        primeiroAcesso: true
       });
 
       return uid;
     } catch (error) {
       console.error("Erro ao cadastrar funcionário:", error.message);
-      // Tratamento de erros comuns
       if (error.code === 'auth/email-already-in-use') {
         throw new Error("Este e-mail já está em uso.");
       }
@@ -39,10 +40,17 @@ export const funcionarioService = {
     }
   },
 
-  // Listar funcionários da mesma unidade/escola
+  // 🚨 CORREÇÃO CRUCIAL: Estava buscando em "users", mudei para "usuarios"
   async listarPorEscola(escolaId) {
     try {
-      const q = query(collection(db, "users"), where("escolaId", "==", escolaId));
+      // Se não passar escolaId, ele busca da Anísio Teixeira por padrão
+      const unidadeBusca = escolaId || 'E. M. Anísio Teixeira';
+      
+      const q = query(
+        collection(db, "usuarios"), 
+        where("escolaId", "==", unidadeBusca)
+      );
+      
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
