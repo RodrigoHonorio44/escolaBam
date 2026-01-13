@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 // AJUSTADO: De "../api/Firebase" para o seu caminho real
-import { auth } from "../firebase/firebaseconfig"; 
+import { auth } from '../firebase/firebaseConfig'; // Certifique-se que o C está maiúsculo
 import { signOut } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
