@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/firebaseConfig'; 
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { collection, query, where, getDocs, doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { Lock, Mail, Loader2, GraduationCap, ShieldCheck, X, MessageSquare, LifeBuoy } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -22,7 +22,7 @@ const Login = () => {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      // 2. BUSCA DINÂMICA: Procurar na coleção 'usuarios' pelo campo 'email'
+      // 2. Busca o documento na coleção 'usuarios' pelo email
       const usuariosRef = collection(db, "usuarios");
       const q = query(usuariosRef, where("email", "==", user.email));
       const querySnapshot = await getDocs(q);
@@ -30,7 +30,7 @@ const Login = () => {
       const sessionId = Date.now().toString();
       localStorage.setItem("current_session_id", sessionId);
 
-      // 3. Lógica para o Usuário Root (Rodrigo Honório)
+      // 3. Lógica para Usuário Root
       if (user.email === "rodrigohono21@gmail.com") {
         const rootRef = doc(db, "usuarios", user.uid);
         if (querySnapshot.empty) {
@@ -53,27 +53,34 @@ const Login = () => {
         return "ACESSO MESTRE LIBERADO"; 
       }
 
-      // 4. Verificação para usuários comuns (Ex: Rodrigo Simas)
+      // 4. Verificação de existência do usuário comum
       if (querySnapshot.empty) {
-        await signOut(auth); // Desloga se não houver documento no Firestore
-        throw new Error("USUÁRIO NÃO CADASTRADO NO BANCO DE DADOS");
+        await signOut(auth);
+        throw new Error("USUÁRIO NÃO LOCALIZADO NO BANCO DE DADOS");
       }
 
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
-      // 5. Verificação de Status
-      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
+      // 5. Verificação de Status/Bloqueio
+      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada" || userData.licencaStatus === "bloqueada";
       if (isBloqueado) {
         await signOut(auth);
         throw new Error("ACESSO SUSPENSO PELO ADMINISTRADOR");
       }
 
-      // 6. Atualização de Sessão e Último Login
+      // 6. LÓGICA DE PRIMEIRO ACESSO (Redirecionamento)
+      if (userData.primeiroAcesso === true) {
+        // Redireciona para tela de troca sem alterar a flag no banco ainda
+        navigate('/alterar-senha'); 
+        return "PRIMEIRO ACESSO: ALTERE SUA SENHA PARA CONTINUAR";
+      }
+
+      // 7. Atualização de Sessão para usuários que já trocaram a senha
       await updateDoc(userDoc.ref, {
         currentSessionId: sessionId,
         ultimoLogin: serverTimestamp(),
-        primeiroAcesso: false
+        primeiroAcesso: false // Garante que usuários veteranos mantenham o status correto
       });
 
       navigate('/');

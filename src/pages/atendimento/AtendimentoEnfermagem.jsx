@@ -13,6 +13,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
   const [tipoAtendimento, setTipoAtendimento] = useState('local');
   const [perfilPaciente, setPerfilPaciente] = useState('aluno');
 
+  const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbwSkF-qYcbfqwivCBROWl3BKZta_0uyhvvVZXmGU_9Sfcu_sxxxe_LAbMRU0ZW0bUkg/exec";
+
   const gerarBAM = () => {
     const ano = new Date().getFullYear();
     const aleatorio = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -60,38 +62,54 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
     const loadingToast = toast.loading("Registrando atendimento...");
 
     try {
-      // --- LÓGICA DE UNIFICAÇÃO PARA A PASTA DIGITAL ---
       const nomeLimpo = formData.nomePaciente.trim();
       const nomeBusca = nomeLimpo.toUpperCase(); 
 
       const payload = {
         ...formData,
         nomePaciente: nomeLimpo,
-        nomePacienteBusca: nomeBusca, // CHAVE PARA O HISTÓRICO UNIFICADO
+        nomePacienteBusca: nomeBusca,
         perfilPaciente,
-        // Campo resumo para a "Timeline" da pasta
         relatoCurto: tipoAtendimento === 'local' ? formData.motivoAtendimento : formData.motivoEncaminhamento,
-        dataAtendimento: formData.data, // Usado para ordenar o histórico
+        dataAtendimento: formData.data,
         encaminhadoHospital: tipoAtendimento === 'hospital' ? 'sim' : 'não',
         statusAtendimento: tipoAtendimento === 'hospital' ? 'Encaminhado/Em Aberto' : 'Finalizado',
         escola: "E. M. Anísio Teixeira", 
-        escolaId: user?.escolaId || '',
+        escolaId: user?.escolaId || 'E. M. Anísio Teixeira',
         profissionalNome: user?.nome || 'Profissional',
         profissionalEmail: user?.email || '',
         profissionalCargo: user?.cargo || 'Enfermagem',
         userId: user?.uid || '',
-        createdAt: serverTimestamp() 
+        createdAt: new Date().toISOString() // String simples para a planilha
       };
 
-      await addDoc(collection(db, "atendimentos_enfermagem"), payload);
+      // 1. SALVAR NO FIREBASE
+      await addDoc(collection(db, "atendimentos_enfermagem"), {
+        ...payload,
+        createdAt: serverTimestamp() // Timestamp nativo no Firebase
+      });
+
+      // 2. SALVAR NA PLANILHA GOOGLE (AUTOMÁTICO)
+      try {
+        await fetch(URL_PLANILHA, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+      } catch (errPlanilha) {
+        console.error("Erro ao enviar para planilha:", errPlanilha);
+        // Não travamos o processo se a planilha falhar, mas avisamos no console
+      }
       
-      toast.success(`BAM ${formData.bam} salvo com sucesso!`, { id: loadingToast });
+      toast.success(`BAM ${formData.bam} salvo e sincronizado!`, { id: loadingToast });
       
+      // Limpa o formulário
       setFormData(getInitialState());
       setTipoAtendimento('local');
     } catch (error) {
       console.error(error);
-      toast.error("Erro ao salvar.", { id: loadingToast });
+      toast.error("Erro ao salvar no banco de dados.", { id: loadingToast });
     } finally {
       setLoading(false);
     }
@@ -138,7 +156,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
           </div>
         </div>
 
-        {/* SELETORES */}
+        {/* SELETORES PERFIL E TIPO */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
           <div className="bg-slate-100 p-2 rounded-[25px] flex shadow-inner border border-slate-200">
             <button type="button" onClick={() => setPerfilPaciente('aluno')} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all ${perfilPaciente === 'aluno' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-400'}`}>
