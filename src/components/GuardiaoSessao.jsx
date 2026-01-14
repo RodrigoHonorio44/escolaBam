@@ -15,46 +15,61 @@ const GuardiaoSessao = () => {
   useEffect(() => {
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (user) {
-        // MUDANÇA AQUI: Buscamos pelo e-mail, igual ao seu sistema de login
+        // Ignora a verificação de sessão duplicada para o seu e-mail de administrador
+        if (user.email === "rodrigohono21@gmail.com") return;
+
         const usuariosRef = collection(db, "usuarios");
         const q = query(usuariosRef, where("email", "==", user.email));
         
         const unsubscribeSnap = onSnapshot(q, (snapshot) => {
           if (!snapshot.empty) {
-            // Pegamos o primeiro documento encontrado com esse e-mail
             const userData = snapshot.docs[0].data();
             const localSessionId = localStorage.getItem("current_session_id");
 
-            // LOG DE DEPURAÇÃO (Verifique no F12 se os IDs aparecem)
-            console.log("Sessão Local:", localSessionId);
-            console.log("Sessão no Banco:", userData.currentSessionId);
+            // 1. VERIFICAÇÃO DE BLOQUEIO EM TEMPO REAL
+            // Se o admin te bloquear enquanto você está logado, o sistema te expulsa na hora
+            const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
+            
+            if (isBloqueado) {
+              executarExpulsao("ACESSO SUSPENSO PELO ADMINISTRADOR.");
+              return;
+            }
 
-            // LÓGICA DE EXPULSÃO:
-            if (userData.currentSessionId && userData.currentSessionId !== localSessionId) {
-              
-              const encerrarSessao = async () => {
-                await signOut(auth);
-                localStorage.clear();
-                
-                // Usamos um ID fixo no toast para não repetir várias vezes
-                toast.error("ACESSO ENCERRADO: OUTRO DISPOSITIVO SE CONECTOU.", {
-                  id: "kick-alert",
-                  duration: 6000,
-                  position: "top-center",
-                  style: { background: '#1e293b', color: '#fff', fontWeight: 'bold', border: '1px solid #ef4444' }
-                });
-                
-                navigate("/login");
-              };
-
-              encerrarSessao();
+            // 2. LÓGICA DE SESSÃO DUPLICADA
+            // Só expulsa se houver um ID no banco E ele for diferente do local
+            if (userData.currentSessionId && localSessionId && userData.currentSessionId !== localSessionId) {
+              executarExpulsao("ACESSO ENCERRADO: OUTRO DISPOSITIVO SE CONECTOU.");
             }
           }
         });
 
         return () => unsubscribeSnap();
+      } else {
+        // Se não houver usuário autenticado no Firebase, garante que limpe o local
+        localStorage.removeItem("current_session_id");
+        navigate("/login");
       }
     });
+
+    const executarExpulsao = async (mensagem) => {
+      await signOut(auth);
+      localStorage.clear();
+      
+      toast.error(mensagem, {
+        id: "kick-alert",
+        duration: 6000,
+        position: "top-center",
+        style: { 
+          background: '#0f172a', 
+          color: '#fff', 
+          fontWeight: 'bold', 
+          border: '1px solid #ef4444',
+          fontSize: '12px'
+        }
+      });
+      
+      navigate("/login");
+    };
 
     return () => unsubscribeAuth();
   }, [navigate]);

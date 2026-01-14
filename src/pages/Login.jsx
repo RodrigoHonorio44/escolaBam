@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/firebaseConfig'; 
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { collection, query, where, getDocs, doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { Lock, Mail, Loader2, GraduationCap, ShieldCheck, X, MessageSquare, LifeBuoy } from 'lucide-react';
+import { Lock, Mail, Loader2, GraduationCap, ShieldCheck, X, MessageSquare, LifeBuoy, ArrowRight } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 const Login = () => {
@@ -18,11 +18,9 @@ const Login = () => {
     setLoading(true);
 
     const loginLogic = async () => {
-      // 1. Autenticação no Firebase Auth
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
 
-      // 2. Busca o documento na coleção 'usuarios' pelo email
       const usuariosRef = collection(db, "usuarios");
       const q = query(usuariosRef, where("email", "==", user.email));
       const querySnapshot = await getDocs(q);
@@ -30,7 +28,6 @@ const Login = () => {
       const sessionId = Date.now().toString();
       localStorage.setItem("current_session_id", sessionId);
 
-      // 3. Lógica para Usuário Root
       if (user.email === "rodrigohono21@gmail.com") {
         const rootRef = doc(db, "usuarios", user.uid);
         if (querySnapshot.empty) {
@@ -53,7 +50,6 @@ const Login = () => {
         return "ACESSO MESTRE LIBERADO"; 
       }
 
-      // 4. Verificação de existência do usuário comum
       if (querySnapshot.empty) {
         await signOut(auth);
         throw new Error("USUÁRIO NÃO LOCALIZADO NO BANCO DE DADOS");
@@ -62,25 +58,21 @@ const Login = () => {
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
-      // 5. Verificação de Status/Bloqueio
       const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada" || userData.licencaStatus === "bloqueada";
       if (isBloqueado) {
         await signOut(auth);
         throw new Error("ACESSO SUSPENSO PELO ADMINISTRADOR");
       }
 
-      // 6. LÓGICA DE PRIMEIRO ACESSO (Redirecionamento)
       if (userData.primeiroAcesso === true) {
-        // Redireciona para tela de troca sem alterar a flag no banco ainda
         navigate('/alterar-senha'); 
         return "PRIMEIRO ACESSO: ALTERE SUA SENHA PARA CONTINUAR";
       }
 
-      // 7. Atualização de Sessão para usuários que já trocaram a senha
       await updateDoc(userDoc.ref, {
         currentSessionId: sessionId,
         ultimoLogin: serverTimestamp(),
-        primeiroAcesso: false // Garante que usuários veteranos mantenham o status correto
+        primeiroAcesso: false 
       });
 
       navigate('/');
@@ -98,17 +90,15 @@ const Login = () => {
       },
     }, {
       style: {
-        minWidth: '250px',
+        minWidth: '280px',
         background: '#0f172a',
         color: '#fff',
-        borderRadius: '12px',
-        fontSize: '11px',
-        fontWeight: '900',
+        borderRadius: '16px',
+        fontSize: '10px',
+        fontWeight: 'bold',
         letterSpacing: '1px',
-        border: '1px solid rgba(255,255,255,0.1)'
-      },
-      success: {
-        iconTheme: { primary: '#3b82f6', secondary: '#fff' },
+        border: '1px solid rgba(255,255,255,0.1)',
+        padding: '16px'
       },
     });
 
@@ -116,106 +106,82 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full flex bg-slate-50 overflow-hidden font-sans relative">
-      <Toaster position="top-center" />
+    <div className="h-screen w-full flex bg-white overflow-hidden font-sans relative">
+      <Toaster position="top-right" />
 
-      {/* MODAL DE SUPORTE TÉCNICO */}
-      {showSupport && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#0f172a]/80 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl relative">
-            <button 
-              onClick={() => setShowSupport(false)}
-              className="absolute top-6 right-6 p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400"
-            >
-              <X size={20} />
-            </button>
+      {/* --- LADO ESQUERDO: BRANDING --- */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-12 xl:p-20 flex-col justify-center items-center border-r border-white/5">
+        {/* Camadas de Brilho de Fundo */}
+        <div className="absolute top-[-15%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
-            <div className="p-10 text-center">
-              <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-3 shadow-lg shadow-blue-600/20">
-                <LifeBuoy className="text-white" size={32} />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 uppercase italic tracking-tighter mb-2">Suporte Técnico</h3>
-              <p className="text-slate-500 text-sm font-medium mb-8">Escolha um canal para falar com o desenvolvedor do sistema.</p>
-
-              <div className="space-y-3">
-                <a 
-                  href="https://wa.me/5521975966330?text=Olá!%20Preciso%20de%20suporte%20no%20sistema%20Rodhon%20MedSys." 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:scale-[1.02] transition-transform shadow-lg shadow-green-500/20"
-                >
-                  <MessageSquare size={16} fill="currentColor" /> WhatsApp Direto
-                </a>
-
-                <a 
-                  href="mailto:rodrigohono21@gmail.com" 
-                  className="flex items-center justify-center gap-3 w-full bg-slate-100 text-slate-700 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-slate-200 transition-colors"
-                >
-                  <Mail size={16} /> rodrigohono21@gmail.com
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* LADO ESQUERDO: Branding */}
-      <div className="hidden lg:flex lg:w-[55%] bg-[#0f172a] relative p-16 flex-col justify-between overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-125 h-125 bg-blue-600/20 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-100 h-100 bg-indigo-600/20 rounded-full blur-[100px]"></div>
-
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-16">
-            <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-600/20">
-              <GraduationCap className="text-white" size={32} />
+        <div className="relative z-10 w-full max-w-xl">
+          {/* Badge Escola */}
+          <div className="flex items-center gap-4 mb-12 animate-in fade-in slide-in-from-left duration-700">
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-[22px] shadow-2xl shadow-blue-500/20 rotate-3 transition-transform hover:rotate-0">
+              <GraduationCap className="text-white" size={36} />
             </div>
             <div>
-              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic"> E.M. Anísio Teixeira</h3>
-              <p className="text-blue-400 text-[10px] font-black tracking-[0.3em] uppercase">Unidade Escolar</p>
+              <h3 className="text-white font-black text-2xl tracking-tighter uppercase italic leading-none">
+                E.M. Anísio Teixeira
+              </h3>
+              <p className="text-blue-400 text-[9px] font-black tracking-[0.4em] uppercase mt-1">Unidade Escolar</p>
             </div>
           </div>
 
-          <h1 className="text-8xl font-black text-white leading-[0.9] tracking-tighter italic uppercase">
+          {/* Headline Principal */}
+          <h1 className="text-6xl xl:text-8xl font-black text-white leading-[0.85] tracking-tighter italic uppercase mb-8">
             SISTEMA <br />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-indigo-400">DE SAÚDE</span>
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-cyan-400">
+              DE SAÚDE
+            </span>
           </h1>
-          <p className="mt-6 text-slate-400 max-w-md font-medium text-lg leading-relaxed">
-            Plataforma inteligente para gestão de prontuários e atendimentos em unidades escolares.
+          
+          <p className="text-slate-400 max-w-md font-medium text-lg leading-relaxed mb-12 opacity-80">
+            Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
           </p>
-        </div>
 
-        <div className="relative z-10 flex items-center gap-8 text-slate-500">
-           <div className="flex flex-col">
-              <span className="text-white font-bold text-2xl">2026</span>
-              <span className="text-[10px] uppercase tracking-widest font-black">Versão Atualizada</span>
-           </div>
-           <div className="h-10 w-px bg-slate-800"></div>
-           <div className="flex items-center gap-2">
-              <ShieldCheck className="text-blue-500" size={20} />
-              <span className="text-[10px] uppercase tracking-widest font-black">Acesso Criptografado</span>
-           </div>
+          {/* Status Bar */}
+          <div className="flex items-center gap-10 text-slate-500 bg-white/[0.03] border border-white/10 p-6 rounded-[32px] backdrop-blur-md w-fit">
+             <div className="flex flex-col">
+                <span className="text-white font-black text-2xl tabular-nums tracking-tighter">2026</span>
+                <span className="text-[8px] uppercase tracking-[0.2em] font-black text-blue-500">Versão Estável</span>
+             </div>
+             <div className="h-8 w-px bg-white/10"></div>
+             <div className="flex items-center gap-3">
+                <ShieldCheck className="text-emerald-500" size={24} />
+                <span className="text-[8px] uppercase tracking-[0.2em] font-black text-slate-300">Criptografia Ativa</span>
+             </div>
+          </div>
         </div>
       </div>
 
-      {/* LADO DIREITO: Form */}
-      <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 relative">
-        <div className="w-full max-w-105 space-y-10">
-          <div className="text-center lg:text-left">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic mb-2">
+      {/* --- LADO DIREITO: FORMULÁRIO --- */}
+      <div className="flex-1 flex flex-col justify-center items-center p-8 bg-slate-50/30">
+        <div className="w-full max-w-[420px] animate-in fade-in slide-in-from-right duration-700">
+          
+          <div className="text-center mb-10">
+            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
               RODHON<span className="text-blue-600">SYSTEM</span>
             </h2>
-            <p className="text-slate-500 font-bold text-sm">Identifique-se para continuar.</p>
+            <div className="flex items-center justify-center gap-2 mt-3">
+               <div className="h-px w-4 bg-slate-200"></div>
+               <p className="text-slate-400 font-bold text-[11px] uppercase tracking-widest">Painel de Acesso</p>
+               <div className="h-px w-4 bg-slate-200"></div>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">E-mail Corporativo</label>
-              <div className="relative group">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+            <div className="group space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-blue-600">
+                E-mail Corporativo
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
                 <input
                   type="email"
-                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm"
-                  placeholder="nome@exemplo.com"
+                  className="w-full pl-14 pr-7 py-5 bg-white border-2 border-slate-100 rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/5 transition-all shadow-sm placeholder:text-slate-300"
+                  placeholder="exemplo@rodhon.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -223,13 +189,15 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Senha de Acesso</label>
-              <div className="relative group">
-                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+            <div className="group space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 transition-colors group-focus-within:text-blue-600">
+                Senha de Segurança
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
                 <input
                   type="password"
-                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm"
+                  className="w-full pl-14 pr-7 py-5 bg-white border-2 border-slate-100 rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/5 transition-all shadow-sm placeholder:text-slate-300"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -241,25 +209,71 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300"
+              className="w-full bg-[#020617] text-white py-5 rounded-[22px] font-black uppercase tracking-[0.2em] text-[11px] shadow-2xl shadow-slate-900/20 hover:bg-blue-600 hover:-translate-y-1 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 mt-8"
             >
-              {loading ? <Loader2 className="animate-spin" size={20} /> : 'Acessar Painel'}
+              {loading ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <>Entrar no Sistema <ArrowRight size={18} /></>
+              )}
             </button>
           </form>
 
-          <div className="pt-10 border-t border-slate-100">
-             <div className="flex justify-between items-center">
-                <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">© 2026 Rodhon Inc.</p>
-                <button 
-                  onClick={() => setShowSupport(true)} 
-                  className="text-[9px] text-blue-600 font-black uppercase tracking-widest hover:underline cursor-pointer"
-                >
-                  Suporte Técnico
-                </button>
+          {/* Footer Lateral */}
+          <div className="mt-16 pt-8 border-t border-slate-100 flex justify-between items-center">
+             <div>
+                <p className="text-[10px] text-slate-900 font-black uppercase tracking-tighter italic">Rodhon<span className="text-blue-600">MedSys</span></p>
+                <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">© 2026 Enterprise Edition</p>
              </div>
+             <button 
+                onClick={() => setShowSupport(true)}
+                className="group flex items-center gap-2 bg-slate-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-full transition-all"
+              >
+                <LifeBuoy size={14} className="group-hover:rotate-45 transition-transform" />
+                <span className="text-[9px] font-black uppercase tracking-widest">Suporte</span>
+              </button>
           </div>
         </div>
       </div>
+
+      {/* --- MODAL DE SUPORTE (REDESENHADO) --- */}
+      {showSupport && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[40px] p-12 shadow-2xl relative border border-slate-100 overflow-hidden">
+            {/* Elemento decorativo no modal */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-[100px] -z-10"></div>
+            
+            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900 transition-colors">
+              <X size={24} />
+            </button>
+            
+            <div className="text-center">
+              <div className="w-20 h-20 bg-blue-600 text-white rounded-[28px] flex items-center justify-center mx-auto mb-8 rotate-6 shadow-xl shadow-blue-600/30">
+                <MessageSquare size={36} />
+              </div>
+              <h3 className="text-3xl font-black text-slate-900 uppercase italic tracking-tighter mb-3">Ajuda Especializada</h3>
+              <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed">Olá! Sou o Rodrigo. Como posso ajudar você hoje com o sistema?</p>
+              
+              <div className="space-y-4">
+                <a 
+                  href="https://wa.me/5521975966330" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-5 rounded-[22px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-green-500/20 hover:scale-[1.02] transition-transform"
+                >
+                  Chamado via WhatsApp
+                </a>
+                <a 
+                  href="mailto:rodrigohono21@gmail.com" 
+                  className="flex items-center justify-center gap-3 w-full bg-slate-900 text-white py-5 rounded-[22px] font-black uppercase text-[10px] tracking-[0.2em] hover:bg-slate-800 transition-colors"
+                >
+                  Enviar E-mail
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
