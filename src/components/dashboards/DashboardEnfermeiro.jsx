@@ -6,7 +6,7 @@ import {
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
   ChevronDown, LogOut, Users, Briefcase, FolderSearch, Lock,
   Calendar, Info, Settings, Bell, FileBarChart, Menu, ChevronLeft, 
-  Sun, Moon, LifeBuoy, ArrowUpRight, MessageSquare, Mail 
+  Sun, Moon, LifeBuoy, ArrowUpRight, MessageSquare, Mail, HeartPulse 
 } from "lucide-react";
 
 // Suas importações de páginas...
@@ -16,8 +16,10 @@ import HistoricoAtendimentos from "../../pages/atendimento/HistoricoAtendimentos
 import FormCadastroAluno from "../../pages/cadastros/FormCadastroAluno";
 import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionario";
 import PastaDigital from "../PastaDigital";
+// ✅ NOVA IMPORTAÇÃO
+import QuestionarioSaude from "../../pages/cadastros/QuestionarioSaude"; 
 
-// --- COMPONENTE DA TELA DE SUPORTE ATUALIZADA ---
+// --- COMPONENTE DA TELA DE SUPORTE ---
 const TelaSuporte = ({ darkMode }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] p-4 animate-in fade-in zoom-in duration-500">
@@ -42,7 +44,6 @@ const TelaSuporte = ({ darkMode }) => {
           </p>
           
           <div className="w-full space-y-4">
-            {/* BOTÃO WHATSAPP */}
             <a 
               href="https://wa.me/5521975966330?text=Olá!%20Preciso%20de%20suporte%20no%20sistema%20Rodhon%20MedSys." 
               target="_blank" 
@@ -56,7 +57,6 @@ const TelaSuporte = ({ darkMode }) => {
               <ArrowUpRight size={18} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
             </a>
 
-            {/* BOTÃO E-MAIL */}
             <a 
               href="mailto:rodrigohono21@gmail.com" 
               className={`flex items-center justify-between w-full font-black uppercase italic text-[11px] tracking-widest px-8 py-6 rounded-[24px] border transition-all ${
@@ -125,7 +125,12 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       label: "Cadastros", 
       icon: <UserPlus size={20} />, 
       key: "pacientes",
-      subItems: [{ id: "aluno", label: "Alunos" }, { id: "funcionario", label: "Funcionários" }]
+      // ✅ ADICIONADO SUB-ITEM DA FICHA DE SAÚDE
+      subItems: [
+        { id: "aluno", label: "Alunos" }, 
+        { id: "funcionario", label: "Funcionários" },
+        { id: "saude_escolar", label: "Ficha de Saúde" } 
+      ]
     }, 
     { id: "historico", label: "Bams Antigos", icon: <ClipboardList size={20} />, key: "relatorios" },
     { id: "relatorio_geral", label: "Relatório Geral", icon: <FileBarChart size={20} />, key: "dashboard" },
@@ -148,9 +153,11 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
       case "pacientes":
-        return cadastroMode === "aluno" 
-          ? <FormCadastroAluno onVoltar={() => setActiveTab("home")} /> 
-          : <FormCadastroFuncionario onVoltar={() => setActiveTab("home")} />;
+        // ✅ LÓGICA DE TROCA DE FORMULÁRIOS NOS CADASTROS
+        if (cadastroMode === "aluno") return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
+        if (cadastroMode === "funcionario") return <FormCadastroFuncionario onVoltar={() => setActiveTab("home")} />;
+        if (cadastroMode === "saude_escolar") return <QuestionarioSaude onVoltar={() => setActiveTab("home")} />;
+        return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
       case "relatorio_geral": return <div className={`p-10 font-black uppercase italic ${theme.sidebarText}`}>Área de Relatórios Consolidados</div>;
       default: return <HomeEnfermeiro user={user} darkMode={darkMode} />;
     }
@@ -267,7 +274,9 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                </button>
              )}
              <h1 className={`text-sm font-black uppercase tracking-widest italic ${darkMode ? "text-white" : "text-slate-800"}`}>
-                {activeTab === "suporte" ? "Suporte Técnico" : menuItems.find(i => i.id === activeTab)?.label}
+                {activeTab === "suporte" ? "Suporte Técnico" : 
+                 activeTab === "pacientes" ? (cadastroMode === "saude_escolar" ? "Ficha de Saúde" : "Cadastros") :
+                 menuItems.find(i => i.id === activeTab)?.label}
              </h1>
           </div>
           <div className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border ${darkMode ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-100"}`}>

@@ -1,15 +1,9 @@
 import { useForm } from 'react-hook-form';
-import { funcionarioService } from '../../api/funcionarioService';
+import { db } from '../../firebase/firebaseConfig'; // Import direto igual ao de alunos
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { 
-  UserPlus, 
-  Briefcase, 
-  Save, 
-  Calendar, 
-  User, 
-  Loader2, 
-  CreditCard, 
-  ShieldAlert, 
-  ChevronLeft 
+  UserPlus, Briefcase, Save, Calendar, User, 
+  Loader2, CreditCard, ShieldAlert, ChevronLeft, AlertCircle 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -17,35 +11,53 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
-      sexo: ''
+      sexo: '',
+      temAlergia: 'Não',
+      historicoMedico: '' 
     }
   });
 
   const naoSabeSus = watch("naoSabeSus");
+  const temAlergia = watch("temAlergia");
 
   const onSubmit = async (data) => {
     const saveAction = async () => {
-      // --- LÓGICA DE UNIFICAÇÃO ---
       const nomeLimpo = data.nome.trim();
       const nomeParaBusca = nomeLimpo.toUpperCase();
 
-      const payload = {
-        ...data,
+      // LÓGICA INTELIGENTE DO SUS (Igual ao de alunos + fallback inteligente)
+      let susFinal = data.cartaoSus;
+      if (data.naoSabeSus || !susFinal) {
+        susFinal = "NÃO INFORMADO";
+      }
+
+      // SALVAMENTO DIRETO NA COLEÇÃO (Sem passar por services de email/auth)
+      await addDoc(collection(db, "funcionario"), {
         nome: nomeLimpo,
-        nomeBusca: nomeParaBusca, // CHAVE DE LIGAÇÃO PARA O PRONTUÁRIO
-        tipoPerfil: 'funcionario', // Identificador de categoria
-        cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
-        dataCadastro: new Date().toISOString()
-      };
+        nomeBusca: nomeParaBusca,
+        tipoPerfil: 'funcionario',
+        idade: data.idade,
+        sexo: data.sexo,
+        cargo: data.cargo,
+        cartaoSus: susFinal,
+        
+        // ESTRUTURA DE ALERGIAS (Mantendo o Map para a Pasta Digital)
+        alergias: {
+          possui: data.temAlergia,
+          detalhes: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma informada"
+        },
+        
+        dataCadastro: new Date().toISOString(),
+        createdAt: serverTimestamp()
+      });
       
-      await funcionarioService.cadastrar(payload);
       reset();
     };
 
     toast.promise(saveAction(), {
-      loading: 'CADASTRANDO...',
-      success: 'SUCESSO!',
-      error: (err) => `ERRO: ${err.message}`,
+      loading: 'SALVANDO DADOS...',
+      success: 'STAFF CADASTRADO COM SUCESSO!',
+      error: 'ERRO AO SALVAR NO FIREBASE.',
     }, {
       style: {
         minWidth: '300px',
@@ -70,12 +82,12 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
           </div>
           <div>
             <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Cadastro Staff</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registrar novo profissional</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registrar na coleção funcionario</p>
           </div>
         </div>
         <button 
           onClick={onVoltar}
-          className="flex items-center gap-2 text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest"
+          className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest flex items-center gap-2"
         >
           <ChevronLeft size={14} /> Voltar
         </button>
@@ -83,62 +95,34 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Nome Completo */}
+        {/* Nome */}
         <div className="md:col-span-2 space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-          <input 
-            {...register("nome")} 
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" 
-            placeholder="Nome do funcionário"
-            required 
-          />
+          <input {...register("nome")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
         </div>
 
-        {/* Idade */}
+        {/* Idade e Sexo */}
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-            <Calendar size={12} className="text-blue-600"/> Idade
-          </label>
-          <input 
-            type="number"
-            {...register("idade")} 
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
-            placeholder="Ex: 35"
-            required 
-          />
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Idade</label>
+          <input type="number" {...register("idade")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
         </div>
 
-        {/* Sexo */}
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-            <User size={12} className="text-blue-600"/> Sexo
-          </label>
-          <select 
-            {...register("sexo")} 
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm cursor-pointer"
-            required
-          >
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Sexo</label>
+          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm cursor-pointer" required>
             <option value="">Selecione...</option>
             <option value="Masculino">Masculino</option>
             <option value="Feminino">Feminino</option>
-            <option value="Outros">Outros</option>
           </select>
         </div>
 
         {/* Cargo */}
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-            <Briefcase size={12} className="text-blue-600"/> Cargo / Função
-          </label>
-          <input 
-            {...register("cargo")} 
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
-            placeholder="Ex: Professor"
-            required 
-          />
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Cargo / Função</label>
+          <input {...register("cargo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
         </div>
 
-        {/* Cartão SUS */}
+        {/* Cartão SUS Inteligente */}
         <div className="space-y-2">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -161,16 +145,39 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
           />
         </div>
 
-        {/* Histórico Clínico */}
-        <div className="md:col-span-2 space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
-            <ShieldAlert size={12} className="text-orange-500"/> Histórico / Alergias
-          </label>
-          <textarea 
-            {...register("historicoMedico")} 
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm resize-none" 
-            rows="3"
-          ></textarea>
+        {/* Alergias Dinâmicas */}
+        <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+              <AlertCircle size={14} className="text-orange-500"/> Possui alguma alergia?
+            </label>
+            
+            <div className="flex bg-white p-1 rounded-xl shadow-inner border border-slate-200">
+              {["Sim", "Não"].map((opcao) => (
+                <label key={opcao} className="cursor-pointer">
+                  <input type="radio" value={opcao} {...register("temAlergia")} className="hidden peer" />
+                  <span className="px-6 py-2 rounded-lg text-[10px] font-black uppercase transition-all peer-checked:bg-slate-900 peer-checked:text-white text-slate-400 block">
+                    {opcao}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {temAlergia === "Sim" && (
+            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+              <label className="text-[9px] font-black text-orange-600 uppercase tracking-widest ml-1 flex items-center gap-2">
+                 <ShieldAlert size={12}/> Descreva as alergias
+              </label>
+              <textarea 
+                {...register("historicoMedico")} 
+                className="w-full mt-2 px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 transition-all shadow-sm resize-none" 
+                rows="3"
+                placeholder="Ex: Alérgico a penicilina e frutos do mar..."
+                required={temAlergia === "Sim"}
+              ></textarea>
+            </div>
+          )}
         </div>
 
         <button 
