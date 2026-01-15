@@ -8,6 +8,9 @@ import {
 import { db } from '../firebase/firebaseConfig';
 import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 
+// Importação do novo componente de impressão
+import ImpressaoPastaDigital from './ImpressaoPastaDigital';
+
 const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
@@ -17,233 +20,10 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
   
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null);
+  const [imprimirAtendimento, setImprimirAtendimento] = useState(null); // Novo estado para controle de impressão
   const itensPorPagina = 5;
 
-  // --- FUNÇÃO DE IMPRESSÃO PROFISSIONAL ATUALIZADA ---
-  const handleImprimir = (atend) => {
-    const win = window.open('', '_blank');
-    win.document.write(`
-      <html>
-        <head>
-          <title>BAENF - ${atend.nomePaciente}</title>
-          <style>
-            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-            
-            body { 
-              font-family: 'Inter', sans-serif; 
-              padding: 0; 
-              margin: 0; 
-              color: #0f172a; 
-              background-color: #fff;
-              -webkit-print-color-adjust: exact;
-            }
-            
-            .page { 
-              padding: 40px; 
-              max-width: 800px; 
-              margin: auto;
-            }
-            
-            /* Cabeçalho de Documento Oficial */
-            .header { 
-              display: flex; 
-              justify-content: space-between; 
-              align-items: center; 
-              border-bottom: 3px solid #020617; 
-              padding-bottom: 15px; 
-              margin-bottom: 25px;
-            }
-            
-            .brand h1 { 
-              margin: 0; 
-              font-size: 22px; 
-              font-weight: 900; 
-              text-transform: uppercase; 
-              letter-spacing: -1px; 
-              font-style: italic;
-              color: #020617;
-            }
-            
-            .brand h1 span { color: #2563eb; }
-            .brand p { margin: 0; font-size: 10px; color: #64748b; font-weight: 700; text-transform: uppercase; }
-            
-            .doc-type { text-align: right; }
-            .doc-type div { font-size: 9px; font-weight: 900; color: #2563eb; text-transform: uppercase; letter-spacing: 1px; }
-            .doc-type h2 { margin: 0; font-size: 16px; font-weight: 900; color: #020617; }
-
-            /* Alerta de Alergia Estilizado */
-            .alerta-alergia {
-              background: #fef2f2;
-              border: 1px solid #ef4444;
-              padding: 10px 15px;
-              border-radius: 8px;
-              margin-bottom: 20px;
-              color: #b91c1c;
-              font-size: 12px;
-              font-weight: 700;
-              text-transform: uppercase;
-              display: flex;
-              align-items: center;
-              gap: 8px;
-            }
-
-            /* Grade de Informações */
-            .section-label { 
-              font-size: 9px; 
-              font-weight: 900; 
-              text-transform: uppercase; 
-              color: #64748b; 
-              margin-bottom: 6px; 
-              letter-spacing: 0.5px;
-              border-left: 3px solid #2563eb;
-              padding-left: 8px;
-            }
-
-            .info-grid { 
-              display: grid; 
-              grid-template-cols: repeat(4, 1fr); 
-              gap: 12px; 
-              margin-bottom: 25px; 
-            }
-            
-            .info-item { 
-              background: #f8fafc; 
-              padding: 10px; 
-              border-radius: 6px; 
-              border: 1px solid #e2e8f0;
-            }
-            
-            .info-item .label { font-size: 8px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
-            .info-item .value { font-size: 11px; font-weight: 700; color: #1e293b; }
-
-            /* Blocos de Texto */
-            .text-block { 
-              margin-bottom: 20px; 
-            }
-            
-            .content-area { 
-              padding: 15px; 
-              background: #fff;
-              border: 1px solid #e2e8f0; 
-              border-radius: 8px; 
-              font-size: 12px; 
-              line-height: 1.6;
-              color: #334155;
-              min-height: 50px;
-            }
-            
-            .highlight { background: #f1f5f9; font-weight: 700; color: #0f172a; }
-
-            /* Rodapé e Assinatura */
-            .footer { 
-              margin-top: 50px; 
-              display: flex; 
-              justify-content: space-between; 
-              align-items: flex-end;
-              border-top: 1px solid #f1f5f9;
-              padding-top: 20px;
-            }
-            
-            .meta-info { font-size: 8px; color: #94a3b8; line-height: 1.4; }
-            
-            .signature-box { 
-              text-align: center; 
-              width: 250px;
-            }
-            
-            .sig-line { border-top: 1px solid #020617; margin-bottom: 5px; }
-            .sig-name { font-size: 11px; font-weight: 900; text-transform: uppercase; }
-            .sig-role { font-size: 9px; color: #64748b; font-weight: 600; }
-
-            @media print {
-              body { padding: 0; }
-              .page { padding: 20px; }
-              button { display: none; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="page">
-            <header class="header">
-              <div class="brand">
-                <h1>SISTEMA <span>SAÚDE</span></h1>
-                <p>${atend.escola || 'Unidade de Saúde Escolar'}</p>
-              </div>
-              <div class="doc-type">
-                <div>Documento de Enfermagem</div>
-                <h2>BAENF #${atend.baenf || 'S/N'}</h2>
-              </div>
-            </header>
-
-            ${atend.qualAlergia || atend.alunoPossuiAlergia === 'Sim' ? `
-              <div class="alerta-alergia">
-                ⚠️ ALERGIA IDENTIFICADA: ${atend.qualAlergia || 'Não especificada'}
-              </div>
-            ` : ''}
-
-            <div class="section-label">Dados do Paciente</div>
-            <div class="info-grid">
-              <div class="info-item" style="grid-column: span 2;">
-                <div class="label">Paciente</div>
-                <div class="value">${atend.nomePaciente}</div>
-              </div>
-              <div class="info-item">
-                <div class="label">Data / Hora</div>
-                <div class="value">${atend.dataAtendimento} às ${atend.horario}</div>
-              </div>
-              <div class="info-item">
-                <div class="label">Turma/Setor</div>
-                <div class="value">${atend.turma || '---'}</div>
-              </div>
-              <div class="info-item">
-                <div class="label">Temperatura</div>
-                <div class="value">${atend.temperatura ? atend.temperatura + '°C' : 'Não aferida'}</div>
-              </div>
-              <div class="info-item">
-                <div class="label">Cartão SUS</div>
-                <div class="value">${atend.cartaoSus || '---'}</div>
-              </div>
-              <div class="info-item" style="grid-column: span 2;">
-                <div class="label">Status do Atendimento</div>
-                <div class="value">${atend.statusAtendimento || 'Finalizado'}</div>
-              </div>
-            </div>
-
-            <div class="text-block">
-              <div class="section-label">Motivo do Atendimento / Queixa Principal</div>
-              <div class="content-area highlight">
-                ${atend.motivoAtendimento}
-              </div>
-            </div>
-
-            <div class="text-block">
-              <div class="section-label">Evolução e Conduta Técnica</div>
-              <div class="content-area">
-                ${atend.observacoes || 'Sem observações técnicas adicionais registradas no sistema.'}
-              </div>
-            </div>
-
-            <footer class="footer">
-              <div class="meta-info">
-                Emitido em: ${new Date().toLocaleString('pt-BR')}<br>
-                Autenticação Digital: ${atend.id}<br>
-                Cópia do Prontuário Eletrônico
-              </div>
-              <div class="signature-box">
-                <div class="sig-line"></div>
-                <div class="sig-name">${atend.profissionalNome}</div>
-                <div class="sig-role">${atend.profissionalRegistro || 'Enfermeiro(a) Responsável'}</div>
-              </div>
-            </footer>
-          </div>
-        </body>
-      </html>
-    `);
-    win.document.close();
-    win.print();
-  };
-
-  // 1. LÓGICA DE ALERTA DE ALERGIA
+  // LÓGICA DE ALERTA DE ALERGIA
   const temAlergiaCritica = () => {
     if (!resultado) return false;
     const daSaude = resultado.saude?.alergias?.possui === 'Sim';
@@ -259,7 +39,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
            "Não especificada";
   };
 
-  // 2. CARGA DE NOMES (AUTOCOMPLETE)
+  // CARGA DE NOMES (AUTOCOMPLETE)
   useEffect(() => {
     const carregarNomesRecentes = async () => {
       try {
@@ -277,7 +57,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
     carregarNomesRecentes();
   }, []);
 
-  // 3. LÓGICA PARA NOVO REGISTRO
   const handleAcaoRegistro = () => {
     if (!resultado) return;
     const ultimoAtend = resultado.atendimentos[0] || {};
@@ -347,6 +126,14 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 font-sans">
       
+      {/* Componente Invisível de Impressão */}
+      {imprimirAtendimento && (
+        <ImpressaoPastaDigital 
+          atendimento={imprimirAtendimento} 
+          onFinished={() => setImprimirAtendimento(null)} 
+        />
+      )}
+
       {/* MODAL: DETALHES DO ATENDIMENTO */}
       {atendimentoSelecionado && (
         <div className="fixed inset-0 z-[150] flex items-center justify-end bg-slate-900/80 backdrop-blur-sm p-4">
@@ -392,7 +179,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
                     <p className="text-xs font-black text-slate-800 uppercase italic">{atendimentoSelecionado.profissionalNome}</p>
                 </div>
                 <button 
-                  onClick={() => handleImprimir(atendimentoSelecionado)}
+                  onClick={() => setImprimirAtendimento(atendimentoSelecionado)}
                   className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all"
                 >
                    <FileText size={16} /> Imprimir BAENF
@@ -477,7 +264,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
           </div>
 
           <div className="lg:col-span-3 space-y-6">
-             <div className="flex items-center justify-between px-4">
+              <div className="flex items-center justify-between px-4">
                 <h4 className="flex items-center gap-3 text-slate-900 font-black uppercase italic text-xl">
                     <Activity className="text-blue-600" /> Histórico de BAM/BAENF
                 </h4>
@@ -486,9 +273,9 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
                     <span className="text-[9px] font-black w-12 text-center uppercase">{paginaAtual} / {totalPaginas || 1}</span>
                     <button onClick={() => setPaginaAtual(p => Math.min(totalPaginas, p+1))} disabled={paginaAtual === totalPaginas || totalPaginas === 0} className="p-1 hover:bg-slate-100 rounded-lg disabled:opacity-20"><ChevronRight size={16}/></button>
                 </div>
-             </div>
+              </div>
 
-             <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
+              <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b border-slate-100">
                         <tr>
@@ -526,7 +313,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
                         )}
                     </tbody>
                 </table>
-             </div>
+              </div>
           </div>
         </div>
       )}
