@@ -87,6 +87,9 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const [isExpanded, setIsExpanded] = useState(true);
   const [darkMode, setDarkMode] = useState(true); 
   
+  // ✅ NOVO ESTADO PARA RECEBER DADOS DA PASTA DIGITAL
+  const [dadosParaEdicao, setDadosParaEdicao] = useState(null);
+  
   const unsubscribeRef = useRef(null);
 
   useEffect(() => {
@@ -107,15 +110,22 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     } catch (error) { console.error(error); }
   };
 
-  // ✅ LOGICA DE ACESSO REFORÇADA
   const isLiberado = (itemKey) => {
     if (user?.status === 'bloqueado') return false;
     if (user?.statusLicenca === 'bloqueada') return false;
-    if (!user?.modulosSidebar) return true; // Caso padrão se não houver objeto de módulos
+    if (!user?.modulosSidebar) return true;
     return user.modulosSidebar[itemKey] !== false;
   };
 
   const isUsuarioBloqueado = user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada';
+
+  // ✅ NOVA FUNÇÃO PARA TRATAR O CLIQUE NA PASTA DIGITAL
+  const handleNovoAtendimentoDaPasta = (payload) => {
+    // payload é { tipo: 'ALUNO' ou 'FUNCIONARIO', dados: { ... } }
+    setDadosParaEdicao(payload.dados);
+    setCadastroMode(payload.tipo.toLowerCase()); // 'aluno' ou 'funcionario'
+    setActiveTab("pacientes"); // Muda para a aba de cadastros
+  };
 
   const menuItems = [
     { id: "home", label: "Dashboard", icon: <LayoutDashboard size={20} />, key: "dashboard" },
@@ -148,14 +158,21 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     switch (activeTab) {
       case "home": return <HomeEnfermeiro user={user} setActiveTab={setActiveTab} isLiberado={isLiberado} darkMode={darkMode} />;
       case "atendimento": return <AtendimentoEnfermagem user={user} onVoltar={() => setActiveTab("home")} />;
-      case "pasta_digital": return <PastaDigital onVoltar={() => setActiveTab("home")} />;
+      
+      // ✅ ATUALIZADO: PASSA A NOVA FUNÇÃO PARA A PASTA DIGITAL
+      case "pasta_digital": return <PastaDigital onVoltar={() => setActiveTab("home")} onNovoAtendimento={handleNovoAtendimentoDaPasta} />;
+      
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
+      
       case "pacientes":
-        if (cadastroMode === "aluno") return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
-        if (cadastroMode === "funcionario") return <FormCadastroFuncionario onVoltar={() => setActiveTab("home")} />;
-        if (cadastroMode === "saude_escolar") return <QuestionarioSaude onVoltar={() => setActiveTab("home")} />;
+        // Limpamos os dados de edição ao sair ou cancelamos? 
+        // Passamos 'dadosIniciais' para os formulários
+        if (cadastroMode === "aluno") return <FormCadastroAluno dadosIniciais={dadosParaEdicao} onVoltar={() => { setActiveTab("home"); setDadosParaEdicao(null); }} />;
+        if (cadastroMode === "funcionario") return <FormCadastroFuncionario dadosIniciais={dadosParaEdicao} onVoltar={() => { setActiveTab("home"); setDadosParaEdicao(null); }} />;
+        if (cadastroMode === "saude_escolar") return <QuestionarioSaude onVoltar={() => { setActiveTab("home"); setDadosParaEdicao(null); }} />;
         return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
+      
       case "relatorio_geral": return <div className={`p-10 font-black uppercase italic ${theme.sidebarText}`}>Relatórios Consolidados</div>;
       default: return <HomeEnfermeiro user={user} darkMode={darkMode} />;
     }
@@ -163,21 +180,19 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
   return (
     <div className={`fixed inset-0 z-[999] flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${theme.contentBg}`}>
-      
-      {/* OVERLAY DE BLOQUEIO TOTAL */}
       {isUsuarioBloqueado && <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />}
 
       {/* SIDEBAR SLIM */}
       <div className={`w-16 flex flex-col items-center py-8 gap-8 border-r shrink-0 z-50 ${darkMode ? "bg-[#050B18] border-white/5" : "bg-slate-100 border-slate-200"}`}>
-         <div className="text-blue-500"><Stethoscope size={24} /></div>
-         <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-xl transition-all ${darkMode ? "text-yellow-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-200"}`}>
-           {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-         </button>
-         <button className={`${darkMode ? "text-slate-600 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><Bell size={20} /></button>
-         <button className={`${darkMode ? "text-slate-600 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><Settings size={20} /></button>
-         <button onClick={() => setActiveTab("suporte")} className={`mt-auto mb-4 p-2 rounded-xl transition-all ${activeTab === "suporte" ? "bg-blue-600 text-white" : "text-emerald-500/50 hover:bg-white/5"}`}>
-            <LifeBuoy size={20} />
-         </button>
+          <div className="text-blue-500"><Stethoscope size={24} /></div>
+          <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-xl transition-all ${darkMode ? "text-yellow-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-200"}`}>
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+          <button className={`${darkMode ? "text-slate-600 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><Bell size={20} /></button>
+          <button className={`${darkMode ? "text-slate-600 hover:text-white" : "text-slate-400 hover:text-slate-900"}`}><Settings size={20} /></button>
+          <button onClick={() => setActiveTab("suporte")} className={`mt-auto mb-4 p-2 rounded-xl transition-all ${activeTab === "suporte" ? "bg-blue-600 text-white" : "text-emerald-500/50 hover:bg-white/5"}`}>
+             <LifeBuoy size={20} />
+          </button>
       </div>
 
       {/* SIDEBAR PRINCIPAL */}
@@ -202,7 +217,11 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                     disabled={!liberado}
                     onClick={() => {
                       if (item.subItems) setMenuAberto(menuAberto === item.id ? null : item.id);
-                      else { setActiveTab(item.id); setMenuAberto(null); }
+                      else { 
+                        setActiveTab(item.id); 
+                        setMenuAberto(null); 
+                        setDadosParaEdicao(null); // Limpa dados ao trocar manualmente de aba
+                      }
                     }}
                     className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${
                       !liberado ? "opacity-30 cursor-not-allowed grayscale" : 
@@ -220,7 +239,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                   {item.subItems && liberado && menuAberto === item.id && (
                     <div className={`ml-9 mt-2 space-y-2 border-l pl-4 ${darkMode ? "border-white/10" : "border-slate-200"}`}>
                       {item.subItems.map(sub => (
-                        <button key={sub.id} onClick={() => { setActiveTab(item.id); setCadastroMode(sub.id); }} className={`w-full text-left text-[9px] font-black uppercase tracking-widest ${cadastroMode === sub.id && isActive ? "text-blue-500" : "text-slate-500 hover:text-blue-500"}`}>
+                        <button key={sub.id} onClick={() => { setActiveTab(item.id); setCadastroMode(sub.id); setDadosParaEdicao(null); }} className={`w-full text-left text-[9px] font-black uppercase tracking-widest ${cadastroMode === sub.id && isActive ? "text-blue-500" : "text-slate-500 hover:text-blue-500"}`}>
                           {sub.label}
                         </button>
                       ))}
@@ -248,7 +267,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
         </div>
       </aside>
 
-      {/* CONTEÚDO PRINCIPAL */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className={`h-20 border-b flex items-center justify-between px-8 shrink-0 ${darkMode ? "bg-[#0A1629] border-white/5" : "bg-white border-slate-200"}`}>
           <div className="flex items-center gap-4">
