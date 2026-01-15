@@ -12,6 +12,7 @@ export const AuthProvider = ({ children }) => {
   const handleLogout = () => {
     localStorage.removeItem("current_session_id");
     signOut(auth);
+    setUserData(null); // Limpa o estado local imediatamente
     if (window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
@@ -22,7 +23,6 @@ export const AuthProvider = ({ children }) => {
     let unsubscribeDoc = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
-      // Limpa listener anterior se existir
       if (unsubscribeDoc) {
         unsubscribeDoc();
         unsubscribeDoc = null;
@@ -40,13 +40,22 @@ export const AuthProvider = ({ children }) => {
                 const data = docSnap.data();
                 const localSession = localStorage.getItem("current_session_id");
 
-                // Validação de Sessão Única
-                if (
+                // --- 1. VERIFICAÇÃO DE SESSÃO ÚNICA ---
+                const sessaoInvalida = 
                   data.currentSessionId && 
                   localSession && 
-                  data.currentSessionId !== localSession &&
-                  currentUser.email !== "rodrigohono21@gmail.com"
-                ) {
+                  data.currentSessionId !== localSession;
+
+                // --- 2. VERIFICAÇÃO DE BLOQUEIO INSTANTÂNEO ---
+                const contaBloqueada = 
+                  data.status === 'bloqueado' || 
+                  data.statusLicenca === 'bloqueada' || 
+                  data.licencaStatus === 'bloqueada';
+
+                // Root (você) é imune à sessão única para poder testar em várias abas
+                const isRoot = currentUser.email === "rodrigohono21@gmail.com";
+
+                if (!isRoot && (sessaoInvalida || contaBloqueada)) {
                   handleLogout();
                   return;
                 }
@@ -57,6 +66,7 @@ export const AuthProvider = ({ children }) => {
                   ...data 
                 });
               } else {
+                // Caso o documento do usuário seja deletado do banco
                 setUserData({ 
                   uid: currentUser.uid, 
                   email: currentUser.email, 

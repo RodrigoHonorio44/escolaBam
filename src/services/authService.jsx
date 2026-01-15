@@ -4,14 +4,13 @@ import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firest
 import { initializeApp, deleteApp } from 'firebase/app';
 
 /**
- * SERVIÇO DE LOGIN COM SESSÃO ÚNICA (KICKOUT)
+ * SERVIÇO DE LOGIN COM SESSÃO ÚNICA E TRAVA DE EXPIRAÇÃO
  */
 export const loginService = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // 🚨 CORREÇÃO: Mudado de "users" para "usuarios"
     const userRef = doc(db, "usuarios", user.uid);
     const userSnap = await getDoc(userRef);
 
@@ -22,19 +21,29 @@ export const loginService = async (email, password) => {
 
     const userData = userSnap.data();
 
-    // Verificação de Licença
+    // 🛡️ VERIFICAÇÃO DE EXPIRAÇÃO DE LICENÇA
+    if (userData.dataExpiracao) {
+      const dataAtual = new Date();
+      const dataExpiracao = new Date(userData.dataExpiracao);
+      if (dataAtual > dataExpiracao) {
+        await updateDoc(userRef, { status: 'bloqueado', statusLicenca: 'expirada' });
+        await signOut(auth);
+        throw new Error("Sua licença expirou. Entre em contato com a administração.");
+      }
+    }
+
+    // Verificação de Status Suspenso
     if (userData.statusLicenca === 'bloqueado' && userData.role !== 'admin_saas') {
       await signOut(auth);
       throw new Error("Acesso suspenso. Entre em contato com a administração.");
     }
 
     const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    // Padronizando a chave do localStorage
     localStorage.setItem('current_session_id', newSessionId);
 
     await updateDoc(userRef, {
       currentSessionId: newSessionId,
-      ultimoLogin: serverTimestamp() // Usando timestamp oficial
+      ultimoLogin: serverTimestamp()
     });
 
     return { ...user, ...userData };
@@ -42,8 +51,6 @@ export const loginService = async (email, password) => {
     let message = "Falha ao acessar o sistema.";
     if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
       message = "E-mail ou senha incorretos.";
-    } else if (error.code === 'auth/too-many-requests') {
-      message = "Muitas tentativas. Tente novamente em instantes.";
     } else if (error.message) {
       message = error.message;
     }
@@ -52,7 +59,7 @@ export const loginService = async (email, password) => {
 };
 
 /**
- * SERVIÇO DE CADASTRO (EVITA O LOGOUT DO ADMIN)
+ * SERVIÇO DE CADASTRO (DINÂMICO - SALVA TODOS OS CAMPOS DO FORMULÁRIO)
  */
 export const cadastrarUsuarioService = async (dados) => {
   const tempAppName = `tempApp_${Date.now()}`;
@@ -63,12 +70,14 @@ export const cadastrarUsuarioService = async (dados) => {
     const userCredential = await createUserWithEmailAndPassword(tempAuth, dados.email, dados.password);
     const newUser = userCredential.user;
 
-    // 🚨 CORREÇÃO: Gravando em "usuarios" e removendo o Hospital Fixo
+    // 1. Separamos a senha para não salvar no Firestore
+    const { password, ...dadosParaSalvar } = dados;
+
+    // 2. Gravamos em "usuarios" usando o spread (...dadosParaSalvar)
+    // Isso garante que modulosSidebar e registroProfissional sejam incluídos!
     await setDoc(doc(db, "usuarios", newUser.uid), {
-      nome: dados.nome,
-      email: dados.email,
-      role: dados.role || 'enfermeiro',
-      // 🚨 AGORA SALVA A ESCOLA CERTA (Anísio Teixeira)
+      ...dadosParaSalvar, // <--- AQUI ENTRA O COREN E OS MÓDULOS
+      uid: newUser.uid,
       escolaId: dados.escolaId || 'E. M. Anísio Teixeira', 
       statusLicenca: 'ativa',
       status: 'ativo',
@@ -81,12 +90,9 @@ export const cadastrarUsuarioService = async (dados) => {
 
     return { success: true, uid: newUser.uid };
   } catch (error) {
-    await deleteApp(tempApp);
+    if (tempApp) await deleteApp(tempApp);
     console.error("Erro no cadastro:", error);
-    
-    let msg = "Erro ao cadastrar usuário.";
-    if (error.code === 'auth/email-already-in-use') msg = "E-mail já cadastrado.";
-    
+    let msg = error.code === 'auth/email-already-in-use' ? "E-mail já cadastrado." : "Erro ao cadastrar.";
     throw new Error(msg);
   }
 };

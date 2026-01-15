@@ -137,7 +137,7 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
 
         {/* RODAPÉ TÉCNICO */}
         <footer className="mt-8 pt-2 border-t border-slate-100 text-[8px] flex justify-between text-slate-400 font-bold uppercase tracking-tighter">
-          <span>MedSys • Gestão Inteligente de Saúde Escolar</span>
+          <span>Baenf • Gestão Inteligente de Saúde Escolar</span>
           <span>ID do Documento: {data.id?.substring(0,8) || 'DRAFT'}</span>
         </footer>
       </div>

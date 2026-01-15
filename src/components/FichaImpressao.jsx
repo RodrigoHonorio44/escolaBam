@@ -26,12 +26,12 @@ const FichaImpressao = ({ dados, onVoltar }) => {
         {/* CABEÇALHO OFICIAL */}
         <div className="border-b-4 border-slate-900 pb-6 mb-8 flex justify-between items-start">
           <div>
-            <h1 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Boletim de Atendimento Médico (BAM)</h1>
+            <h1 className="text-2xl font-black uppercase tracking-tighter text-slate-900">Ficha de Atendimento (BAENF)</h1>
             <p className="text-sm font-bold text-slate-500 uppercase tracking-widest">{dados.escola}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] font-black text-slate-400 uppercase">Registro No.</p>
-            <p className="text-lg font-black text-blue-600">{dados.bam}</p>
+            <p className="text-lg font-black text-blue-600">{dados.baenf || dados.bam}</p>
           </div>
         </div>
 
@@ -111,24 +111,15 @@ const FichaImpressao = ({ dados, onVoltar }) => {
               </div>
             </div>
           )}
-
-          {/* FECHAMENTO HOSPITALAR (Se finalizado) */}
-          {dados.statusAtendimento === 'Finalizado' && dados.condutaHospitalar && (
-            <div className="bg-green-50 border border-green-100 p-6 rounded-2xl space-y-4">
-              <h3 className="text-green-700 font-black uppercase text-xs tracking-widest">Desfecho / Alta Hospitalar</h3>
-              <p className="text-sm text-green-800 italic">"{dados.condutaHospitalar}"</p>
-              <div className="text-[10px] font-bold text-green-600 uppercase">
-                Finalizado por: {dados.finalizadoPor} em {new Date(dados.finalizadoEm).toLocaleDateString()}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* ASSINATURAS */}
+        {/* ASSINATURAS — NOME E REGISTRO NA MESMA LINHA */}
         <div className="mt-20 grid grid-cols-2 gap-20">
           <div className="text-center border-t border-slate-300 pt-4">
-            <p className="text-[10px] font-black uppercase text-slate-400">{dados.profissionalNome}</p>
-            <p className="text-[9px] font-bold text-slate-500 uppercase">{dados.profissionalCargo}</p>
+            <p className="text-[10px] font-black uppercase text-slate-800">
+              {dados.profissionalNome} — COREN: {dados.profissionalRegistro || 'NÃO INFORMADO'}
+            </p>
+            <p className="text-[9px] font-bold text-slate-500 uppercase">{dados.profissionalCargo || 'Enfermagem'}</p>
           </div>
           <div className="text-center border-t border-slate-300 pt-4">
             <p className="text-[10px] font-black uppercase text-slate-400">Responsável / Ciente</p>

@@ -13,7 +13,6 @@ const TrocarSenha = () => {
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
 
-  // Lógica de validação em tempo real
   const validacoes = {
     length: novaSenha.length >= 6,
     special: /[!@#$%^&*(),.?":{}|<>]/.test(novaSenha),
@@ -39,32 +38,34 @@ const TrocarSenha = () => {
       await updateDoc(userRef, {
         primeiroAcesso: false,
         dataUltimaTroca: new Date().toISOString(),
-        status: 'ativo'
+        status: 'ativo',
+        statusLicenca: 'ativa', // Garantindo padronização
+        licencaStatus: 'ativa'   // Garantindo padronização
       });
 
-      // 3. LOGOUT IMEDIATO
-      // Isso limpa o estado de autenticação ANTES de redirecionar,
-      // garantindo que o Dashboard nem tente carregar.
+      // 3. LIMPEZA E LOGOUT
+      localStorage.removeItem("current_session_id"); // Limpa sessão antiga
       await signOut(auth);
 
-      toast.success("SENHA ALTERADA COM SUCESSO!", {
+      toast.success("SENHA ALTERADA! FAÇA LOGIN NOVAMENTE.", {
         style: {
           background: '#0f172a',
           color: '#fff',
           fontWeight: '900',
-          fontSize: '11px'
+          fontSize: '11px',
+          borderRadius: '12px'
         }
       });
 
-      // 4. Redirecionamento limpo
+      // 4. Redirecionamento limpo para forçar novo login
       setTimeout(() => {
         window.location.replace('/login'); 
-      }, 1500);
+      }, 2000);
 
     } catch (err) {
       console.error(err);
       if (err.code === 'auth/requires-recent-login') {
-        setErro("SESSÃO EXPIRADA. POR SEGURANÇA, FAÇA LOGIN NOVAMENTE PARA TROCAR A SENHA.");
+        setErro("SESSÃO EXPIRADA. POR SEGURANÇA, SAIA E ENTRE NOVAMENTE PARA TROCAR A SENHA.");
       } else {
         setErro("ERRO TÉCNICO: " + err.message.toUpperCase());
       }
@@ -91,10 +92,10 @@ const TrocarSenha = () => {
         </div>
         
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter">Primeiro Acesso</h2>
+          <h2 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter">Segurança</h2>
           <p className="text-slate-500 text-sm font-medium mt-1 px-4">
             Olá, <span className="text-blue-600 font-bold">{user?.nome?.split(' ')[0]}</span>. 
-            Defina sua senha definitiva para liberar seu acesso.
+            Defina sua senha definitiva para continuar.
           </p>
         </div>
 
@@ -104,7 +105,7 @@ const TrocarSenha = () => {
             <input 
               type="password" 
               placeholder="••••••••" 
-              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-600 focus:bg-white font-bold transition-all"
+              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-600 focus:bg-white font-bold transition-all shadow-inner"
               onChange={(e) => setNovaSenha(e.target.value)} 
             />
           </div>
@@ -114,13 +115,13 @@ const TrocarSenha = () => {
             <input 
               type="password" 
               placeholder="••••••••" 
-              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-600 focus:bg-white font-bold transition-all"
+              className="w-full p-4 bg-slate-50 border-2 border-slate-100 rounded-2xl outline-none focus:border-blue-600 focus:bg-white font-bold transition-all shadow-inner"
               onChange={(e) => setConfirmarSenha(e.target.value)} 
             />
           </div>
 
           <div className="bg-slate-50 p-5 rounded-3xl space-y-2.5 border border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 italic">Segurança:</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 italic">Requisitos:</p>
             
             <div className={`flex items-center gap-3 text-xs font-bold transition-colors ${validacoes.length ? 'text-emerald-500' : 'text-slate-400'}`}>
               <div className={`w-5 h-5 rounded-full flex items-center justify-center ${validacoes.length ? 'bg-emerald-100' : 'bg-slate-200'}`}>
@@ -165,7 +166,7 @@ const TrocarSenha = () => {
               : 'bg-slate-100 text-slate-300 cursor-not-allowed shadow-none'
             }`}
           >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : 'FINALIZAR E LOGAR'}
+            {loading ? <Loader2 className="animate-spin" size={18} /> : 'SALVAR E FINALIZAR'}
           </button>
         </form>
       </div>

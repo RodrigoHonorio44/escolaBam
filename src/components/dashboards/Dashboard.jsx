@@ -8,7 +8,7 @@ import {
   AlertCircle, ArrowRight, Loader2, Eye, LayoutDashboard, Undo2 
 } from 'lucide-react';
 
-// ✅ IMPORTANTE: Importe o seu Dashboard de Enfermeiro aqui
+// ✅ Dashboard de Enfermeiro
 import DashboardEnfermeiro from './DashboardEnfermeiro'; 
 
 const Dashboard = () => {
@@ -16,7 +16,7 @@ const Dashboard = () => {
   const [stats, setStats] = useState({ total: 0, ativos: 0, bloqueados: 0 });
   const [loading, setLoading] = useState(true);
   
-  // ✅ ESTADO PARA CONTROLAR A TRANSIÇÃO DE TELA
+  // ✅ CONTROLE DE TELA (ROOT <-> ENFERMEIRO)
   const [modoVisualizacao, setModoVisualizacao] = useState(false);
 
   useEffect(() => {
@@ -36,16 +36,15 @@ const Dashboard = () => {
   }, []);
 
   const formatarValidade = (data) => {
-    if (!data) return "2026"; // Seguindo a instrução de que o ano atual é 2026
+    if (!data) return "2026";
     const d = new Date(data);
     return d.getFullYear();
   };
 
-  // ✅ LÓGICA DE RENDERIZAÇÃO CONDICIONAL (MODO ENFERMEIRO)
+  // ✅ RENDERIZAÇÃO DO MODO ENFERMEIRO (QUANDO CLICAR NO BOTÃO)
   if (modoVisualizacao) {
     return (
       <div className="relative min-h-screen bg-slate-50">
-        {/* BOTÃO FLUTUANTE PARA VOLTAR AO ADMIN */}
         <button 
           onClick={() => setModoVisualizacao(false)}
           className="fixed bottom-8 right-8 z-[9999] bg-rose-600 hover:bg-rose-700 text-white px-8 py-5 rounded-[25px] shadow-2xl flex items-center gap-3 font-black uppercase italic tracking-tighter transition-all hover:scale-105 active:scale-95 border-4 border-white/20"
@@ -54,7 +53,6 @@ const Dashboard = () => {
           Sair da Visualização
         </button>
 
-        {/* COMPONENTE DO ENFERMEIRO */}
         <DashboardEnfermeiro user={user} />
       </div>
     );
@@ -62,7 +60,8 @@ const Dashboard = () => {
 
   return (
     <div className="p-2 md:p-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      {/* Cabeçalho Profissional */}
+      
+      {/* Header com Botão de Visualização */}
       <header className="mb-10 flex justify-between items-start">
         <div>
             <h2 className="text-5xl font-black text-slate-900 tracking-tighter italic">
@@ -74,16 +73,16 @@ const Dashboard = () => {
             </p>
         </div>
 
-        {/* BOTÃO RÁPIDO NO HEADER */}
+        {/* ✅ BOTÃO 1: VER SISTEMA (HEADER) */}
         <button 
            onClick={() => setModoVisualizacao(true)}
-           className="hidden md:flex items-center gap-2 bg-slate-900 text-white px-5 py-3 rounded-2xl font-black text-[10px] uppercase italic tracking-widest hover:bg-blue-600 transition-all shadow-lg shadow-slate-200"
+           className="flex items-center gap-2 bg-slate-900 text-white px-6 py-4 rounded-2xl font-black text-[11px] uppercase italic tracking-widest hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
         >
-            <Eye size={16} /> Ver Sistema
+            <Eye size={18} /> Entrar no Sistema
         </button>
       </header>
 
-      {/* Grid de Status Superior */}
+      {/* Grid de Status */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
         <div className="bg-white p-8 rounded-[35px] border border-slate-100 shadow-sm group">
           <div className="bg-blue-600 text-white w-10 h-10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
@@ -125,57 +124,58 @@ const Dashboard = () => {
       {/* Seção de Módulos Operacionais */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         
-        {/* NOVO CARD: ACESSAR SISTEMA (ENFERMEIRO) */}
+        {/* ✅ BOTÃO 2: CARD AZUL "ACESSAR MEDSYS" */}
         <div 
           onClick={() => setModoVisualizacao(true)}
-          className="cursor-pointer bg-blue-600 p-10 rounded-[45px] text-white flex flex-col justify-between min-h-[320px] shadow-2xl relative overflow-hidden group transition-all hover:bg-blue-700"
+          className="cursor-pointer bg-blue-600 p-10 rounded-[45px] text-white flex flex-col justify-between min-h-[340px] shadow-2xl relative overflow-hidden group transition-all hover:bg-blue-700"
         >
-           <div className="z-10 bg-white/20 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 border border-white/10">
-             <LayoutDashboard size={24} className="text-white"/>
-           </div>
-           <div className="z-10">
-             <h3 className="text-3xl font-black italic mb-2 tracking-tighter">Acessar MedSys</h3>
-             <p className="text-blue-100 text-xs font-medium leading-relaxed max-w-[250px]">
-                Entre na interface de enfermagem para realizar atendimentos e testes.
-             </p>
-             <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase text-white group-hover:gap-4 transition-all">
-                Abrir Módulo Clínico <ArrowRight size={14}/>
-             </div>
-           </div>
-           <Eye size={180} className="absolute -right-10 -bottom-10 text-white/10 rotate-12 group-hover:scale-110 transition-transform duration-700" />
+            <div className="z-10 bg-white/20 w-14 h-14 rounded-2xl flex items-center justify-center mb-4 border border-white/10 shadow-lg">
+              <LayoutDashboard size={28} className="text-white"/>
+            </div>
+            <div className="z-10">
+              <h3 className="text-4xl font-black italic mb-2 tracking-tighter">Entrar como Enfermeiro</h3>
+              <p className="text-blue-100 text-sm font-medium leading-relaxed max-w-[250px]">
+                Acesse o MedSys para realizar atendimentos clínicos, triagens e relatórios de saúde.
+              </p>
+              <div className="mt-8 flex items-center gap-3 text-[11px] font-black uppercase text-white group-hover:gap-5 transition-all">
+                Abrir Sistema Completo <ArrowRight size={16}/>
+              </div>
+            </div>
+            {/* Ícone de fundo decorativo */}
+            <LayoutDashboard size={200} className="absolute -right-12 -bottom-12 text-white/10 rotate-12 group-hover:scale-110 transition-transform duration-700" />
         </div>
 
         {/* Card Gestão de Usuários */}
         <Link to="/usuarios" className="bg-[#0f172a] p-10 rounded-[45px] text-white flex flex-col justify-between min-h-[320px] shadow-2xl relative overflow-hidden group">
-           <div className="z-10 bg-white/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 border border-white/10">
-             <Activity size={24} className="text-blue-400"/>
-           </div>
-           <div className="z-10">
-             <h3 className="text-3xl font-black italic mb-2 tracking-tighter">Gestão de Usuários</h3>
-             <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-[250px]">
-               Revogar acessos, editar perfis e gerenciar colaboradores da rede.
-             </p>
-             <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 group-hover:gap-4 transition-all">
-                Abrir Administração <ArrowRight size={14}/>
-             </div>
-           </div>
-           <Activity size={180} className="absolute -right-10 -bottom-10 text-white/5 rotate-12 group-hover:scale-110 transition-transform duration-700" />
+            <div className="z-10 bg-white/10 w-12 h-12 rounded-2xl flex items-center justify-center mb-4 border border-white/10">
+              <Activity size={24} className="text-blue-400"/>
+            </div>
+            <div className="z-10">
+              <h3 className="text-3xl font-black italic mb-2 tracking-tighter">Gestão de Usuários</h3>
+              <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-[250px]">
+                Revogar acessos, editar perfis e gerenciar colaboradores da rede.
+              </p>
+              <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase text-blue-400 group-hover:gap-4 transition-all">
+                 Abrir Administração <ArrowRight size={14}/>
+              </div>
+            </div>
+            <Activity size={180} className="absolute -right-10 -bottom-10 text-white/5 rotate-12 group-hover:scale-110 transition-transform duration-700" />
         </Link>
 
         {/* Card Controle SaaS */}
         <Link to="/licencas" className="bg-white p-10 rounded-[45px] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[320px] group hover:border-blue-200 transition-all">
-           <div className="bg-blue-50 w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
-             <ShieldCheck size={24} className="text-blue-600"/>
-           </div>
-           <div>
-             <h3 className="text-3xl font-black italic mb-2 tracking-tighter text-slate-800">Controle SaaS</h3>
-             <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-[250px]">
-               Faturamento estimado e renovação imediata de licenças expiradas.
-             </p>
-             <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 group-hover:gap-4 transition-all">
+            <div className="bg-blue-50 w-12 h-12 rounded-2xl flex items-center justify-center mb-4">
+              <ShieldCheck size={24} className="text-blue-600"/>
+            </div>
+            <div>
+              <h3 className="text-3xl font-black italic mb-2 tracking-tighter text-slate-800">Controle SaaS</h3>
+              <p className="text-slate-400 text-xs font-medium leading-relaxed max-w-[250px]">
+                Faturamento estimado e renovação imediata de licenças expiradas.
+              </p>
+              <div className="mt-8 flex items-center gap-2 text-[10px] font-black uppercase text-blue-600 group-hover:gap-4 transition-all">
                 Acessar Licenças <ArrowRight size={14}/>
-             </div>
-           </div>
+              </div>
+            </div>
         </Link>
       </div>
     </div>

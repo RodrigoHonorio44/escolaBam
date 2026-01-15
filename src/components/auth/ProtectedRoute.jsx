@@ -7,8 +7,9 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-900"></div>
+      <div className="flex h-screen flex-col items-center justify-center bg-slate-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-900 mb-4"></div>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verificando Credenciais...</p>
       </div>
     );
   }
@@ -18,21 +19,29 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. VERIFICAÇÃO DE BLOQUEIO (Adicione isto aqui!)
-  // Se o status for bloqueado, ele não pode ver NADA dentro das rotas protegidas
-  if (user.licencaStatus === 'bloqueado') {
-    return <Navigate to="/bloqueio" replace />;
+  // 2. VERIFICAÇÃO DE BLOQUEIO REFORÇADA
+  // Checamos todas as variantes de campos de status para garantir o bloqueio
+  const isBloqueado = 
+    user.status === 'bloqueado' || 
+    user.licencaStatus === 'bloqueada' || 
+    user.statusLicenca === 'bloqueada';
+
+  if (isBloqueado) {
+    // Redireciona para uma tela de aviso ou de volta para o login
+    // Se você não tiver a rota "/bloqueio", pode usar "/login"
+    return <Navigate to="/login" replace />;
   }
 
-  // 3. Se o usuário precisa trocar a senha (Primeiro Acesso)
-  if (user.primeiroAcesso === true) {
-    // Se você tiver uma rota de troca de senha, mande para lá. 
-    // Caso contrário, o componente TrocarSenha será renderizado pelo App.jsx
+  // 3. Verificação de Primeiro Acesso
+  // Se ele for um usuário comum e for o primeiro acesso, obriga a troca de senha
+  if (user.primeiroAcesso === true && location.pathname !== '/alterar-senha') {
+    return <Navigate to="/alterar-senha" replace />;
   }
 
   // 4. Verificação de Papéis (Roles)
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/unauthorized" replace />;
+  // O root sempre tem acesso, os demais verificamos o array de permissões
+  if (allowedRoles && user.role !== 'root' && !allowedRoles.includes(user.role)) {
+    return <Navigate to="/" replace />; // Ou uma página de "Sem permissão"
   }
 
   return children;

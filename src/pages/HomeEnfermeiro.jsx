@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../firebase/firebaseConfig'; 
-import { collection, query, where, onSnapshot, orderBy, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { 
   Users, 
   Clock, 
@@ -13,39 +13,19 @@ import {
   ShieldCheck
 } from 'lucide-react';
 
-const HomeEnfermeiro = ({ onIniciarAtendimento, onAbrirHistorico, onAbrirCadastros, onAbrirPastaDigital, darkMode }) => {
+const HomeEnfermeiro = ({ user, onIniciarAtendimento, onAbrirPastaDigital, darkMode }) => {
   const [metricas, setMetricas] = useState({ atendidoshoje: 0, totalPacientes: 0 });
   const [ultimosAtendimentos, setUltimosAtendimentos] = useState([]);
-  const [dadosUsuario, setDadosUsuario] = useState({ nome: "Carregando...", role: "...", escolaId: "Sede" });
 
   useEffect(() => {
-    const buscarUsuario = async () => {
-      try {
-        const qUser = query(
-          collection(db, "usuarios"), 
-          where("nome", "==", "Maria conceiçao"),
-          limit(1)
-        );
-        const querySnapshot = await getDocs(qUser);
-        if (!querySnapshot.empty) {
-          const docData = querySnapshot.docs[0].data();
-          setDadosUsuario({
-            nome: docData.nome,
-            role: docData.role,
-            escolaId: docData.escolaId || "Sede"
-          });
-        }
-      } catch (error) {
-        console.error("Erro ao buscar usuário:", error);
-      }
-    };
-
-    buscarUsuario();
-
+    // 1. Definição da data de hoje para o filtro de atendimentos
     const hoje = new Date().toISOString().split('T')[0];
+
+    // 2. Listener de Atendimentos do Dia (Filtra por data e pela escola do usuário)
     const qAtendimentos = query(
       collection(db, "atendimentos_enfermagem"),
       where("dataAtendimento", "==", hoje),
+      where("escolaId", "==", user?.escolaId || "Sede"),
       orderBy("createdAt", "desc")
     );
 
@@ -57,7 +37,12 @@ const HomeEnfermeiro = ({ onIniciarAtendimento, onAbrirHistorico, onAbrirCadastr
       })).slice(0, 5));
     });
 
-    const qPacientes = query(collection(db, "alunos"));
+    // 3. Listener de Alunos (Filtra apenas os alunos da unidade do enfermeiro logado)
+    const qPacientes = query(
+      collection(db, "alunos"),
+      where("escolaId", "==", user?.escolaId || "")
+    );
+
     const unsubPacientes = onSnapshot(qPacientes, (snapshot) => {
       setMetricas(prev => ({ ...prev, totalPacientes: snapshot.size }));
     });
@@ -66,12 +51,12 @@ const HomeEnfermeiro = ({ onIniciarAtendimento, onAbrirHistorico, onAbrirCadastr
       unsubAtendimentos();
       unsubPacientes();
     };
-  }, []);
+  }, [user?.escolaId]); // Re-executa se o usuário ou a escola mudarem
 
   return (
     <div className="space-y-10 animate-in fade-in duration-700">
       
-      {/* NOVO HEADER: GERENCIAMENTO DE SAÚDE ESCOLAR */}
+      {/* HEADER DINÂMICO: GERENCIAMENTO DE SAÚDE ESCOLAR */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-dashed border-slate-700/20 pb-8">
         <div className="space-y-2">
           <div className="flex items-center gap-2">
@@ -84,27 +69,31 @@ const HomeEnfermeiro = ({ onIniciarAtendimento, onAbrirHistorico, onAbrirCadastr
           <h1 className={`text-4xl md:text-6xl font-black tracking-tighter uppercase italic leading-none transition-colors duration-500 ${
             darkMode ? "text-white" : "text-[#0F172A]"
           }`}>
-            Rodhon <span className="text-blue-600">MedSys</span>
+            Rodhon <span className="text-blue-600">Baenf</span>
           </h1>
 
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <p className={`text-xl font-medium ${darkMode ? "text-slate-400" : "text-slate-500"}`}>
-              Olá, <span className="text-blue-600 font-black italic">{dadosUsuario.nome}</span>
+              Olá, <span className="text-blue-600 font-black italic">{user?.nome || "Profissional"}</span>
             </p>
             <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${
               darkMode ? "bg-white/5 border-white/10 text-slate-300" : "bg-slate-100 border-slate-200 text-slate-500"
             }`}>
               <ShieldCheck size={12} className="text-blue-500" />
-              <span className="text-[9px] font-black uppercase tracking-widest">{dadosUsuario.role}</span>
+              <span className="text-[9px] font-black uppercase tracking-widest">
+                {user?.role || "Enfermagem"} {user?.registroProfissional ? `| ${user.registroProfissional}` : ""}
+              </span>
             </div>
           </div>
         </div>
         
-        {/* Widget de Unidade e Data Estilizado */}
+        {/* Widget de Unidade e Data */}
         <div className="flex items-center gap-4">
             <div className={`hidden lg:flex flex-col text-right pr-4 border-r ${darkMode ? "border-white/10" : "border-slate-200"}`}>
                 <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none mb-1">Unidade Ativa</span>
-                <span className={`text-sm font-bold italic ${darkMode ? "text-blue-400" : "text-blue-600"}`}>{dadosUsuario.escolaId}</span>
+                <span className={`text-sm font-bold italic ${darkMode ? "text-blue-400" : "text-blue-600"}`}>
+                  {user?.escolaId || 'Sede'}
+                </span>
             </div>
 
             <div className={`flex items-center gap-3 p-4 rounded-[24px] border transition-colors ${
@@ -125,7 +114,6 @@ const HomeEnfermeiro = ({ onIniciarAtendimento, onAbrirHistorico, onAbrirCadastr
 
       {/* CARDS DE KPI */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        
         <button 
           onClick={onIniciarAtendimento}
           className="bg-[#0F172A] group hover:bg-blue-600 p-8 rounded-[40px] text-white transition-all shadow-xl flex flex-col justify-between h-52 relative overflow-hidden text-left"
@@ -201,7 +189,7 @@ const HomeEnfermeiro = ({ onIniciarAtendimento, onAbrirHistorico, onAbrirCadastr
               </div>
             )) : (
               <div className="p-16 text-center text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">
-                Aguardando fluxos de atendimento.
+                Aguardando fluxos de atendimento na unidade.
               </div>
             )}
           </div>

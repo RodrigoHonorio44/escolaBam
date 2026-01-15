@@ -13,13 +13,13 @@ const FormCadastroAluno = ({ onVoltar }) => {
       naoSabeSus: false,
       cartaoSus: '',
       sexo: '',
-      temAlergia: 'Não', // Valor padrão inteligente
+      temAlergia: 'Não',
       historicoMedico: ''
     }
   });
 
   const naoSabeSus = watch("naoSabeSus");
-  const temAlergia = watch("temAlergia"); // Monitorando a escolha de alergia
+  const temAlergia = watch("temAlergia");
 
   const onSubmit = async (data) => {
     const saveAction = async () => {
@@ -36,13 +36,10 @@ const FormCadastroAluno = ({ onVoltar }) => {
         responsavel: data.responsavel,
         contato: data.contato,
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
-        
-        // --- INTELIGÊNCIA DE ALERGIAS ---
         alergias: {
           possui: data.temAlergia,
           detalhes: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma"
         },
-
         dataCadastro: new Date().toISOString(),
         createdAt: serverTimestamp(),
       });
@@ -90,13 +87,24 @@ const FormCadastroAluno = ({ onVoltar }) => {
         {/* Nome */}
         <div className="space-y-2 md:col-span-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
-          <input {...register("nome")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
+          <input 
+            {...register("nome")} 
+            placeholder="Ex: João Silva Sauro"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            required 
+          />
         </div>
 
         {/* Idade e Sexo */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Idade</label>
-          <input type="number" {...register("idade")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
+          <input 
+            type="number" 
+            {...register("idade")} 
+            placeholder="Ex: 12"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            required 
+          />
         </div>
 
         <div className="space-y-2">
@@ -117,27 +125,46 @@ const FormCadastroAluno = ({ onVoltar }) => {
               <span className="text-[9px] font-black text-slate-400 group-hover:text-orange-500 uppercase transition-colors">Não informado</span>
             </label>
           </div>
-          <input {...register("cartaoSus")} disabled={naoSabeSus} placeholder={naoSabeSus ? "NÃO INFORMADO" : "000 0000 0000 0000"} className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all ${naoSabeSus ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-slate-50 border-transparent text-slate-700 focus:border-blue-600 focus:bg-white"}`} />
+          <input 
+            {...register("cartaoSus")} 
+            disabled={naoSabeSus} 
+            placeholder={naoSabeSus ? "NÃO INFORMADO" : "000 0000 0000 0000"} 
+            className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all placeholder:text-slate-300 placeholder:font-medium ${naoSabeSus ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-slate-50 border-transparent text-slate-700 focus:border-blue-600 focus:bg-white"}`} 
+          />
         </div>
 
         {/* Turma */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Turma / Ano</label>
-          <input {...register("turma")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
+          <input 
+            {...register("turma")} 
+            placeholder="Ex: 6º Ano A (Tarde)"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            required 
+          />
         </div>
 
         {/* Responsável e Contato */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsável</label>
-          <input {...register("responsavel")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
+          <input 
+            {...register("responsavel")} 
+            placeholder="Nome do pai, mãe ou tutor"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            required 
+          />
         </div>
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Contato</label>
-          <input {...register("contato")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" placeholder="(00) 00000-0000" />
+          <input 
+            {...register("contato")} 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            placeholder="(21) 99999-9999" 
+          />
         </div>
 
-        {/* --- NOVO CAMPO INTELIGENTE DE ALERGIAS (IGUAL AO STAFF) --- */}
+        {/* --- CAMPO DE ALERGIAS --- */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
@@ -163,9 +190,9 @@ const FormCadastroAluno = ({ onVoltar }) => {
               </label>
               <textarea 
                 {...register("historicoMedico")} 
-                className="w-full mt-2 px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 transition-all shadow-sm resize-none" 
+                className="w-full mt-2 px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 transition-all shadow-sm resize-none placeholder:text-orange-200 placeholder:font-medium" 
                 rows="3"
-                placeholder="Ex: Alérgico a amendoim, asma..."
+                placeholder="Descreva aqui: Ex: Alérgico a Dipirona, Corantes, Picada de abelha..."
                 required={temAlergia === "Sim"}
               ></textarea>
             </div>

@@ -1,37 +1,105 @@
-import { auth, db } from '../firebase/firebaseConfig';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db, firebaseConfig } from '../firebase/firebaseConfig';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  getAuth 
+} from 'firebase/auth';
+import { 
+  doc, 
+  updateDoc, 
+  getDoc, 
+  setDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
 
+/**
+ * LOGIN COM TRAVA DE EXPIRAÇÃO
+ */
 export const loginService = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    // 1. Gera um ID de sessão único para este acesso
-    const newSessionId = `sess_${Date.now()}`;
-    
-    // 2. Salva no LocalStorage deste PC (Padrão para verificação de sessão única)
-    localStorage.setItem('current_session_id', newSessionId);
-
-    // 🚨 CORREÇÃO: Mudado de "users" para "usuarios"
     const userRef = doc(db, "usuarios", user.uid);
-    
-    // 3. Verifica se o usuário existe no banco correto antes de atualizar
     const userSnap = await getDoc(userRef);
+
     if (!userSnap.exists()) {
-      // Se ele não existir em 'usuarios', o login é bloqueado
-      throw new Error("Perfil não encontrado na base de dados 'usuarios'.");
+      await signOut(auth);
+      throw new Error("Perfil não encontrado.");
     }
 
-    // 4. Atualiza no Firestore para o Dashboard e para o controle de sessão
+    const userData = userSnap.data();
+
+    // 🛡️ TRAVA: Verificação de Licença Expirada
+    if (userData.dataExpiracao) {
+      const dataAtual = new Date();
+      const dataExpiracao = new Date(userData.dataExpiracao);
+      if (dataAtual > dataExpiracao) {
+        await updateDoc(userRef, { status: 'bloqueado', statusLicenca: 'expirada' });
+        await signOut(auth);
+        throw new Error("Licença expirada. Contate o administrador.");
+      }
+    }
+
+    if (userData.status === 'bloqueado') {
+      await signOut(auth);
+      throw new Error("Acesso bloqueado.");
+    }
+
+    const newSessionId = `sess_${Date.now()}`;
+    localStorage.setItem('current_session_id', newSessionId);
+
     await updateDoc(userRef, {
       currentSessionId: newSessionId,
-      ultimoLogin: serverTimestamp() // Usando timestamp oficial do Firebase
+      ultimoLogin: serverTimestamp()
     });
 
-    return user;
+    return { ...user, ...userData };
   } catch (error) {
-    console.error("Erro no loginService:", error.message);
-    throw error;
+    throw new Error(error.message);
+  }
+};
+
+/**
+ * CADASTRO SEM DESLOGAR O ADMIN (USANDO APP TEMPORÁRIO)
+ * Salva Coren, Módulos e Prazos via ...dadosParaSalvar
+ */
+export const cadastrarUsuarioService = async (dados) => {
+  // 1. Criamos uma instância temporária para o cadastro não afetar o seu login
+  const tempAppName = `tempApp_${Date.now()}`;
+  const tempApp = initializeApp(firebaseConfig, tempAppName);
+  const tempAuth = getAuth(tempApp); 
+
+  try {
+    const userCredential = await createUserWithEmailAndPassword(
+      tempAuth, 
+      dados.email, 
+      dados.password
+    );
+    const newUser = userCredential.user;
+
+    // 2. Removemos a senha para não salvar no banco
+    const { password, ...dadosParaSalvar } = dados;
+
+    // 3. Salvamos TUDO no banco (Coren, Módulos, etc)
+    const userRef = doc(db, "usuarios", newUser.uid);
+    await setDoc(userRef, {
+      ...dadosParaSalvar, // <--- Aqui entra o Coren e os Módulos marcados
+      uid: newUser.uid,
+      currentSessionId: "", 
+      dataCadastro: serverTimestamp(), 
+    });
+
+    // 4. Limpamos a instância temporária
+    await signOut(tempAuth);
+    await deleteApp(tempApp);
+
+    return { success: true, uid: newUser.uid };
+  } catch (error) {
+    if (tempApp) await deleteApp(tempApp);
+    console.error("Erro no cadastro:", error);
+    throw new Error(error.code === 'auth/email-already-in-use' ? "E-mail já cadastrado." : "Erro ao cadastrar.");
   }
 };

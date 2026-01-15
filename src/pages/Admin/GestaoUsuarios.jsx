@@ -4,7 +4,7 @@ import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, delete
 import { 
   Users, Trash2, CheckCircle, XCircle, Search, 
   LayoutDashboard, UserRound, Stethoscope, ClipboardList, Lock, FolderSearch,
-  LogOut, HeartPulse // ✅ Importado HeartPulse para a Ficha de Saúde
+  LogOut, HeartPulse, BarChart3 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -59,36 +59,45 @@ const GestaoUsuarios = () => {
         currentSessionId: usuarioAlvo?.currentSessionId || ""
       };
       if (modulo === 'relatorios') { updates['modulosSidebar.triagem'] = deleteField(); }
+      
       await updateDoc(doc(db, "usuarios", userId), updates);
       toast.success(`Módulo atualizado`);
     } catch (error) { toast.error("Erro ao alterar módulo"); }
   };
 
+  // FUNÇÃO ATUALIZADA AQUI
   const alternarStatus = async (id, statusAtual, nome) => {
     const novoStatus = statusAtual === 'ativo' ? 'bloqueado' : 'ativo';
-    const statusLicenca = novoStatus === 'ativo' ? 'ativa' : 'bloqueada';
+    const textoLicenca = novoStatus === 'ativo' ? 'ativa' : 'bloqueada';
     const liberado = novoStatus === 'ativo';
     const usuarioAlvo = usuarios.find(u => u.id === id);
     
-    const sessaoAtual = novoStatus === 'ativo' ? (usuarioAlvo?.currentSessionId || "") : "";
+    // Se estiver bloqueando, mata a sessão na hora
+    const sessaoAtualizada = novoStatus === 'ativo' ? (usuarioAlvo?.currentSessionId || "") : "";
     
     try {
       await updateDoc(doc(db, "usuarios", id), { 
         "status": novoStatus,
-        "statusLicenca": statusLicenca,
-        "currentSessionId": sessaoAtual,
+        "statusLicenca": textoLicenca, // Atualiza campo 1
+        "licencaStatus": textoLicenca, // Atualiza campo 2 (conforme seu log)
+        "currentSessionId": sessaoAtualizada,
         "modulosSidebar.dashboard": liberado,
         "modulosSidebar.atendimento": liberado,
         "modulosSidebar.pasta_digital": liberado,
         "modulosSidebar.pacientes": liberado,
         "modulosSidebar.relatorios": liberado,
-        // ✅ Adicionado para liberar por padrão ao ativar novo usuário
         "modulosSidebar.saude_escolar": liberado, 
         "modulosSidebar.triagem": deleteField() 
       });
+      
       registrarLog(nome, `Alterou status para ${novoStatus}`);
-      toast.success(`${nome} está ${novoStatus}`);
-    } catch (error) { toast.error("Falha ao atualizar"); }
+      toast.success(`${nome} agora está ${novoStatus}`, {
+        icon: novoStatus === 'ativo' ? '✅' : '🚫'
+      });
+    } catch (error) { 
+      console.error("Erro ao atualizar:", error);
+      toast.error("Falha ao atualizar"); 
+    }
   };
 
   const deletarUsuario = async (id, nome) => {
@@ -151,6 +160,10 @@ const GestaoUsuarios = () => {
                          {u.currentSessionId && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Sessão Ativa"></span>}
                       </div>
                       <span className="text-[10px] text-blue-500 font-bold uppercase">{u.escolaId || 'Sem Unidade'}</span>
+                      {/* Badge Visual do Status da Licença */}
+                      <span className={`text-[8px] font-black uppercase mt-1 ${u.statusLicenca === 'ativa' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        Licença: {u.statusLicenca}
+                      </span>
                     </div>
                   </td>
 
@@ -158,18 +171,10 @@ const GestaoUsuarios = () => {
                     <div className="flex justify-center gap-2">
                       <ModuloBtn label="Dash" icon={<LayoutDashboard size={16} />} ativo={u.modulosSidebar?.dashboard} onClick={() => toggleModulo(u.id, 'dashboard', u.modulosSidebar?.dashboard)} />
                       <ModuloBtn label="Atend" icon={<Stethoscope size={16} />} ativo={u.modulosSidebar?.atendimento} onClick={() => toggleModulo(u.id, 'atendimento', u.modulosSidebar?.atendimento)} />
-                      
-                      {/* ✅ NOVO BOTÃO DE MODULO: FICHA DE SAÚDE */}
-                      <ModuloBtn 
-                        label="Saúde" 
-                        icon={<HeartPulse size={16} />} 
-                        ativo={u.modulosSidebar?.saude_escolar} 
-                        onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} 
-                      />
-
+                      <ModuloBtn label="Saúde" icon={<HeartPulse size={16} />} ativo={u.modulosSidebar?.saude_escolar} onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} />
                       <ModuloBtn label="Pasta" icon={<FolderSearch size={16} />} ativo={u.modulosSidebar?.pasta_digital} onClick={() => toggleModulo(u.id, 'pasta_digital', u.modulosSidebar?.pasta_digital)} />
                       <ModuloBtn label="Cads" icon={<UserRound size={16} />} ativo={u.modulosSidebar?.pacientes} onClick={() => toggleModulo(u.id, 'pacientes', u.modulosSidebar?.pacientes)} />
-                      <ModuloBtn label="BAMs" icon={<ClipboardList size={16} />} ativo={u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem} onClick={() => toggleModulo(u.id, 'relatorios', u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem)} />
+                      <ModuloBtn label="BAENF" icon={<ClipboardList size={16} />} ativo={u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem} onClick={() => toggleModulo(u.id, 'relatorios', u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem)} />
                     </div>
                   </td>
 
@@ -179,7 +184,7 @@ const GestaoUsuarios = () => {
                         disabled={!u.currentSessionId}
                         onClick={() => derrubarSessao(u.id, u.nome)}
                         className={`p-2.5 rounded-xl transition-all ${u.currentSessionId ? 'bg-orange-100 text-orange-600 hover:bg-orange-600 hover:text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
-                        title="Desconectar Máquina (Sessão Dupla)"
+                        title="Desconectar Máquina"
                       >
                         <LogOut size={16} />
                       </button>
@@ -191,6 +196,7 @@ const GestaoUsuarios = () => {
                         `}
                       >
                         {u.status === 'ativo' ? <XCircle size={14} /> : <CheckCircle size={14} />}
+                        {u.status === 'ativo' ? 'Bloquear' : 'Ativar'}
                       </button>
 
                       <button onClick={() => deletarUsuario(u.id, u.nome)} className="p-2 text-slate-300 hover:text-rose-600 transition-all">
