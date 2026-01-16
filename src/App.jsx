@@ -11,13 +11,15 @@ import TrocarSenha from './components/auth/TrocarSenha';
 import Bloqueado from './pages/Bloqueado'; 
 import Expirado from './pages/Expirado';
 
-// 🚨 ATUALIZADO: Importando o DashboardMain do novo caminho em components
+// Dashboard e Negócio
 import DashboardMain from './components/dashboards/DashboardMain';
-
-// Páginas de Negócio
 import CadastrarUsuario from './pages/cadastros/CadastrarUsuario';
 import GestaoUsuarios from './pages/Admin/GestaoUsuarios';
 import ControleLicencas from './pages/Admin/ControleLicencas';
+
+// 🚨 NOVOS IMPORTS: Formulários de Negócio
+import FormCadastroAluno from './pages/cadastros/FormCadastroAluno'; 
+import FormCadastroFuncionario from './pages/cadastros/FormCadastroFuncionario';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -81,13 +83,19 @@ function App() {
             }
           >
             <Route element={<Layout />}>
-              {/* 🚨 ATUALIZADO: Usando o DashboardMain como index */}
+              {/* Dashboard Principal */}
               <Route index element={<DashboardMain />} />
               
+              {/* Gestão de Usuários e Sistema (Admin/Root) */}
               <Route path="cadastrar-usuario" element={<CadastrarUsuario />} />
               <Route path="usuarios" element={<GestaoUsuarios />} />
               <Route path="licencas" element={<ControleLicencas />} /> 
+
+              {/* 🚨 NOVAS ROTAS: Cadastros de Pacientes (Pasta Digital) */}
+              <Route path="cadastro-aluno" element={<FormCadastroAluno onVoltar={() => window.history.back()} />} />
+              <Route path="cadastro-funcionario" element={<FormCadastroFuncionario onVoltar={() => window.history.back()} />} />
               
+              {/* Áreas Administrativas (Placeholders) */}
               <Route path="admin/unidades" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Unidades Escolares</div>} />
               <Route path="admin/config" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Configurações Master</div>} />
             </Route>

@@ -1,15 +1,79 @@
 @import "tailwindcss";
 
-/* Força o Tailwind a ler todos os arquivos JSX na pasta src */
+/* Configuração de Origem */
 @source "../src/**/*.{js,jsx,ts,tsx}";
 
+/* Definição de Tema (Tailwind v4 style) */
 @theme {
   --color-primary: #1E3A8A;
   --color-secondary: #64748B;
   --color-urgente: #DC2626;
+  
+  /* Adicionando espaçamentos customizados se necessário */
+  --spacing-main: 1.5rem;
 }
 
-/* Teste visual forçado: Se o fundo não ficar cinza, o CSS não carregou */
+/* --- ESTILOS GLOBAIS --- */
 body {
   background-color: #f3f4f6;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* Camada de utilitários para responsividade global */
+@layer utilities {
+  
+  /* Container Principal Responsivo:
+     Ajusta o padding automaticamente baseando-se na tela.
+  */
+  .main-container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    transition: all 0.3s ease;
+    
+    /* Mobile (Padrão) */
+    padding: 1rem; 
+    
+    /* Notebooks / Tablets (sm, md, lg) */
+    @media (min-width: 1024px) {
+      padding: 2rem;
+      max-width: 1400px;
+    }
+
+    /* Telas Grandes (xl) */
+    @media (min-width: 1536px) {
+      padding: 3rem;
+      max-width: 1600px;
+    }
+  }
+
+  /* Card Padrão do Sistema:
+     Garante que formulários e listas tenham o mesmo visual.
+  */
+  .app-card {
+    @apply rounded-3xl lg:rounded-[40px] p-5 lg:p-8 border transition-all duration-200;
+    background-color: white;
+  }
+
+  /* Esconder Scrollbar mas permitir scroll (útil para menus laterais) */
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Títulos que se adaptam ao tamanho da tela */
+  .heading-responsive {
+    @apply font-black uppercase italic tracking-tighter leading-none;
+    font-size: clamp(1.1rem, 4vw, 1.75rem);
+  }
+}
+
+/* Estilo para Dark Mode (se você estiver usando a classe 'dark' no html/body) */
+.dark body {
+  background-color: #050B18;
 }

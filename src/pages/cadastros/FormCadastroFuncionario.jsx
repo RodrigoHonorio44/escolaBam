@@ -1,13 +1,14 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { db } from '../../firebase/firebaseConfig'; // Import direto igual ao de alunos
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../firebase/firebaseConfig';
+import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
   UserPlus, Briefcase, Save, Calendar, User, 
   Loader2, CreditCard, ShieldAlert, ChevronLeft, AlertCircle 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const FormCadastroFuncionario = ({ onVoltar }) => {
+const FormCadastroFuncionario = ({ onVoltar, dadosEdicao }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
@@ -17,6 +18,22 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
     }
   });
 
+  // --- EFEITO PARA CARREGAR DADOS VINDOS DA PASTA DIGITAL ---
+  useEffect(() => {
+    if (dadosEdicao) {
+      reset({
+        nome: dadosEdicao.nome || '',
+        idade: dadosEdicao.idade || '',
+        sexo: dadosEdicao.sexo || '',
+        cargo: dadosEdicao.cargo || '',
+        cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : dadosEdicao.cartaoSus,
+        naoSabeSus: dadosEdicao.cartaoSus === "NÃO INFORMADO",
+        temAlergia: dadosEdicao.alergias?.possui || 'Não',
+        historicoMedico: dadosEdicao.alergias?.detalhes === "Nenhuma informada" ? "" : dadosEdicao.alergias?.detalhes
+      });
+    }
+  }, [dadosEdicao, reset]);
+
   const naoSabeSus = watch("naoSabeSus");
   const temAlergia = watch("temAlergia");
 
@@ -25,14 +42,12 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
       const nomeLimpo = data.nome.trim();
       const nomeParaBusca = nomeLimpo.toUpperCase();
 
-      // LÓGICA INTELIGENTE DO SUS (Igual ao de alunos + fallback inteligente)
       let susFinal = data.cartaoSus;
       if (data.naoSabeSus || !susFinal) {
         susFinal = "NÃO INFORMADO";
       }
 
-      // SALVAMENTO DIRETO NA COLEÇÃO (Sem passar por services de email/auth)
-      await addDoc(collection(db, "funcionario"), {
+      const payload = {
         nome: nomeLimpo,
         nomeBusca: nomeParaBusca,
         tipoPerfil: 'funcionario',
@@ -40,24 +55,32 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
         sexo: data.sexo,
         cargo: data.cargo,
         cartaoSus: susFinal,
-        
-        // ESTRUTURA DE ALERGIAS (Mantendo o Map para a Pasta Digital)
         alergias: {
           possui: data.temAlergia,
           detalhes: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma informada"
         },
-        
-        dataCadastro: new Date().toISOString(),
-        createdAt: serverTimestamp()
-      });
+        updatedAt: serverTimestamp()
+      };
+
+      if (dadosEdicao?.id) {
+        // ATUALIZAÇÃO (Para quando veio da Pasta Digital)
+        await setDoc(doc(db, "funcionario", dadosEdicao.id), payload, { merge: true });
+      } else {
+        // NOVO CADASTRO
+        await addDoc(collection(db, "funcionario"), {
+          ...payload,
+          dataCadastro: new Date().toISOString(),
+          createdAt: serverTimestamp()
+        });
+      }
       
-      reset();
+      if (!dadosEdicao) reset();
     };
 
     toast.promise(saveAction(), {
       loading: 'SALVANDO DADOS...',
-      success: 'STAFF CADASTRADO COM SUCESSO!',
-      error: 'ERRO AO SALVAR NO FIREBASE.',
+      success: dadosEdicao ? 'DADOS ATUALIZADOS COM SUCESSO!' : 'STAFF CADASTRADO COM SUCESSO!',
+      error: 'ERRO AO SALVAR.',
     }, {
       style: {
         minWidth: '300px',
@@ -71,18 +94,22 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200">
+    <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200 animate-in fade-in duration-500">
       <Toaster position="top-center" />
       
       {/* Header */}
       <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-6">
         <div className="flex items-center gap-4">
           <div className="bg-slate-900 p-3 rounded-2xl shadow-lg text-white">
-            <UserPlus size={24} />
+            <Briefcase size={24} />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Cadastro Staff</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registrar na coleção funcionario</p>
+            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
+              {dadosEdicao ? 'Atualizar Staff' : 'Cadastro Staff'}
+            </h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+               {dadosEdicao ? `Editando: ${dadosEdicao.nome}` : 'Registrar na coleção funcionario'}
+            </p>
           </div>
         </div>
         <button 
@@ -104,12 +131,12 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
         {/* Idade e Sexo */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Idade</label>
-          <input type="number" {...register("idade")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
+          <input type="number" {...register("idade")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
         </div>
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Sexo</label>
-          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm cursor-pointer" required>
+          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm cursor-pointer" required>
             <option value="">Selecione...</option>
             <option value="Masculino">Masculino</option>
             <option value="Feminino">Feminino</option>
@@ -119,17 +146,17 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
         {/* Cargo */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Cargo / Função</label>
-          <input {...register("cargo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" required />
+          <input {...register("cargo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
         </div>
 
-        {/* Cartão SUS Inteligente */}
+        {/* Cartão SUS */}
         <div className="space-y-2">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <CreditCard size={12} className="text-blue-600"/> Cartão SUS
             </label>
             <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" {...register("naoSabeSus")} className="w-3 h-3 text-blue-600" />
+              <input type="checkbox" {...register("naoSabeSus")} className="w-3 h-3 text-blue-600 rounded" />
               <span className="text-[9px] font-black text-slate-400 group-hover:text-orange-500 uppercase transition-colors">Não informado</span>
             </label>
           </div>
@@ -140,18 +167,17 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
             className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all shadow-sm ${
               naoSabeSus 
               ? "bg-slate-100 border-slate-200 text-slate-400 italic" 
-              : "bg-slate-50 border-transparent text-slate-700 focus:border-blue-600 focus:bg-white"
+              : "bg-slate-50 border-transparent text-slate-700 focus:border-slate-900 focus:bg-white"
             }`}
           />
         </div>
 
-        {/* Alergias Dinâmicas */}
+        {/* Alergias */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
               <AlertCircle size={14} className="text-orange-500"/> Possui alguma alergia?
             </label>
-            
             <div className="flex bg-white p-1 rounded-xl shadow-inner border border-slate-200">
               {["Sim", "Não"].map((opcao) => (
                 <label key={opcao} className="cursor-pointer">
@@ -166,14 +192,11 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
 
           {temAlergia === "Sim" && (
             <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-              <label className="text-[9px] font-black text-orange-600 uppercase tracking-widest ml-1 flex items-center gap-2">
-                 <ShieldAlert size={12}/> Descreva as alergias
-              </label>
               <textarea 
                 {...register("historicoMedico")} 
                 className="w-full mt-2 px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 transition-all shadow-sm resize-none" 
                 rows="3"
-                placeholder="Ex: Alérgico a penicilina e frutos do mar..."
+                placeholder="Ex: Alérgico a penicilina..."
                 required={temAlergia === "Sim"}
               ></textarea>
             </div>
@@ -185,7 +208,7 @@ const FormCadastroFuncionario = ({ onVoltar }) => {
           disabled={isSubmitting}
           className="md:col-span-2 mt-4 bg-slate-900 text-white py-5 rounded-[22px] font-black uppercase tracking-[0.2em] italic text-xs shadow-xl hover:bg-blue-600 transition-all disabled:bg-slate-300 flex items-center justify-center gap-3"
         >
-          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Finalizar Registro Staff</>}
+          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> {dadosEdicao ? 'Atualizar Dados' : 'Finalizar Registro Staff'}</>}
         </button>
       </form>
     </div>

@@ -1,13 +1,14 @@
+import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { db } from '../../firebase/firebaseConfig';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
   UserPlus, Users, Phone, ShieldAlert, Save, 
   Loader2, CreditCard, Calendar, User, AlertCircle 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const FormCadastroAluno = ({ onVoltar }) => {
+const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
@@ -18,6 +19,24 @@ const FormCadastroAluno = ({ onVoltar }) => {
     }
   });
 
+  // --- CARREGA DADOS PARA EDIÇÃO ---
+  useEffect(() => {
+    if (dadosEdicao) {
+      reset({
+        nome: dadosEdicao.nome || '',
+        idade: dadosEdicao.idade || '',
+        sexo: dadosEdicao.sexo || '',
+        turma: dadosEdicao.turma || '',
+        responsavel: dadosEdicao.responsavel || '',
+        contato: dadosEdicao.contato || '',
+        cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : dadosEdicao.cartaoSus,
+        naoSabeSus: dadosEdicao.cartaoSus === "NÃO INFORMADO",
+        temAlergia: dadosEdicao.alergias?.possui || 'Não',
+        historicoMedico: dadosEdicao.alergias?.detalhes === "Nenhuma" ? "" : dadosEdicao.alergias?.detalhes
+      });
+    }
+  }, [dadosEdicao, reset]);
+
   const naoSabeSus = watch("naoSabeSus");
   const temAlergia = watch("temAlergia");
 
@@ -26,7 +45,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
       const nomeLimpo = data.nome.trim();
       const nomeParaBusca = nomeLimpo.toUpperCase();
 
-      await addDoc(collection(db, "alunos"), {
+      const payload = {
         nome: nomeLimpo,
         nomeBusca: nomeParaBusca,
         tipoPerfil: 'aluno',
@@ -40,15 +59,27 @@ const FormCadastroAluno = ({ onVoltar }) => {
           possui: data.temAlergia,
           detalhes: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma"
         },
-        dataCadastro: new Date().toISOString(),
-        createdAt: serverTimestamp(),
-      });
-      reset();
+        updatedAt: serverTimestamp(),
+      };
+
+      if (dadosEdicao?.id) {
+        // ATUALIZA ALUNO EXISTENTE
+        await setDoc(doc(db, "alunos", dadosEdicao.id), payload, { merge: true });
+      } else {
+        // CRIA NOVO ALUNO
+        await addDoc(collection(db, "alunos"), {
+          ...payload,
+          dataCadastro: new Date().toISOString(),
+          createdAt: serverTimestamp(),
+        });
+      }
+      
+      if (!dadosEdicao) reset();
     };
 
     toast.promise(saveAction(), {
-      loading: 'SALVANDO DADOS...',
-      success: 'ALUNO CADASTRADO COM SUCESSO!',
+      loading: dadosEdicao ? 'ATUALIZANDO DADOS...' : 'SALVANDO DADOS...',
+      success: dadosEdicao ? 'DADOS ATUALIZADOS!' : 'ALUNO CADASTRADO COM SUCESSO!',
       error: 'ERRO AO SALVAR.',
     }, {
       style: {
@@ -73,8 +104,12 @@ const FormCadastroAluno = ({ onVoltar }) => {
             <UserPlus size={24} />
           </div>
           <div>
-            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">Novo Aluno</h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Registrar aluno no sistema</p>
+            <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
+              {dadosEdicao ? 'Atualizar Aluno' : 'Novo Aluno'}
+            </h2>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              {dadosEdicao ? `Editando: ${dadosEdicao.nome}` : 'Registrar aluno no sistema'}
+            </p>
           </div>
         </div>
         <button onClick={onVoltar} className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest flex items-center gap-2">
@@ -90,7 +125,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
           <input 
             {...register("nome")} 
             placeholder="Ex: João Silva Sauro"
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
         </div>
@@ -102,7 +137,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
             type="number" 
             {...register("idade")} 
             placeholder="Ex: 12"
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
         </div>
@@ -129,7 +164,7 @@ const FormCadastroAluno = ({ onVoltar }) => {
             {...register("cartaoSus")} 
             disabled={naoSabeSus} 
             placeholder={naoSabeSus ? "NÃO INFORMADO" : "000 0000 0000 0000"} 
-            className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all placeholder:text-slate-300 placeholder:font-medium ${naoSabeSus ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-slate-50 border-transparent text-slate-700 focus:border-blue-600 focus:bg-white"}`} 
+            className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all ${naoSabeSus ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-slate-50 border-transparent text-slate-700 focus:border-blue-600"}`} 
           />
         </div>
 
@@ -138,8 +173,8 @@ const FormCadastroAluno = ({ onVoltar }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Turma / Ano</label>
           <input 
             {...register("turma")} 
-            placeholder="Ex: 6º Ano A (Tarde)"
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            placeholder="Ex: 801"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
         </div>
@@ -150,27 +185,26 @@ const FormCadastroAluno = ({ onVoltar }) => {
           <input 
             {...register("responsavel")} 
             placeholder="Nome do pai, mãe ou tutor"
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
         </div>
 
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Contato</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Contato</label>
           <input 
             {...register("contato")} 
-            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm placeholder:text-slate-300 placeholder:font-medium" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm" 
             placeholder="(21) 99999-9999" 
           />
         </div>
 
-        {/* --- CAMPO DE ALERGIAS --- */}
+        {/* Alergias */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2">
-              <AlertCircle size={14} className="text-orange-500"/> O aluno possui alguma alergia?
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+              <AlertCircle size={14} className="text-orange-500"/> Possui alergia?
             </label>
-            
             <div className="flex bg-white p-1 rounded-xl shadow-inner border border-slate-200">
               {["Sim", "Não"].map((opcao) => (
                 <label key={opcao} className="cursor-pointer">
@@ -184,15 +218,12 @@ const FormCadastroAluno = ({ onVoltar }) => {
           </div>
 
           {temAlergia === "Sim" && (
-            <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-              <label className="text-[9px] font-black text-orange-600 uppercase tracking-widest ml-1 flex items-center gap-2">
-                 <ShieldAlert size={12}/> Detalhes Médicos / Alergias
-              </label>
+            <div className="animate-in fade-in slide-in-from-top-2">
               <textarea 
                 {...register("historicoMedico")} 
-                className="w-full mt-2 px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 transition-all shadow-sm resize-none placeholder:text-orange-200 placeholder:font-medium" 
+                className="w-full mt-2 px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 transition-all" 
                 rows="3"
-                placeholder="Descreva aqui: Ex: Alérgico a Dipirona, Corantes, Picada de abelha..."
+                placeholder="Descreva as alergias..."
                 required={temAlergia === "Sim"}
               ></textarea>
             </div>
@@ -202,9 +233,9 @@ const FormCadastroAluno = ({ onVoltar }) => {
         <button 
           type="submit" 
           disabled={isSubmitting}
-          className="md:col-span-2 mt-4 bg-blue-600 text-white py-5 rounded-[22px] font-black uppercase tracking-[0.2em] italic text-xs shadow-xl hover:bg-blue-700 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300"
+          className="md:col-span-2 mt-4 bg-blue-600 text-white py-5 rounded-[22px] font-black uppercase italic text-xs shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300"
         >
-          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> Finalizar Cadastro Aluno</>}
+          {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Save size={18} /> {dadosEdicao ? 'Salvar Alterações' : 'Finalizar Cadastro Aluno'}</>}
         </button>
       </form>
     </div>

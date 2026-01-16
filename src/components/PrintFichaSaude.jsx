@@ -36,10 +36,9 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
       {/* FOLHA A4 (LAYOUT OFICIAL) */}
       <div className="max-w-[210mm] mx-auto bg-white p-[15mm] shadow-2xl print:shadow-none print:p-0 border border-slate-200 print:border-none">
         
-        {/* CABEÇALHO CONFORME A IMAGEM QUE VOCÊ ENVIOU */}
+        {/* CABEÇALHO */}
         <div className="flex flex-col items-center text-center border-b-2 border-black pb-4 mb-6">
           <div className="flex justify-between w-full items-center mb-2">
-            {/* Logo Maricá */}
             <img src="/brasao_marica.png" alt="Prefeitura de Maricá" className="h-24 w-auto object-contain" />
             
             <div className="flex-1 px-4">
@@ -48,11 +47,9 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
               <h3 className="text-[16px] font-black text-black leading-tight uppercase italic tracking-tighter">E.M. ANÍSIO SPÍNOLA TEIXEIRA</h3>
             </div>
 
-            {/* Logo CEPT */}
             <img src="/logo_cept.png" alt="Logo CEPT" className="h-24 w-auto object-contain" />
           </div>
 
-          {/* Dados da Unidade */}
           <div className="text-[9px] text-black font-medium leading-none space-y-1 mt-1">
             <p>E.mail: emanisioteixeira.r2@gmail.com | Código do INEP: 33183996</p>
             <p>Avenida Jardel Filho s/nº - Jardim Atlântico Central – Itaipuaçu – Maricá – RJ CEP: 24934-180</p>
@@ -68,7 +65,6 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
         {/* CORPO DO DOCUMENTO */}
         <div className="space-y-6 text-[12px]">
           
-          {/* IDENTIFICAÇÃO */}
           <section className="grid grid-cols-2 gap-4 border-b pb-4">
             <div className="col-span-2">
               <p><strong>NOME COMPLETO:</strong> <span className="uppercase border-b border-dotted border-black block mt-1">{data.nomeAluno || '_____________________________________________________________________'}</span></p>
@@ -87,7 +83,6 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
             </div>
           </section>
 
-          {/* CHECKLIST DE SAÚDE */}
           <section>
             <h4 className="font-bold bg-black text-white px-2 py-1 mb-3 uppercase italic">Condições de Saúde</h4>
             <div className="grid grid-cols-2 gap-4">
@@ -108,7 +103,6 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
             </div>
           </section>
 
-          {/* OBSERVAÇÕES */}
           <section>
             <h4 className="font-bold border-b border-black mb-1 uppercase">Observações Adicionais do Enfermeiro:</h4>
             <div className="min-h-[80px] border border-slate-200 p-2 italic text-slate-600">
@@ -117,7 +111,7 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
           </section>
 
           {/* TERMO DE RESPONSABILIDADE */}
-          <section className="mt-10 p-4 border border-black rounded-sm">
+          <section className="mt-6 p-4 border border-black rounded-sm">
             <p className="text-[10px] leading-relaxed text-justify">
               Declaro que as informações acima são verdadeiras e que estou ciente da importância de comunicar qualquer alteração no quadro de saúde do aluno à secretaria da E.M. Anísio Spínola Teixeira. Em caso de emergência, autorizo o encaminhamento para a unidade de saúde mais próxima.
             </p>
@@ -132,6 +126,20 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
                 <p className="text-[12px] font-bold">Maricá, ____ de ________________ de 2026.</p>
               </div>
             </div>
+          </section>
+
+          {/* ✅ ASSINATURA TÉCNICA SINCRONIZADA COM O BANCO (Jairo) */}
+          <section className="mt-10 flex justify-center">
+             <div className="text-center w-[300px] border-t border-slate-400 pt-2">
+                <p className="text-[11px] font-black uppercase text-slate-900">
+                   {/* Busca o campo 'nome' do objeto de usuário logado */}
+                   {data.nome || data.profissionalNome || '________________________________'}
+                </p>
+                <p className="text-[9px] font-bold text-blue-600 uppercase">
+                   {/* Busca o campo 'registroProfissional' do objeto de usuário logado */}
+                   Enfermeiro(a) • COREN: {data.registroProfissional || data.profissionalRegistro || '________________'}
+                </p>
+             </div>
           </section>
         </div>
 
