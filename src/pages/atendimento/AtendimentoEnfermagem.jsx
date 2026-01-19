@@ -21,7 +21,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
   const queixasComuns = [
     "Febre", "Dor de Cabeça", "Dor Abdominal", "Náusea/Vômito", 
     "Pequeno Curativo", "Trauma/Queda", "Crise de Ansiedade", 
-    "Sintomas Gripais", "Hipertensão", "Hipoglicemia", "Outros"
+    "Sintomas Gripais", "Hipertensão", "Hipoglicemia","Cólica menstrual","Enxaqueca", "Outros"
   ];
 
   const opcoesEncaminhamentoAluno = [
