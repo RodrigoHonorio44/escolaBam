@@ -3,12 +3,12 @@ import { useForm } from 'react-hook-form';
 import { db } from '../../firebase/firebaseConfig';
 import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
-  UserPlus, Briefcase, Save, Calendar, User, 
-  Loader2, CreditCard, ShieldAlert, ChevronLeft, AlertCircle 
+  Briefcase, Save, Loader2, CreditCard, ChevronLeft, AlertCircle 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const FormCadastroFuncionario = ({ onVoltar, dadosEdicao }) => {
+// ✅ Adicionada a prop onSucesso
+const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
@@ -63,7 +63,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao }) => {
       };
 
       if (dadosEdicao?.id) {
-        // ATUALIZAÇÃO (Para quando veio da Pasta Digital)
+        // ATUALIZAÇÃO
         await setDoc(doc(db, "funcionario", dadosEdicao.id), payload, { merge: true });
       } else {
         // NOVO CADASTRO
@@ -74,7 +74,14 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao }) => {
         });
       }
       
-      if (!dadosEdicao) reset();
+      // ✅ LOGICA DE RETORNO PARA A PASTA DIGITAL
+      if (onSucesso) {
+        setTimeout(() => {
+          onSucesso({ nome: nomeLimpo }); // Passa o nome para o Dashboard reabrir a pasta
+        }, 1500);
+      } else if (!dadosEdicao) {
+        reset();
+      }
     };
 
     toast.promise(saveAction(), {

@@ -3,15 +3,15 @@ import {
   Search, User, Briefcase, GraduationCap, Clock, 
   ChevronRight, FileText, AlertCircle, Calendar, 
   MapPin, Activity, Loader2, ArrowLeft, PlusCircle, ShieldAlert,
-  ChevronLeft, X, Heart, Thermometer, Info, Phone, Stethoscope, Syringe
+  ChevronLeft, X, Heart, Thermometer, Info, Phone, Stethoscope, Syringe, Edit3
 } from 'lucide-react';
 import { db } from '../firebase/firebaseConfig';
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 import { useBuscaPaciente } from '../hooks/useBuscaPaciente'; 
 
-// ✅ PROPS ATUALIZADAS PARA O PADRÃO DO DASHBOARD
-const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
+// Adicionada a prop alunoParaReabrir vinda do Dashboard
+const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoParaReabrir }) => {
   const [busca, setBusca] = useState('');
   const [resultado, setResultado] = useState(null);
   const [sugestoes, setSugestoes] = useState([]);
@@ -21,6 +21,14 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
   const itensPorPagina = 5;
 
   const { buscarDadosCompletos, loading } = useBuscaPaciente();
+
+  // ✅ EFEITO PARA REABRIR O ALUNO AUTOMATICAMENTE AO VOLTAR
+  useEffect(() => {
+    if (alunoParaReabrir && alunoParaReabrir.nome) {
+      setBusca(alunoParaReabrir.nome);
+      pesquisarPaciente(alunoParaReabrir.nome);
+    }
+  }, [alunoParaReabrir]);
 
   useEffect(() => {
     const carregarNomesRecentes = async () => {
@@ -46,13 +54,22 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
     const data = await buscarDadosCompletos(nomeFinal);
     if (data) {
       setResultado(data);
-      toast.success("Sincronização concluída!");
+      // Feedback silencioso se for reabertura, toast se for busca manual
+      if (!nomeSelecionado) toast.success("Sincronização concluída!");
     } else {
       toast.error("Paciente não encontrado");
     }
   };
 
-  // ✅ FUNÇÃO CORRIGIDA: AGORA CHAMA onNovoAtendimento
+  const handleAbrirQuestionarioSaude = () => {
+    if (!resultado?.dadosParaForm) return;
+    
+    onAbrirQuestionario({
+      tipo: resultado.isFuncionario ? 'FUNCIONARIO' : 'ALUNO',
+      dados: resultado.dadosParaForm
+    });
+  };
+
   const handleAcaoRegistro = () => {
     if (!resultado?.dadosParaForm) return;
 
@@ -83,7 +100,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
       });
     }
 
-    // ✅ DISPARA O SINAL PARA O DASHBOARD ABRIR O FORMULÁRIO
     setTimeout(() => {
       onNovoAtendimento({
         tipo: resultado.isFuncionario ? 'FUNCIONARIO' : 'ALUNO',
@@ -167,9 +183,8 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
                 {!resultado.isFuncionario && <InfoRow label="Responsável" value={resultado.perfil?.responsavel} icon={<User size={10}/>} />}
               </div>
 
-              {/* ✅ BOTÃO QUE AGORA DISPARA A AÇÃO CORRETA */}
               <button onClick={handleAcaoRegistro} className="w-full mt-6 bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-lg">
-                <PlusCircle size={16} /> {resultado.dadosParaForm.isEdicao ? 'Atualizar Dados' : 'Criar Cadastro'}
+                <PlusCircle size={16} /> {resultado.dadosParaForm.isEdicao ? 'Novo Atendimento' : 'Criar Cadastro'}
               </button>
             </div>
 
@@ -190,7 +205,17 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
 
           <div className="lg:col-span-3 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Section title="Histórico Clínico">
+              <Section 
+                title="Histórico Clínico" 
+                action={
+                  <button 
+                    onClick={handleAbrirQuestionarioSaude}
+                    className="flex items-center gap-1 text-[9px] font-black text-blue-600 hover:text-blue-800 uppercase transition-colors"
+                  >
+                    <Edit3 size={12} /> Atualizar Ficha de Saúde
+                  </button>
+                }
+              >
                 <div className="grid grid-cols-2 gap-3">
                   <HealthStatusBadge label="Asma" status={resultado.statusClinico.asma} />
                   <HealthStatusBadge label="Diabetes" status={resultado.statusClinico.diabetes} />
@@ -307,11 +332,14 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento }) => {
 };
 
 // COMPONENTES AUXILIARES
-const Section = ({ title, children }) => (
+const Section = ({ title, children, action }) => (
   <div className="bg-white rounded-[32px] border border-slate-200 p-6 shadow-sm">
-    <h4 className="text-[10px] font-black text-slate-400 uppercase mb-4 flex items-center gap-2">
-      <div className="w-1 h-3 bg-blue-600 rounded-full"></div> {title}
-    </h4>
+    <div className="flex justify-between items-center mb-4">
+      <h4 className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2">
+        <div className="w-1 h-3 bg-blue-600 rounded-full"></div> {title}
+      </h4>
+      {action}
+    </div>
     {children}
   </div>
 );

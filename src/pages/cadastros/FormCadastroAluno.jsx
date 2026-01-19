@@ -3,12 +3,12 @@ import { useForm } from 'react-hook-form';
 import { db } from '../../firebase/firebaseConfig';
 import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
-  UserPlus, Users, Phone, ShieldAlert, Save, 
-  Loader2, CreditCard, Calendar, User, AlertCircle 
+  UserPlus, Save, Loader2, AlertCircle 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
+// Adicionada a prop onSucesso para comunicar o Dashboard
+const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
@@ -19,7 +19,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
     }
   });
 
-  // --- CARREGA DADOS PARA EDIÇÃO ---
   useEffect(() => {
     if (dadosEdicao) {
       reset({
@@ -63,10 +62,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
       };
 
       if (dadosEdicao?.id) {
-        // ATUALIZA ALUNO EXISTENTE
         await setDoc(doc(db, "alunos", dadosEdicao.id), payload, { merge: true });
       } else {
-        // CRIA NOVO ALUNO
         await addDoc(collection(db, "alunos"), {
           ...payload,
           dataCadastro: new Date().toISOString(),
@@ -74,7 +71,16 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
         });
       }
       
-      if (!dadosEdicao) reset();
+      // ✅ LOGICA DE RETORNO:
+      // Se tivermos a função onSucesso (vinda do Dashboard), chamamos ela 
+      // passando o nome do aluno para a Pasta Digital reabrir.
+      if (onSucesso) {
+        setTimeout(() => {
+          onSucesso({ nome: nomeLimpo }); 
+        }, 1500); // Aguarda o toast de sucesso aparecer
+      } else if (!dadosEdicao) {
+        reset();
+      }
     };
 
     toast.promise(saveAction(), {
@@ -97,7 +103,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
     <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200 animate-in fade-in duration-500">
       <Toaster position="top-center" />
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-6">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-3 rounded-2xl shadow-lg text-white">
@@ -118,8 +123,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Nome */}
         <div className="space-y-2 md:col-span-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
           <input 
@@ -130,7 +133,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
           />
         </div>
 
-        {/* Idade e Sexo */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Idade</label>
           <input 
@@ -151,7 +153,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
           </select>
         </div>
 
-        {/* Cartão SUS */}
         <div className="space-y-2">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Cartão SUS</label>
@@ -168,7 +169,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
           />
         </div>
 
-        {/* Turma */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Turma / Ano</label>
           <input 
@@ -179,7 +179,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
           />
         </div>
 
-        {/* Responsável e Contato */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsável</label>
           <input 
@@ -199,7 +198,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao }) => {
           />
         </div>
 
-        {/* Alergias */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">

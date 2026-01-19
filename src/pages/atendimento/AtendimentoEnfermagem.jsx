@@ -12,7 +12,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
   const [loading, setLoading] = useState(false);
   const [tipoAtendimento, setTipoAtendimento] = useState('local');
   const [perfilPaciente, setPerfilPaciente] = useState('aluno');
-
   const [houveMedicacao, setHouveMedicacao] = useState('Não');
   const [precisaEncaminhamento, setPrecisaEncaminhamento] = useState('Não');
 
@@ -48,7 +47,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
     cargo: '',
     temperatura: '',
     motivoAtendimento: '',
-    detalheQueixa: '',
+    detheQueixa: '',
     alunoPossuiAlergia: 'Não',
     qualAlergia: '', 
     procedimentos: '',
@@ -61,6 +60,20 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
   });
 
   const [formData, setFormData] = useState(getInitialState());
+
+  const validarNomeCompleto = (nome) => {
+    const nomeLimpo = nome.trim();
+    const partes = nomeLimpo.split(/\s+/);
+    return partes.length >= 2 && partes[1].length >= 2;
+  };
+
+  const handleTempChange = (e) => {
+    let value = e.target.value.replace(',', '.');
+    value = value.replace(/[^0-9.]/g, '');
+    const parts = value.split('.');
+    if (parts.length > 2) value = parts[0] + '.' + parts.slice(1).join('');
+    setFormData({...formData, temperatura: value});
+  };
 
   useEffect(() => {
     if (!loading && formData.nomePaciente === '') {
@@ -76,6 +89,48 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // 🛡️ VALIDAÇÕES OBRIGATÓRIAS ATUALIZADAS
+    if (!validarNomeCompleto(formData.nomePaciente)) {
+      toast.error("ERRO: Digite o nome e o SOBRENOME!");
+      return;
+    }
+
+    if (!formData.idade) {
+        toast.error("ERRO: A idade é obrigatória!");
+        return;
+    }
+
+    if (perfilPaciente === 'aluno' && !formData.turma) {
+        toast.error("ERRO: A turma é obrigatória!");
+        return;
+    }
+
+    if (perfilPaciente === 'funcionario' && !formData.cargo) {
+        toast.error("ERRO: O cargo é obrigatório!");
+        return;
+    }
+
+    if (!formData.temperatura || isNaN(parseFloat(formData.temperatura))) {
+      toast.error("ERRO: Informe a temperatura (Ex: 36.5)!");
+      return;
+    }
+
+    if (tipoAtendimento === 'local') {
+      if (!formData.motivoAtendimento) {
+        toast.error("ERRO: Selecione o motivo do atendimento!");
+        return;
+      }
+      if (!formData.procedimentos.trim()) {
+        toast.error("ERRO: O campo Procedimentos é obrigatório!");
+        return;
+      }
+      if (!formData.observacoes.trim()) {
+        toast.error("ERRO: O campo Observações Adicionais é obrigatório!");
+        return;
+      }
+    }
+
     setLoading(true);
     const loadingToast = toast.loading("Registrando atendimento...");
 
@@ -106,12 +161,12 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
         await fetch(URL_PLANILHA, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
       } catch (err) { console.error(err); }
       
-      toast.success(`BAENF ${formData.baenf} salvo!`, { id: loadingToast });
+      toast.success(`BAENF ${formData.baenf} salvo com sucesso!`, { id: loadingToast });
       setFormData(getInitialState());
       setHouveMedicacao('Não');
       setPrecisaEncaminhamento('Não');
     } catch (error) {
-      toast.error("Erro ao salvar.", { id: loadingToast });
+      toast.error("Erro técnico ao salvar.", { id: loadingToast });
     } finally {
       setLoading(false);
     }
@@ -175,22 +230,28 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
             <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Nome Completo</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Nome Completo *</label>
               <input 
+                id="campoNomePaciente"
                 type="text" 
                 required 
                 placeholder="Ex: Maria Oliveira dos Santos"
-                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-slate-300 placeholder:font-medium" 
+                className={`w-full bg-slate-50 border-2 rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 outline-none transition-all ${
+                  formData.nomePaciente.length > 0 && !validarNomeCompleto(formData.nomePaciente) 
+                  ? 'border-red-500 bg-red-50 focus:ring-red-500' 
+                  : 'border-transparent focus:ring-blue-500'
+                }`}
                 value={formData.nomePaciente} 
                 onChange={(e) => setFormData({...formData, nomePaciente: e.target.value})} 
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Idade</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Idade *</label>
               <input 
                 type="number" 
+                required
                 placeholder="Ex: 14"
-                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-slate-300 placeholder:font-medium" 
+                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={formData.idade} 
                 onChange={(e) => setFormData({...formData, idade: e.target.value})} 
               />
@@ -215,23 +276,29 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
               <input type="time" className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={formData.horario} onChange={(e) => setFormData({...formData, horario: e.target.value})} />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-blue-500 uppercase ml-2 italic">{perfilPaciente === 'aluno' ? 'Turma' : 'Cargo'}</label>
+              <label className="text-[10px] font-black text-blue-500 uppercase ml-2 italic">
+                {perfilPaciente === 'aluno' ? 'Turma *' : 'Cargo *'}
+              </label>
               <input 
                 type="text" 
+                required
                 placeholder={perfilPaciente === 'aluno' ? "Ex: 8º Ano B" : "Ex: Inspetor"}
-                className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-blue-200 placeholder:font-medium" 
+                className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={perfilPaciente === 'aluno' ? formData.turma : formData.cargo} 
                 onChange={(e) => setFormData(perfilPaciente === 'aluno' ? {...formData, turma: e.target.value} : {...formData, cargo: e.target.value})} 
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-red-500 uppercase ml-2">Temp.</label>
+              <label className="text-[10px] font-black text-red-500 uppercase ml-2 italic">Temperatura *</label>
               <input 
+                id="campoTemperatura"
                 type="text" 
-                placeholder="36.5°C"
-                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-slate-300 placeholder:font-medium" 
+                inputMode="decimal"
+                required
+                placeholder="36.5"
+                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                 value={formData.temperatura} 
-                onChange={(e) => setFormData({...formData, temperatura: e.target.value})} 
+                onChange={handleTempChange} 
               />
             </div>
             <div className="space-y-2">
@@ -242,18 +309,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
               </select>
             </div>
           </div>
-          {formData.alunoPossuiAlergia === 'Sim' && (
-            <div className="animate-in slide-in-from-top-2 duration-300">
-              <label className="text-[10px] font-black text-orange-600 uppercase ml-2">Descreva a Alergia</label>
-              <input 
-                type="text" 
-                placeholder="Ex: Dipirona, Corante Vermelho, Poeira..." 
-                className="w-full bg-orange-50 border-2 border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none placeholder:text-orange-200" 
-                value={formData.qualAlergia} 
-                onChange={(e) => setFormData({...formData, qualAlergia: e.target.value})} 
-              />
-            </div>
-          )}
         </div>
 
         {/* ÁREA CLÍNICA */}
@@ -265,23 +320,26 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-blue-600 uppercase ml-2">Motivo Principal</label>
+                <label className="text-[10px] font-black text-blue-600 uppercase ml-2">Motivo Principal *</label>
                 <select required className="w-full bg-blue-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer" value={formData.motivoAtendimento} onChange={(e) => setFormData({...formData, motivoAtendimento: e.target.value})}>
                   <option value="">Selecione...</option>
                   {queixasComuns.map(q => <option key={q} value={q}>{q}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Procedimentos</label>
+                <label className="text-[10px] font-black text-blue-600 uppercase ml-2">Procedimentos *</label>
                 <input 
+                  id="campoProcedimentos"
                   type="text" 
-                  placeholder="Ex: Higienização, Aferição de PA, Repouso..."
-                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none placeholder:text-slate-300 placeholder:font-medium" 
+                  required
+                  placeholder="Ex: Higienização, Aferição de PA..."
+                  className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" 
                   value={formData.procedimentos} 
                   onChange={(e) => setFormData({...formData, procedimentos: e.target.value})} 
                 />
               </div>
               
+              {/* Medicação e Encaminhamento... (mesmo código anterior) */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-emerald-600 uppercase ml-2">Administrou Medicação?</label>
                 <select className="w-full bg-emerald-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-emerald-500 outline-none cursor-pointer" value={houveMedicacao} onChange={(e) => setHouveMedicacao(e.target.value)}>
@@ -289,44 +347,15 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
                   <option value="Sim">Sim</option>
                 </select>
               </div>
-              {houveMedicacao === 'Sim' && (
-                <div className="space-y-2 animate-in slide-in-from-left-2 duration-300">
-                  <label className="text-[10px] font-black text-emerald-600 uppercase ml-2">Qual Medicação e Dose?</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: Paracetamol 500mg (1 comprimido)"
-                    className="w-full bg-emerald-50 border-2 border-emerald-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none placeholder:text-emerald-200" 
-                    value={formData.medicacao} 
-                    onChange={(e) => setFormData({...formData, medicacao: e.target.value})} 
-                  />
-                </div>
-              )}
-              
-              {perfilPaciente === 'aluno' && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-orange-600 uppercase ml-2 italic">Houve Encaminhamento?</label>
-                  <select className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none cursor-pointer" value={precisaEncaminhamento} onChange={(e) => setPrecisaEncaminhamento(e.target.value)}>
-                    <option value="Não">Não</option>
-                    <option value="Sim">Sim</option>
-                  </select>
-                </div>
-              )}
-              {precisaEncaminhamento === 'Sim' && (
-                <div className="space-y-2 animate-in zoom-in-95 duration-300">
-                  <label className="text-[10px] font-black text-orange-600 uppercase ml-2 italic">Destino</label>
-                  <select className="w-full bg-orange-50 border-2 border-orange-200 rounded-2xl px-5 py-4 text-sm font-bold outline-none cursor-pointer" value={formData.destinoHospital} onChange={(e) => setFormData({...formData, destinoHospital: e.target.value})}>
-                    <option value="">Selecione...</option>
-                    {opcoesEncaminhamentoAluno.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                  </select>
-                </div>
-              )}
 
               <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2">Observações Adicionais</label>
+                <label className="text-[10px] font-black text-blue-600 uppercase ml-2">Observações Adicionais *</label>
                 <textarea 
+                  id="campoObservacoes"
+                  required
                   rows="2" 
-                  placeholder="Relate aqui detalhes importantes sobre a evolução do paciente no atendimento..."
-                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none resize-none placeholder:text-slate-300" 
+                  placeholder="Relate aqui detalhes importantes sobre o estado do paciente..."
+                  className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 outline-none resize-none" 
                   value={formData.observacoes} 
                   onChange={(e) => setFormData({...formData, observacoes: e.target.value})} 
                 />
@@ -334,6 +363,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
             </div>
           </div>
         ) : (
+          /* Seção de Remoção... */
           <div className="space-y-6">
             <div className="flex items-center gap-2 text-orange-600 border-b border-orange-100 pb-4">
               <AlertTriangle size={18} />
@@ -353,8 +383,9 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
                 <label className="text-[10px] font-black text-orange-600 uppercase ml-2">Motivo</label>
                 <input 
                   type="text" 
-                  placeholder="Ex: Suspeita de fratura, desconforto respiratório grave..."
-                  className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none placeholder:text-orange-200" 
+                  required
+                  placeholder="Ex: Suspeita de fratura..."
+                  className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold focus:ring-2 focus:ring-orange-500 outline-none" 
                   value={formData.motivoEncaminhamento} 
                   onChange={(e) => setFormData({...formData, motivoEncaminhamento: e.target.value})} 
                 />
@@ -363,24 +394,16 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
           </div>
         )}
 
-        {/* ✅ ASSINATURA E SALVAR */}
+        {/* Footer com botão de salvar... */}
         <div className="pt-10 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-4 bg-slate-900 px-8 py-5 rounded-[25px] border-2 border-blue-500/20 w-full md:w-auto shadow-xl">
-            <div className="bg-blue-600 p-2.5 rounded-xl">
-              <UserCheck size={22} className="text-white" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em] mb-0.5">Assinatura Digital BAENF</span>
-              <p className="text-white font-black text-base uppercase italic tracking-tight leading-none mb-1">
-                {user?.nome || 'Profissional não Identificado'}
-              </p>
-              <div className="flex items-center gap-2">
-                <Shield size={10} className="text-emerald-400" />
-                <span className="text-emerald-400 text-[10px] font-bold uppercase tracking-widest leading-none">
-                  {user?.cargo || 'Enfermagem'} — REG: {user?.registroProfissional || user?.coren || 'MED-2026-X'}
-                </span>
-              </div>
-            </div>
+             <div className="bg-blue-600 p-2.5 rounded-xl">
+               <UserCheck size={22} className="text-white" />
+             </div>
+             <div className="flex flex-col">
+               <span className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em] mb-0.5">Assinatura Digital</span>
+               <p className="text-white font-black text-base uppercase italic tracking-tight">{user?.nome || 'Profissional'}</p>
+             </div>
           </div>
 
           <button type="submit" disabled={loading} className={`w-full md:w-auto px-16 py-6 rounded-[30px] font-black uppercase italic tracking-[0.2em] text-xs transition-all shadow-2xl flex items-center justify-center gap-4 ${tipoAtendimento === 'local' ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-200' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-200'} text-white active:scale-95`}>

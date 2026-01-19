@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-// AJUSTADO: Se o Vite falhou com ../../, este caminho abaixo é o padrão para src/firebase/firebaseConfig
 import { db, auth } from "../../firebase/firebaseConfig"; 
 import { doc, onSnapshot } from "firebase/firestore";
 import { signOut } from "firebase/auth";
@@ -7,7 +6,7 @@ import {
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
   ChevronDown, LogOut, FolderSearch, Lock,
   Settings, Bell, FileBarChart, Menu, ChevronLeft, 
-  Sun, Moon, LifeBuoy, ArrowUpRight, MessageSquare, Mail, ShieldAlert
+  Sun, Moon, LifeBuoy, ShieldAlert
 } from "lucide-react";
 
 // Importações de páginas
@@ -19,7 +18,7 @@ import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionar
 import PastaDigital from "../PastaDigital";
 import QuestionarioSaude from "../../pages/cadastros/QuestionarioSaude"; 
 
-// --- COMPONENTES AUXILIARES (TELA DE BLOQUEIO E SUPORTE MANTIDOS) ---
+// --- COMPONENTES AUXILIARES ---
 const TelaBloqueioLicenca = ({ darkMode, onLogout }) => (
   <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-6 backdrop-blur-md ${darkMode ? "bg-black/90" : "bg-slate-900/80"}`}>
     <div className={`max-w-md w-full p-10 rounded-[40px] text-center shadow-2xl animate-in zoom-in duration-300 ${darkMode ? "bg-[#0F1C2E] border border-white/10" : "bg-white"}`}>
@@ -58,8 +57,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const [menuAberto, setMenuAberto] = useState(null); 
   const [isExpanded, setIsExpanded] = useState(true);
   const [darkMode, setDarkMode] = useState(true); 
-  
-  // ✅ ESTADO PARA EDIÇÃO (Sincronizado com Pasta Digital)
   const [dadosParaEdicao, setDadosParaEdicao] = useState(null);
   
   const unsubscribeRef = useRef(null);
@@ -87,11 +84,24 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     return user?.modulosSidebar?.[itemKey] !== false;
   };
 
-  // ✅ FUNÇÃO CORRIGIDA PARA ABRIR O FORMULÁRIO A PARTIR DA PASTA DIGITAL
+  // ✅ CORREÇÃO: Função genérica para salvar estado e trocar tela
   const handleEdicaoDaPasta = (payload) => {
     setDadosParaEdicao(payload.dados);
     setCadastroMode(payload.tipo.toLowerCase()); 
     setActiveTab("pacientes"); 
+  };
+
+  // ✅ CORREÇÃO: Garante que o objeto completo do paciente seja passado
+  const handleAbrirQuestionarioPelaPasta = (payload) => {
+    setDadosParaEdicao(payload.dados); 
+    setCadastroMode("saude_escolar");
+    setActiveTab("pacientes");
+  };
+
+  // ✅ NOVA FUNÇÃO: Chamada pelo QuestionarioSaude ao terminar com sucesso
+  const handleSucessoQuestionario = (aluno) => {
+    setDadosParaEdicao(aluno); // Armazena o aluno para a PastaDigital reabrir
+    setActiveTab("pasta_digital");
   };
 
   const menuItems = [
@@ -127,18 +137,21 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       case "atendimento": return <AtendimentoEnfermagem user={user} onVoltar={() => setActiveTab("home")} />;
       
       case "pasta_digital": 
-        return <PastaDigital onVoltar={() => setActiveTab("home")} onNovoAtendimento={handleEdicaoDaPasta} />;
+        return (
+          <PastaDigital 
+            onVoltar={() => setActiveTab("home")} 
+            onNovoAtendimento={handleEdicaoDaPasta} 
+            onAbrirQuestionario={handleAbrirQuestionarioPelaPasta}
+            alunoParaReabrir={dadosParaEdicao} // ✅ Passa o estado para reabrir o aluno
+          />
+        );
       
       case "pacientes":
         if (cadastroMode === "aluno") {
           return (
             <FormCadastroAluno 
               dadosEdicao={dadosParaEdicao} 
-              onVoltar={() => { 
-                // ✅ VOLTA PARA PASTA DIGITAL SE ESTAVA EDITANDO, SENÃO VOLTA PARA HOME
-                setActiveTab(dadosParaEdicao ? "pasta_digital" : "home"); 
-                setDadosParaEdicao(null); 
-              }} 
+              onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} 
             />
           );
         }
@@ -146,22 +159,23 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           return (
             <FormCadastroFuncionario 
               dadosEdicao={dadosParaEdicao} 
-              onVoltar={() => { 
-                // ✅ VOLTA PARA PASTA DIGITAL SE ESTAVA EDITANDO, SENÃO VOLTA PARA HOME
-                setActiveTab(dadosParaEdicao ? "pasta_digital" : "home"); 
-                setDadosParaEdicao(null); 
-              }} 
+              onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} 
             />
           );
         }
         if (cadastroMode === "saude_escolar") {
-          return <QuestionarioSaude onVoltar={() => { setActiveTab("home"); setDadosParaEdicao(null); }} />;
+          return (
+            <QuestionarioSaude 
+              dadosEdicao={dadosParaEdicao} 
+              onVoltar={() => setActiveTab("pasta_digital")} 
+              onSucesso={handleSucessoQuestionario} // ✅ Usa a função que mantém o aluno carregado
+            />
+          );
         }
         return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
       
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
-      case "relatorio_geral": return <div className={`p-10 font-black uppercase italic ${theme.sidebarText}`}>Relatórios Consolidados</div>;
       default: return <HomeEnfermeiro user={user} darkMode={darkMode} />;
     }
   };
@@ -176,7 +190,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
           <button onClick={() => setActiveTab("suporte")} className={`mt-auto mb-4 p-2 rounded-xl transition-all ${activeTab === "suporte" ? "bg-blue-600 text-white" : "text-emerald-500/50 hover:bg-white/5"}`}>
-             <LifeBuoy size={20} />
+              <LifeBuoy size={20} />
           </button>
       </div>
 
@@ -204,7 +218,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                       else { 
                         setActiveTab(item.id); 
                         setMenuAberto(null); 
-                        setDadosParaEdicao(null);
+                        setDadosParaEdicao(null); 
                       }
                     }}
                     className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${
@@ -254,14 +268,14 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className={`h-20 border-b flex items-center justify-between px-8 shrink-0 ${darkMode ? "bg-[#0A1629] border-white/5" : "bg-white border-slate-200"}`}>
           <div className="flex items-center gap-4">
-             {!isExpanded && (
-               <button onClick={() => setIsExpanded(true)} className={`p-2 rounded-lg ${darkMode ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600"}`}>
-                  <Menu size={18} />
-               </button>
-             )}
-             <h1 className={`text-sm font-black uppercase tracking-widest italic ${darkMode ? "text-white" : "text-slate-800"}`}>
-                {activeTab === "suporte" ? "Suporte Técnico" : menuItems.find(i => i.id === activeTab)?.label}
-             </h1>
+              {!isExpanded && (
+                <button onClick={() => setIsExpanded(true)} className={`p-2 rounded-lg ${darkMode ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600"}`}>
+                   <Menu size={18} />
+                </button>
+              )}
+              <h1 className={`text-sm font-black uppercase tracking-widest italic ${darkMode ? "text-white" : "text-slate-800"}`}>
+                 {activeTab === "suporte" ? "Suporte Técnico" : menuItems.find(i => i.id === activeTab)?.label}
+              </h1>
           </div>
           <div className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border ${darkMode ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-100"}`}>
               Unidade: {user?.escolaId || 'Sede'}
