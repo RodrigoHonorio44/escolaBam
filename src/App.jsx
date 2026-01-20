@@ -17,7 +17,7 @@ import CadastrarUsuario from './pages/cadastros/CadastrarUsuario';
 import GestaoUsuarios from './pages/Admin/GestaoUsuarios';
 import ControleLicencas from './pages/Admin/ControleLicencas';
 
-// 🚨 NOVOS IMPORTS: Formulários de Negócio
+// Formulários de Negócio
 import FormCadastroAluno from './pages/cadastros/FormCadastroAluno'; 
 import FormCadastroFuncionario from './pages/cadastros/FormCadastroFuncionario';
 
@@ -37,10 +37,16 @@ const PrivateRoute = ({ children }) => {
   
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user?.primeiroAcesso === true) {
-    return <TrocarSenha />;
+  // 🚨 LÓGICA REFORÇADA: Se não tiver data de troca OU primeiroAcesso for true, manda para a ROTA de troca
+  const nuncaTrocou = !user?.dataUltimaTroca;
+  const forcarTroca = user?.primeiroAcesso === true;
+
+  if ((nuncaTrocou || forcarTroca) && user?.role !== 'root') {
+    // Redireciona para a URL física, para sair de dentro de qualquer Layout travado
+    return <Navigate to="/trocar-senha" replace />;
   }
 
+  // --- TRAVA DE BLOQUEIO ---
   const estaBloqueado = 
     user?.status === "bloqueado" || 
     user?.licencaStatus === "bloqueado" || 
@@ -50,6 +56,7 @@ const PrivateRoute = ({ children }) => {
     return <Navigate to="/bloqueado" replace />;
   }
 
+  // --- TRAVA DE EXPIRAÇÃO ---
   if (user?.role !== 'root' && user?.dataExpiracao) {
     const hoje = new Date();
     const dataExp = new Date(user.dataExpiracao);
@@ -67,10 +74,12 @@ function App() {
     <AuthProvider> 
       <BrowserRouter>
         <Routes>
-          {/* ROTAS PÚBLICAS */}
+          {/* ROTAS PÚBLICAS OU FORA DE LAYOUT (LIVRES PARA SCROLL) */}
           <Route path="/login" element={<Login />} />
           <Route path="/bloqueado" element={<Bloqueado />} />
           <Route path="/expirado" element={<Expirado />} />
+          
+          {/* Deixando a troca de senha como rota independente para evitar conflito de CSS de Layout */}
           <Route path="/trocar-senha" element={<TrocarSenha />} />
           
           {/* ROTAS PROTEGIDAS */}
@@ -83,19 +92,13 @@ function App() {
             }
           >
             <Route element={<Layout />}>
-              {/* Dashboard Principal */}
               <Route index element={<DashboardMain />} />
-              
-              {/* Gestão de Usuários e Sistema (Admin/Root) */}
               <Route path="cadastrar-usuario" element={<CadastrarUsuario />} />
               <Route path="usuarios" element={<GestaoUsuarios />} />
               <Route path="licencas" element={<ControleLicencas />} /> 
-
-              {/* 🚨 NOVAS ROTAS: Cadastros de Pacientes (Pasta Digital) */}
               <Route path="cadastro-aluno" element={<FormCadastroAluno onVoltar={() => window.history.back()} />} />
               <Route path="cadastro-funcionario" element={<FormCadastroFuncionario onVoltar={() => window.history.back()} />} />
               
-              {/* Áreas Administrativas (Placeholders) */}
               <Route path="admin/unidades" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Unidades Escolares</div>} />
               <Route path="admin/config" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Configurações Master</div>} />
             </Route>

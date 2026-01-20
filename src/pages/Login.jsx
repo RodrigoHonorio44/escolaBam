@@ -182,7 +182,7 @@ const Login = () => {
           <div className="flex flex-col items-center gap-3 mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
             <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
               <GraduationCap className="text-blue-500" size={24} />
-              <h3 className="text-white font-black text-xl xl:text-2xl tracking-[0.1em] uppercase italic leading-none">C . P . T</h3>
+              <h3 className="text-white font-black text-xl xl:text-2xl tracking-[0.1em] uppercase italic leading-none">C . E . P . T</h3>
             </div>
             <p className="text-blue-400 text-[9px] font-black tracking-[0.4em] uppercase">Unidade Escolar</p>
           </div>
