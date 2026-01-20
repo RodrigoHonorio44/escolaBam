@@ -84,23 +84,20 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     return user?.modulosSidebar?.[itemKey] !== false;
   };
 
-  // ✅ CORREÇÃO: Função genérica para salvar estado e trocar tela
   const handleEdicaoDaPasta = (payload) => {
     setDadosParaEdicao(payload.dados);
     setCadastroMode(payload.tipo.toLowerCase()); 
     setActiveTab("pacientes"); 
   };
 
-  // ✅ CORREÇÃO: Garante que o objeto completo do paciente seja passado
   const handleAbrirQuestionarioPelaPasta = (payload) => {
     setDadosParaEdicao(payload.dados); 
     setCadastroMode("saude_escolar");
     setActiveTab("pacientes");
   };
 
-  // ✅ NOVA FUNÇÃO: Chamada pelo QuestionarioSaude ao terminar com sucesso
   const handleSucessoQuestionario = (aluno) => {
-    setDadosParaEdicao(aluno); // Armazena o aluno para a PastaDigital reabrir
+    setDadosParaEdicao(aluno); 
     setActiveTab("pasta_digital");
   };
 
@@ -135,45 +132,26 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     switch (activeTab) {
       case "home": return <HomeEnfermeiro user={user} setActiveTab={setActiveTab} isLiberado={isLiberado} darkMode={darkMode} />;
       case "atendimento": return <AtendimentoEnfermagem user={user} onVoltar={() => setActiveTab("home")} />;
-      
       case "pasta_digital": 
         return (
           <PastaDigital 
             onVoltar={() => setActiveTab("home")} 
             onNovoAtendimento={handleEdicaoDaPasta} 
             onAbrirQuestionario={handleAbrirQuestionarioPelaPasta}
-            alunoParaReabrir={dadosParaEdicao} // ✅ Passa o estado para reabrir o aluno
+            alunoParaReabrir={dadosParaEdicao} 
           />
         );
-      
       case "pacientes":
         if (cadastroMode === "aluno") {
-          return (
-            <FormCadastroAluno 
-              dadosEdicao={dadosParaEdicao} 
-              onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} 
-            />
-          );
+          return <FormCadastroAluno dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
         }
         if (cadastroMode === "funcionario") {
-          return (
-            <FormCadastroFuncionario 
-              dadosEdicao={dadosParaEdicao} 
-              onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} 
-            />
-          );
+          return <FormCadastroFuncionario dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
         }
         if (cadastroMode === "saude_escolar") {
-          return (
-            <QuestionarioSaude 
-              dadosEdicao={dadosParaEdicao} 
-              onVoltar={() => setActiveTab("pasta_digital")} 
-              onSucesso={handleSucessoQuestionario} // ✅ Usa a função que mantém o aluno carregado
-            />
-          );
+          return <QuestionarioSaude dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab("pasta_digital")} onSucesso={handleSucessoQuestionario} />;
         }
         return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
-      
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
       default: return <HomeEnfermeiro user={user} darkMode={darkMode} />;
@@ -282,7 +260,8 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-8 md:p-12 max-w-7xl mx-auto w-full animate-in fade-in duration-500">
+        {/* ✅ ALTERAÇÃO AQUI: Removido 'max-w-7xl' e 'mx-auto' para ocupar 100% da tela */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 w-full animate-in fade-in duration-500">
             {renderContent()}
         </main>
       </div>
