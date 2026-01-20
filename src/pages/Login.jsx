@@ -27,12 +27,11 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  // --- LÓGICA DE SESSÃO ÚNICA (O VIGIA EM TEMPO REAL) ---
+  // --- LÓGICA DE SESSÃO ÚNICA ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         const q = query(collection(db, "usuarios"), where("email", "==", user.email));
-        
         const unsubscribeSnapshot = onSnapshot(q, (querySnapshot) => {
           if (!querySnapshot.empty) {
             const userData = querySnapshot.docs[0].data();
@@ -66,7 +65,6 @@ const Login = () => {
     const loginLogic = async () => {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
-
       const newSessionId = Date.now().toString();
 
       const usuariosRef = collection(db, "usuarios");
@@ -106,6 +104,7 @@ const Login = () => {
       const userDoc = querySnapshot.docs[0];
       const userData = userDoc.data();
 
+      // 1. CHECAR BLOQUEIOS
       const isBloqueado = 
         userData.status === "bloqueado" || 
         userData.statusLicenca === "bloqueada" || 
@@ -116,17 +115,28 @@ const Login = () => {
         throw new Error("ACESSO SUSPENSO: CONSULTE O ADMINISTRADOR");
       }
 
+      // 🚨 2. NOVA TRAVA RÍGIDA (BASEADA NO SEU BANCO)
+      // Se NÃO tem 'dataUltimaTroca', ele é obrigado a trocar a senha (Caso do Marcelo)
+      const nuncaTrocouSenha = !userData.dataUltimaTroca;
+      const forcarPeloBooleano = userData.primeiroAcesso === true;
+
+      if (nuncaTrocouSenha || forcarPeloBooleano) {
+        localStorage.setItem("current_session_id", newSessionId);
+        await updateDoc(userDoc.ref, {
+          currentSessionId: newSessionId
+          // Não atualizamos ultimoLogin aqui para manter a trava ativa até ele concluir a troca
+        });
+        navigate('/trocar-senha'); 
+        return "SEGURANÇA: ALTERE SUA SENHA INICIAL";
+      }
+
+      // 3. ACESSO NORMAL (Caso do Carlos)
       localStorage.setItem("current_session_id", newSessionId);
       await updateDoc(userDoc.ref, {
         currentSessionId: newSessionId,
         ultimoLogin: serverTimestamp(),
         primeiroAcesso: false 
       });
-
-      if (userData.primeiroAcesso === true) {
-        navigate('/alterar-senha'); 
-        return "PRIMEIRO ACESSO: ALTERE SUA SENHA";
-      }
 
       navigate('/');
       return `BEM-VINDO, ${userData.nome.split(' ')[0].toUpperCase()}`;
@@ -158,24 +168,17 @@ const Login = () => {
 
       {/* --- LADO ESQUERDO: BRANDING CENTRALIZADO --- */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-center items-center border-r border-white/5 overflow-hidden">
-        {/* Efeitos de Luz de fundo */}
         <div className="absolute top-[-10%] left-[-10%] w-[45vw] h-[45vw] bg-blue-600/10 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[35vw] h-[35vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10 w-full flex flex-col items-center text-center max-w-lg">
-          {/* Logo Centralizado */}
           <div className="mb-8 animate-in fade-in zoom-in duration-1000">
              <div className="relative inline-block group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-                <img 
-                  src="/logo2.png" 
-                  alt="Logo Institucional" 
-                  className="relative w-28 xl:w-40 h-auto drop-shadow-2xl transition-transform duration-500 hover:scale-105"
-                />
+                <img src="/logo2.png" alt="Logo Institucional" className="relative w-28 xl:w-40 h-auto drop-shadow-2xl transition-transform duration-500 hover:scale-105" />
              </div>
           </div>
 
-          {/* Nome da Escola Centralizado */}
           <div className="flex flex-col items-center gap-3 mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
             <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
               <GraduationCap className="text-blue-500" size={24} />
@@ -184,29 +187,20 @@ const Login = () => {
             <p className="text-blue-400 text-[9px] font-black tracking-[0.4em] uppercase">Unidade Escolar</p>
           </div>
 
-          {/* Título Principal Fluído */}
           <h1 className="text-5xl xl:text-7xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
             SISTEMA <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400">DE SAÚDE</span>
           </h1>
 
           <div className="h-1 w-20 bg-gradient-to-r from-blue-600 to-cyan-500 mb-8 rounded-full"></div>
-          
-          <p className="text-slate-400 max-w-sm font-medium text-sm xl:text-base leading-relaxed opacity-70 animate-in fade-in duration-1000 delay-500">
+          <p className="text-slate-400 max-w-sm font-medium text-sm xl:text-base leading-relaxed opacity-70">
             Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
           </p>
         </div>
       </div>
 
-      {/* --- LADO DIREITO: FORMULÁRIO (OTIMIZADO) --- */}
+      {/* --- LADO DIREITO: FORMULÁRIO --- */}
       <div className="flex-1 flex flex-col justify-center items-center p-6 xl:p-12 bg-slate-50/40 relative">
-        
-        {/* Logo Mobile */}
-        <div className="lg:hidden flex flex-col items-center mb-8">
-            <img src="/logo2.png" alt="Logo" className="w-20 mb-3" />
-            <h2 className="text-2xl font-black text-slate-900 italic uppercase">C.E.P.T <span className="text-blue-600">SAÚDE</span></h2>
-        </div>
-
         <div className="w-full max-w-[360px] xl:max-w-[400px] animate-in fade-in slide-in-from-right duration-700">
           <div className="text-center mb-8 xl:mb-12">
             <h2 className="text-3xl xl:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
@@ -217,12 +211,12 @@ const Login = () => {
 
           <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-5">
             <div className="group space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 group-focus-within:text-blue-600 transition-colors">E-mail Corporativo</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">E-mail Corporativo</label>
               <div className="relative">
                 <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type="email"
-                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm text-sm"
+                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
                   placeholder="exemplo@rodhon.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -232,37 +226,28 @@ const Login = () => {
             </div>
 
             <div className="group space-y-1.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 group-focus-within:text-blue-600 transition-colors">Senha de Segurança</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Senha de Segurança</label>
               <div className="relative">
                 <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type={showPassword ? "text" : "password"}
-                  className="w-full pl-12 pr-12 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm text-sm"
+                  className="w-full pl-12 pr-12 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-blue-600 transition-colors focus:outline-none"
-                >
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-blue-600 transition-colors">
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-[#020617] text-white py-4 xl:py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 mt-6 shadow-xl shadow-slate-900/10"
-            >
+            <button type="submit" disabled={loading} className="w-full bg-[#020617] text-white py-4 xl:py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300 mt-6 shadow-xl">
               {loading ? <Loader2 className="animate-spin" size={20} /> : <>Entrar no Sistema <ArrowRight size={18} /></>}
             </button>
           </form>
 
-          {/* Rodapé Interno */}
           <div className="mt-12 xl:mt-16 pt-8 border-t border-slate-100 flex justify-between items-center">
              <div>
                 <p className="text-[10px] text-slate-900 font-black uppercase italic">Rodhon<span className="text-blue-600">Baenf</span></p>
@@ -276,20 +261,16 @@ const Login = () => {
         </div>
       </div>
 
-      {/* --- MODAL DE SUPORTE (MANTIDO) --- */}
+      {/* MODAL SUPORTE (Mantido) */}
       {showSupport && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl relative border border-slate-100 animate-in zoom-in duration-300">
-            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900">
-              <X size={24} />
-            </button>
+            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900"><X size={24} /></button>
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-lg shadow-blue-600/30">
-                <MessageSquare size={28} />
-              </div>
-              <h3 className="text-2xl font-black text-slate-900 uppercase italic mb-2">Ajuda Especializada</h3>
-              <p className="text-slate-500 text-sm font-medium mb-8">Olá Rodrigo! Como podemos ajudar hoje?</p>
-              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:scale-[1.02] transition-transform">WhatsApp Suporte</a>
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-lg shadow-blue-600/30"><MessageSquare size={28} /></div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic mb-2">Suporte</h3>
+              <p className="text-slate-500 text-sm mb-8">Olá Rodrigo! Como podemos ajudar?</p>
+              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md">WhatsApp</a>
             </div>
           </div>
         </div>
