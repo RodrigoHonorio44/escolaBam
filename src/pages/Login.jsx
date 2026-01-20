@@ -27,7 +27,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  // --- LÓGICA DE SESSÃO ÚNICA (MANTIDA) ---
+  // --- MANTIDA LÓGICA DE SESSÃO ÚNICA ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -56,6 +56,7 @@ const Login = () => {
     return () => unsubscribeAuth();
   }, [navigate]);
 
+  // --- MANTIDA LÓGICA DE LOGIN ---
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -136,16 +137,16 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full flex bg-white overflow-hidden font-sans relative">
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-white overflow-hidden font-sans relative">
       <Toaster position="top-right" />
 
-      {/* --- LADO ESQUERDO: BRANDING ATUALIZADO --- */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-12 flex-col justify-center items-center">
-        {/* Efeitos de luz de fundo */}
-        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-600/20 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-indigo-600/15 rounded-full blur-[100px]"></div>
+      {/* --- LADO ESQUERDO: BRANDING (Responsivo e Centralizado) --- */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-center items-center overflow-hidden border-r border-white/5">
+        {/* Efeitos de luz otimizados para não quebrar o layout */}
+        <div className="absolute top-[-10%] left-[-10%] w-[40vw] h-[40vw] bg-blue-600/15 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[30vw] h-[30vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
-        <div className="relative z-10 flex flex-col items-center text-center max-w-lg">
+        <div className="relative z-10 flex flex-col items-center text-center w-full max-w-lg">
           {/* Logo Centralizado */}
           <div className="mb-8 animate-in fade-in zoom-in duration-1000">
             <div className="relative inline-block group">
@@ -153,62 +154,61 @@ const Login = () => {
               <img 
                 src="/logo2.png" 
                 alt="Logo Institucional" 
-                className="relative w-40 xl:w-52 h-auto drop-shadow-[0_0_25px_rgba(59,130,246,0.5)] transition-transform duration-500 hover:scale-105"
+                className="relative w-32 xl:w-48 h-auto drop-shadow-[0_0_25px_rgba(59,130,246,0.5)] transition-transform duration-500 hover:scale-105"
               />
             </div>
           </div>
 
           {/* Nome da Unidade */}
-          <div className="flex flex-col items-center gap-2 mb-10 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
+          <div className="flex flex-col items-center gap-2 mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
             <div className="flex items-center gap-3">
               <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-600/20">
-                <GraduationCap className="text-white" size={24} />
+                <GraduationCap className="text-white" size={22} />
               </div>
-              <h3 className="text-white font-black text-2xl tracking-[0.1em] uppercase italic leading-none">C . E . P . T</h3>
+              <h3 className="text-white font-black text-xl xl:text-2xl tracking-[0.1em] uppercase italic">C . E . P . T</h3>
             </div>
-            <p className="text-blue-400 text-[10px] font-black tracking-[0.5em] uppercase">Unidade Escolar</p>
+            <p className="text-blue-400 text-[9px] font-black tracking-[0.5em] uppercase">Unidade Escolar</p>
           </div>
 
-          {/* Título Principal */}
-          <h1 className="text-7xl xl:text-8xl font-black text-white leading-[0.85] tracking-tighter italic uppercase mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
+          {/* Título Principal Fluído */}
+          <h1 className="text-5xl xl:text-8xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-6 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
             SISTEMA <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400 drop-shadow-sm">DE SAÚDE</span>
           </h1>
           
-          <div className="h-1 w-24 bg-gradient-to-r from-blue-600 to-transparent mb-8"></div>
+          <div className="h-1 w-20 bg-blue-600 mb-8 rounded-full"></div>
 
-          <p className="text-slate-400 max-w-sm font-medium text-lg leading-relaxed opacity-90 animate-in fade-in duration-1000 delay-500">
+          <p className="text-slate-400 max-w-sm font-medium text-base xl:text-lg leading-relaxed opacity-80 px-4 animate-in fade-in duration-1000 delay-500">
             Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
           </p>
         </div>
       </div>
 
-      {/* --- LADO DIREITO: FORMULÁRIO ATUALIZADO --- */}
-      <div className="flex-1 flex flex-col justify-center items-center p-8 bg-slate-50/40 backdrop-blur-sm">
-        <div className="w-full max-w-[420px] animate-in fade-in slide-in-from-right duration-700">
-          <div className="text-center mb-12">
-            <div className="flex justify-center mb-4">
-               {/* Substituir pelo ícone do logo se disponível */}
-               <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-blue-600/20">
-                  <Lock size={24} />
-               </div>
-            </div>
-            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">RODHON<span className="text-blue-600">SYSTEM</span></h2>
-            <div className="flex items-center justify-center gap-3 mt-4">
-               <div className="h-[2px] w-6 bg-slate-200"></div>
-               <p className="text-slate-400 font-bold text-[11px] uppercase tracking-[0.2em]">Painel de Acesso</p>
-               <div className="h-[2px] w-6 bg-slate-200"></div>
-            </div>
+      {/* --- LADO DIREITO: FORMULÁRIO (Adaptável para Notebook/Mobile) --- */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 bg-slate-50/40 backdrop-blur-sm relative">
+        
+        {/* Logo Mobile (Só aparece quando o lado azul some) */}
+        <div className="lg:hidden flex flex-col items-center mb-8">
+            <img src="/logo2.png" alt="Logo" className="w-20 mb-3" />
+            <h2 className="text-2xl font-black text-slate-900 italic uppercase">C.E.P.T <span className="text-blue-600">SAÚDE</span></h2>
+        </div>
+
+        <div className="w-full max-w-[380px] xl:max-w-[420px] animate-in fade-in slide-in-from-right duration-700">
+          <div className="text-center mb-8 xl:mb-12">
+            <h2 className="text-3xl xl:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
+              RODHON<span className="text-blue-600">SYSTEM</span>
+            </h2>
+            <p className="text-slate-400 font-bold text-[10px] xl:text-[11px] uppercase tracking-[0.2em] mt-4">Painel de Acesso</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="group space-y-2">
+          <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-6">
+            <div className="group space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 group-focus-within:text-blue-600 transition-colors">E-mail Corporativo</label>
               <div className="relative">
-                <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type="email"
-                  className="w-full pl-16 pr-8 py-5 bg-white border-2 border-slate-100 rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm group-hover:border-slate-200"
+                  className="w-full pl-14 pr-6 py-4 xl:py-5 bg-white border-2 border-slate-100 rounded-2xl xl:rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm"
                   placeholder="exemplo@rodhon.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -217,13 +217,13 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="group space-y-2">
+            <div className="group space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 group-focus-within:text-blue-600 transition-colors">Senha de Segurança</label>
               <div className="relative">
-                <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type={showPassword ? "text" : "password"}
-                  className="w-full pl-16 pr-14 py-5 bg-white border-2 border-slate-100 rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm group-hover:border-slate-200"
+                  className="w-full pl-14 pr-12 py-4 xl:py-5 bg-white border-2 border-slate-100 rounded-2xl xl:rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -232,9 +232,9 @@ const Login = () => {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 hover:text-blue-600 transition-colors focus:outline-none"
+                  className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-blue-600"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
@@ -242,41 +242,40 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#020617] text-white py-5 rounded-[22px] font-black uppercase tracking-[0.2em] text-[12px] hover:bg-blue-600 hover:-translate-y-1 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 mt-10 shadow-xl shadow-blue-900/10"
+              className="w-full bg-[#020617] text-white py-4 xl:py-5 rounded-2xl xl:rounded-[22px] font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 mt-6 shadow-xl shadow-blue-900/10"
             >
-              {loading ? <Loader2 className="animate-spin" size={22} /> : <>{'Entrar no Sistema'} <ArrowRight size={20} /></>}
+              {loading ? <Loader2 className="animate-spin" size={20} /> : <>Entrar no Sistema <ArrowRight size={18} /></>}
             </button>
           </form>
 
-          <div className="mt-20 pt-8 border-t border-slate-100 flex justify-between items-center">
-              <div>
-                <p className="text-[10px] text-slate-900 font-black uppercase italic">Rodhon<span className="text-blue-600">Baenf</span></p>
-                <p className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">© 2026 Enterprise Edition</p>
-              </div>
-              <button onClick={() => setShowSupport(true)} className="group flex items-center gap-2 bg-white border border-slate-100 hover:bg-blue-600 hover:text-white px-5 py-3 rounded-full transition-all shadow-sm">
-                <LifeBuoy size={14} className="group-hover:rotate-45 transition-transform" />
-                <span className="text-[9px] font-black uppercase tracking-widest">Suporte</span>
-              </button>
+          {/* Rodapé Interno */}
+          <div className="mt-12 xl:mt-20 pt-8 border-t border-slate-100 flex justify-between items-center">
+            <div>
+              <p className="text-[10px] text-slate-900 font-black uppercase italic leading-none">Rodhon<span className="text-blue-600">Baenf</span></p>
+              <p className="text-[8px] text-slate-400 font-bold uppercase mt-1">© 2026 Enterprise Edition</p>
+            </div>
+            <button onClick={() => setShowSupport(true)} className="flex items-center gap-2 bg-white border border-slate-100 hover:bg-slate-50 px-4 py-2.5 rounded-full transition-all shadow-sm">
+              <LifeBuoy size={14} className="text-blue-600" />
+              <span className="text-[9px] font-black uppercase tracking-widest">Suporte</span>
+            </button>
           </div>
         </div>
       </div>
 
       {/* --- MODAL DE SUPORTE (MANTIDO) --- */}
       {showSupport && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[40px] p-12 shadow-2xl relative border border-slate-100 overflow-hidden">
-            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900 transition-colors">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-md rounded-[40px] p-10 shadow-2xl relative border border-slate-100">
+            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900">
               <X size={24} />
             </button>
             <div className="text-center">
-              <div className="w-20 h-20 bg-blue-600 text-white rounded-[28px] flex items-center justify-center mx-auto mb-8 rotate-6 shadow-xl shadow-blue-600/30">
-                <MessageSquare size={36} />
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-lg shadow-blue-600/30">
+                <MessageSquare size={28} />
               </div>
-              <h3 className="text-3xl font-black text-slate-900 uppercase italic mb-3">Ajuda Especializada</h3>
-              <p className="text-slate-500 text-sm font-medium mb-10">Olá! Sou o Rodrigo. Como posso ajudar você hoje?</p>
-              <div className="space-y-4">
-                <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-5 rounded-[22px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-green-500/20 hover:scale-[1.02] transition-transform">Chamado via WhatsApp</a>
-              </div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic mb-2">Ajuda Especializada</h3>
+              <p className="text-slate-500 text-sm font-medium mb-8">Olá! Sou o Rodrigo. Como posso ajudar?</p>
+              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-[18px] font-black uppercase text-[10px] tracking-widest shadow-lg shadow-green-500/20 hover:scale-[1.02] transition-transform">WhatsApp Suporte</a>
             </div>
           </div>
         </div>
