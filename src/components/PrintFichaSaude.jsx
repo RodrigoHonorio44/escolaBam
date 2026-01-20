@@ -42,15 +42,15 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
             <img src="/brasao_marica.png" alt="Prefeitura de Maricá" className="h-24 w-auto object-contain" />
             
             <div className="flex-1 px-4">
-              <h1 className="text-[17px] font-bold text-black leading-tight">PREFEITURA MUNICIPAL DE MARICÁ</h1>
-              <h2 className="text-[15px] font-bold text-black leading-tight">SECRETARIA MUNICIPAL DE EDUCAÇÃO</h2>
-              <h3 className="text-[16px] font-black text-black leading-tight uppercase italic tracking-tighter">E.M. ANÍSIO SPÍNOLA TEIXEIRA</h3>
+              <h1 className="text-[17px] font-bold text-slate-900 leading-tight">PREFEITURA MUNICIPAL DE MARICÁ</h1>
+              <h2 className="text-[15px] font-bold text-slate-900 leading-tight">SECRETARIA MUNICIPAL DE EDUCAÇÃO</h2>
+              <h3 className="text-[16px] font-black text-slate-900 leading-tight uppercase italic tracking-tighter">E.M. ANÍSIO SPÍNOLA TEIXEIRA</h3>
             </div>
 
             <img src="/logo_cept.png" alt="Logo CEPT" className="h-24 w-auto object-contain" />
           </div>
 
-          <div className="text-[9px] text-black font-medium leading-none space-y-1 mt-1">
+          <div className="text-[9px] text-slate-900 font-medium leading-none space-y-1 mt-1">
             <p>E.mail: emanisioteixeira.r2@gmail.com | Código do INEP: 33183996</p>
             <p>Avenida Jardel Filho s/nº - Jardim Atlântico Central – Itaipuaçu – Maricá – RJ CEP: 24934-180</p>
             <p className="font-bold">Ato de Criação Decreto PMM nº02 de 02/01/2019 Decreto nº 298 de 14/03/2019 – JOM 939 de 18/03/2019</p>

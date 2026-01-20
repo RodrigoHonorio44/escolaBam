@@ -7,31 +7,53 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// Adicionada a prop onSucesso para comunicar o Dashboard
 const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
       cartaoSus: '',
       sexo: '',
+      dataNascimento: '',
+      idade: '',
+      turma: '',
+      responsavel: '',
+      contato: '',
       temAlergia: 'Não',
       historicoMedico: ''
     }
   });
 
+  const criarIdPaciente = (nome, dataNasc) => {
+    const nomeLimpo = nome.trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, '-');
+    
+    if (dataNasc) {
+      const dataLimpa = dataNasc.replace(/-/g, '');
+      return `${nomeLimpo}-${dataLimpa}`;
+    }
+    return `${nomeLimpo}-sem-data`;
+  };
+
+  // ATUALIZAÇÃO: Sincroniza os nomes do banco com os nomes do formulário
   useEffect(() => {
     if (dadosEdicao) {
       reset({
         nome: dadosEdicao.nome || '',
+        dataNascimento: dadosEdicao.dataNascimento || '',
         idade: dadosEdicao.idade || '',
         sexo: dadosEdicao.sexo || '',
         turma: dadosEdicao.turma || '',
         responsavel: dadosEdicao.responsavel || '',
         contato: dadosEdicao.contato || '',
-        cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : dadosEdicao.cartaoSus,
+        cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : (dadosEdicao.cartaoSus || ''),
         naoSabeSus: dadosEdicao.cartaoSus === "NÃO INFORMADO",
-        temAlergia: dadosEdicao.alergias?.possui || 'Não',
-        historicoMedico: dadosEdicao.alergias?.detalhes === "Nenhuma" ? "" : dadosEdicao.alergias?.detalhes
+        
+        // MAPEAMENTO CORRETO:
+        // Pega 'alunoPossuiAlergia' do banco e joga no 'temAlergia' do formulário
+        temAlergia: dadosEdicao.alunoPossuiAlergia || 'Não', 
+        // Pega 'qualAlergia' do banco e joga no 'historicoMedico' do formulário
+        historicoMedico: dadosEdicao.qualAlergia === "Nenhuma" ? "" : (dadosEdicao.qualAlergia || '')
       });
     }
   }, [dadosEdicao, reset]);
@@ -43,24 +65,32 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
     const saveAction = async () => {
       const nomeLimpo = data.nome.trim();
       const nomeParaBusca = nomeLimpo.toUpperCase();
+      const idPasta = criarIdPaciente(nomeLimpo, data.dataNascimento);
 
       const payload = {
         nome: nomeLimpo,
         nomeBusca: nomeParaBusca,
+        pacienteId: idPasta,
         tipoPerfil: 'aluno',
+        dataNascimento: data.dataNascimento || "Não informada",
         idade: data.idade,
         sexo: data.sexo,
         turma: data.turma,
         responsavel: data.responsavel,
         contato: data.contato,
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
-        alergias: {
-          possui: data.temAlergia,
-          detalhes: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma"
-        },
+        
+        // SALVAMENTO PADRONIZADO:
+        alunoPossuiAlergia: data.temAlergia, 
+        qualAlergia: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma",
         updatedAt: serverTimestamp(),
       };
 
+      // 1. Atualiza Pasta Digital
+      const pastaRef = doc(db, "pastas_digitais", idPasta);
+      await setDoc(pastaRef, { ...payload, ultimaAtualizacao: serverTimestamp() }, { merge: true });
+
+      // 2. Atualiza Coleção de Alunos
       if (dadosEdicao?.id) {
         await setDoc(doc(db, "alunos", dadosEdicao.id), payload, { merge: true });
       } else {
@@ -71,21 +101,16 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
         });
       }
       
-      // ✅ LOGICA DE RETORNO:
-      // Se tivermos a função onSucesso (vinda do Dashboard), chamamos ela 
-      // passando o nome do aluno para a Pasta Digital reabrir.
       if (onSucesso) {
         setTimeout(() => {
-          onSucesso({ nome: nomeLimpo }); 
-        }, 1500); // Aguarda o toast de sucesso aparecer
-      } else if (!dadosEdicao) {
-        reset();
+          onSucesso({ nome: nomeLimpo, pacienteId: idPasta }); 
+        }, 1500);
       }
     };
 
     toast.promise(saveAction(), {
-      loading: dadosEdicao ? 'ATUALIZANDO DADOS...' : 'SALVANDO DADOS...',
-      success: dadosEdicao ? 'DADOS ATUALIZADOS!' : 'ALUNO CADASTRADO COM SUCESSO!',
+      loading: 'SINCRONIZANDO COM A PASTA DIGITAL...',
+      success: 'DADOS SALVOS COM SUCESSO!',
       error: 'ERRO AO SALVAR.',
     }, {
       style: {
@@ -127,7 +152,16 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
           <input 
             {...register("nome")} 
-            placeholder="Ex: João Silva Sauro"
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
+            required 
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
+          <input 
+            type="date"
+            {...register("dataNascimento")} 
             className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
@@ -138,7 +172,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
           <input 
             type="number" 
             {...register("idade")} 
-            placeholder="Ex: 12"
             className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
@@ -173,7 +206,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Turma / Ano</label>
           <input 
             {...register("turma")} 
-            placeholder="Ex: 801"
             className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
@@ -183,7 +215,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Responsável</label>
           <input 
             {...register("responsavel")} 
-            placeholder="Nome do pai, mãe ou tutor"
             className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 focus:bg-white transition-all shadow-sm" 
             required 
           />
@@ -194,7 +225,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, onSucesso }) => {
           <input 
             {...register("contato")} 
             className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm" 
-            placeholder="(21) 99999-9999" 
           />
         </div>
 

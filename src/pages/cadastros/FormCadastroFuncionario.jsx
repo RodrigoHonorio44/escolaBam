@@ -7,29 +7,48 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// ✅ Adicionada a prop onSucesso
 const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
   const { register, handleSubmit, reset, watch, formState: { isSubmitting } } = useForm({
     defaultValues: {
       naoSabeSus: false,
+      cartaoSus: '',
       sexo: '',
+      dataNascimento: '',
+      idade: '',
+      cargo: '',
       temAlergia: 'Não',
       historicoMedico: '' 
     }
   });
 
-  // --- EFEITO PARA CARREGAR DADOS VINDOS DA PASTA DIGITAL ---
+  const criarIdPaciente = (nome, dataNasc) => {
+    const nomeLimpo = nome.trim().toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, '-');
+    
+    if (dataNasc) {
+      const dataLimpa = dataNasc.replace(/-/g, '');
+      return `${nomeLimpo}-${dataLimpa}`;
+    }
+    return `${nomeLimpo}-sem-data`;
+  };
+
   useEffect(() => {
     if (dadosEdicao) {
+      // Lógica para recuperar a alergia independente do nome do campo no banco
+      const possuiAlergia = dadosEdicao.alunoPossuiAlergia || dadosEdicao.alergias?.possui || 'Não';
+      const detalhesAlergia = dadosEdicao.qualAlergia || (dadosEdicao.alergias?.detalhes === "Nenhuma informada" ? "" : dadosEdicao.alergias?.detalhes);
+
       reset({
         nome: dadosEdicao.nome || '',
+        dataNascimento: dadosEdicao.dataNascimento || '',
         idade: dadosEdicao.idade || '',
         sexo: dadosEdicao.sexo || '',
         cargo: dadosEdicao.cargo || '',
-        cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : dadosEdicao.cartaoSus,
+        cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : (dadosEdicao.cartaoSus || ''),
         naoSabeSus: dadosEdicao.cartaoSus === "NÃO INFORMADO",
-        temAlergia: dadosEdicao.alergias?.possui || 'Não',
-        historicoMedico: dadosEdicao.alergias?.detalhes === "Nenhuma informada" ? "" : dadosEdicao.alergias?.detalhes
+        temAlergia: possuiAlergia,
+        historicoMedico: detalhesAlergia === "Nenhuma informada" ? "" : detalhesAlergia
       });
     }
   }, [dadosEdicao, reset]);
@@ -41,32 +60,34 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
     const saveAction = async () => {
       const nomeLimpo = data.nome.trim();
       const nomeParaBusca = nomeLimpo.toUpperCase();
-
-      let susFinal = data.cartaoSus;
-      if (data.naoSabeSus || !susFinal) {
-        susFinal = "NÃO INFORMADO";
-      }
+      const idPasta = criarIdPaciente(nomeLimpo, data.dataNascimento);
 
       const payload = {
         nome: nomeLimpo,
         nomeBusca: nomeParaBusca,
+        pacienteId: idPasta,
         tipoPerfil: 'funcionario',
+        dataNascimento: data.dataNascimento,
         idade: data.idade,
         sexo: data.sexo,
         cargo: data.cargo,
-        cartaoSus: susFinal,
-        alergias: {
-          possui: data.temAlergia,
-          detalhes: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma informada"
-        },
+        cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
+        // PADRONIZAÇÃO PARA O PRONTUÁRIO E PASTA DIGITAL
+        alunoPossuiAlergia: data.temAlergia, 
+        qualAlergia: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma informada",
         updatedAt: serverTimestamp()
       };
 
+      // 1. SALVA NA PASTA DIGITAL
+      await setDoc(doc(db, "pastas_digitais", idPasta), {
+        ...payload,
+        ultimaAtualizacao: serverTimestamp()
+      }, { merge: true });
+
+      // 2. SALVA NA COLEÇÃO ESPECÍFICA
       if (dadosEdicao?.id) {
-        // ATUALIZAÇÃO
         await setDoc(doc(db, "funcionario", dadosEdicao.id), payload, { merge: true });
       } else {
-        // NOVO CADASTRO
         await addDoc(collection(db, "funcionario"), {
           ...payload,
           dataCadastro: new Date().toISOString(),
@@ -74,19 +95,16 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
         });
       }
       
-      // ✅ LOGICA DE RETORNO PARA A PASTA DIGITAL
       if (onSucesso) {
         setTimeout(() => {
-          onSucesso({ nome: nomeLimpo }); // Passa o nome para o Dashboard reabrir a pasta
+          onSucesso({ nome: nomeLimpo, pacienteId: idPasta }); 
         }, 1500);
-      } else if (!dadosEdicao) {
-        reset();
       }
     };
 
     toast.promise(saveAction(), {
-      loading: 'SALVANDO DADOS...',
-      success: dadosEdicao ? 'DADOS ATUALIZADOS COM SUCESSO!' : 'STAFF CADASTRADO COM SUCESSO!',
+      loading: 'SINCRONIZANDO COM PRONTUÁRIO...',
+      success: dadosEdicao ? 'DADOS ATUALIZADOS!' : 'STAFF REGISTRADO!',
       error: 'ERRO AO SALVAR.',
     }, {
       style: {
@@ -104,7 +122,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
     <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200 animate-in fade-in duration-500">
       <Toaster position="top-center" />
       
-      {/* Header */}
       <div className="flex items-center justify-between mb-10 border-b border-slate-100 pb-6">
         <div className="flex items-center gap-4">
           <div className="bg-slate-900 p-3 rounded-2xl shadow-lg text-white">
@@ -119,23 +136,22 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
             </p>
           </div>
         </div>
-        <button 
-          onClick={onVoltar}
-          className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest flex items-center gap-2"
-        >
+        <button onClick={onVoltar} className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest flex items-center gap-2">
           <ChevronLeft size={14} /> Voltar
         </button>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        
-        {/* Nome */}
         <div className="md:col-span-2 space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome Completo</label>
           <input {...register("nome")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
         </div>
 
-        {/* Idade e Sexo */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
+          <input type="date" {...register("dataNascimento")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
+        </div>
+
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Idade</label>
           <input type="number" {...register("idade")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
@@ -150,13 +166,11 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
           </select>
         </div>
 
-        {/* Cargo */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">Cargo / Função</label>
           <input {...register("cargo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl outline-none font-bold text-slate-700 focus:border-slate-900 focus:bg-white transition-all shadow-sm" required />
         </div>
 
-        {/* Cartão SUS */}
         <div className="space-y-2">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
@@ -179,7 +193,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
           />
         </div>
 
-        {/* Alergias */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
