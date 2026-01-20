@@ -153,68 +153,76 @@ const Login = () => {
   };
 
   return (
-    <div className="h-screen w-full flex bg-white overflow-hidden font-sans relative">
+    <div className="h-screen w-full flex flex-col lg:flex-row bg-white overflow-hidden font-sans relative">
       <Toaster position="top-right" />
 
-      {/* --- LADO ESQUERDO: BRANDING ATUALIZADO --- */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-12 xl:p-20 flex-col justify-center items-center border-r border-white/5">
-        <div className="absolute top-[-15%] left-[-10%] w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-15%] right-[-10%] w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-[100px]"></div>
+      {/* --- LADO ESQUERDO: BRANDING CENTRALIZADO --- */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-center items-center border-r border-white/5 overflow-hidden">
+        {/* Efeitos de Luz de fundo */}
+        <div className="absolute top-[-10%] left-[-10%] w-[45vw] h-[45vw] bg-blue-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] right-[-10%] w-[35vw] h-[35vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
-        <div className="relative z-10 w-full max-w-xl">
-          {/* CONTAINER DO LOGO2 - DESIGN MODERNO/CONSERVADOR */}
-          <div className="mb-10 animate-in fade-in zoom-in duration-1000">
+        <div className="relative z-10 w-full flex flex-col items-center text-center max-w-lg">
+          {/* Logo Centralizado */}
+          <div className="mb-8 animate-in fade-in zoom-in duration-1000">
              <div className="relative inline-block group">
-                {/* Brilho sutil atrás do logo */}
                 <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
                 <img 
                   src="/logo2.png" 
                   alt="Logo Institucional" 
-                  className="relative w-32 xl:w-44 h-auto drop-shadow-2xl transition-transform duration-500 hover:scale-105"
+                  className="relative w-28 xl:w-40 h-auto drop-shadow-2xl transition-transform duration-500 hover:scale-105"
                 />
              </div>
           </div>
 
-          <div className="flex items-center gap-4 mb-8 animate-in fade-in slide-in-from-left duration-700 delay-200">
-            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-3 rounded-2xl shadow-2xl rotate-3 transition-transform hover:rotate-0">
-              <GraduationCap className="text-white" size={28} />
+          {/* Nome da Escola Centralizado */}
+          <div className="flex flex-col items-center gap-3 mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
+            <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
+              <GraduationCap className="text-blue-500" size={24} />
+              <h3 className="text-white font-black text-xl xl:text-2xl tracking-[0.1em] uppercase italic leading-none">C . P . T</h3>
             </div>
-            <div>
-              <h3 className="text-white font-black text-xl tracking-tighter uppercase italic leading-none">C . P . T</h3>
-              <p className="text-blue-400 text-[8px] font-black tracking-[0.4em] uppercase mt-1">Unidade Escolar</p>
-            </div>
+            <p className="text-blue-400 text-[9px] font-black tracking-[0.4em] uppercase">Unidade Escolar</p>
           </div>
 
-          <h1 className="text-6xl xl:text-8xl font-black text-white leading-[0.85] tracking-tighter italic uppercase mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
+          {/* Título Principal Fluído */}
+          <h1 className="text-5xl xl:text-7xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
             SISTEMA <br />
-            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-400 to-cyan-400">DE SAÚDE</span>
+            <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400">DE SAÚDE</span>
           </h1>
-          <p className="text-slate-400 max-w-md font-medium text-lg leading-relaxed mb-12 opacity-80 border-l-2 border-blue-600/30 pl-6 animate-in fade-in duration-1000 delay-500">
+
+          <div className="h-1 w-20 bg-gradient-to-r from-blue-600 to-cyan-500 mb-8 rounded-full"></div>
+          
+          <p className="text-slate-400 max-w-sm font-medium text-sm xl:text-base leading-relaxed opacity-70 animate-in fade-in duration-1000 delay-500">
             Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
           </p>
         </div>
       </div>
 
-      {/* --- LADO DIREITO: FORMULÁRIO (MANTIDO) --- */}
-      <div className="flex-1 flex flex-col justify-center items-center p-8 bg-slate-50/30">
-        <div className="w-full max-w-[420px] animate-in fade-in slide-in-from-right duration-700">
-          <div className="text-center mb-10">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">RODHON<span className="text-blue-600">SYSTEM</span></h2>
-            <div className="flex items-center justify-center gap-2 mt-3">
-               <div className="h-px w-4 bg-slate-200"></div>
-               <p className="text-slate-400 font-bold text-[11px] uppercase tracking-widest">Painel de Acesso</p>
-               <div className="h-px w-4 bg-slate-200"></div>
-            </div>
+      {/* --- LADO DIREITO: FORMULÁRIO (OTIMIZADO) --- */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 xl:p-12 bg-slate-50/40 relative">
+        
+        {/* Logo Mobile */}
+        <div className="lg:hidden flex flex-col items-center mb-8">
+            <img src="/logo2.png" alt="Logo" className="w-20 mb-3" />
+            <h2 className="text-2xl font-black text-slate-900 italic uppercase">C.E.P.T <span className="text-blue-600">SAÚDE</span></h2>
+        </div>
+
+        <div className="w-full max-w-[360px] xl:max-w-[400px] animate-in fade-in slide-in-from-right duration-700">
+          <div className="text-center mb-8 xl:mb-12">
+            <h2 className="text-3xl xl:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
+              RODHON<span className="text-blue-600">SYSTEM</span>
+            </h2>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em] mt-4">Painel de Acesso</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="group space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-blue-600 transition-colors">E-mail Corporativo</label>
+          <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-5">
+            <div className="group space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 group-focus-within:text-blue-600 transition-colors">E-mail Corporativo</label>
               <div className="relative">
-                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type="email"
-                  className="w-full pl-14 pr-7 py-5 bg-white border-2 border-slate-100 rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm"
+                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm text-sm"
                   placeholder="exemplo@rodhon.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -223,13 +231,13 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="group space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 group-focus-within:text-blue-600 transition-colors">Senha de Segurança</label>
+            <div className="group space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 group-focus-within:text-blue-600 transition-colors">Senha de Segurança</label>
               <div className="relative">
-                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={20} />
+                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type={showPassword ? "text" : "password"}
-                  className="w-full pl-14 pr-14 py-5 bg-white border-2 border-slate-100 rounded-[22px] outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm"
+                  className="w-full pl-12 pr-12 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all shadow-sm text-sm"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -240,7 +248,7 @@ const Login = () => {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-blue-600 transition-colors focus:outline-none"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
@@ -248,19 +256,20 @@ const Login = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-[#020617] text-white py-5 rounded-[22px] font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 mt-8 shadow-xl shadow-slate-900/20"
+              className="w-full bg-[#020617] text-white py-4 xl:py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:bg-slate-300 mt-6 shadow-xl shadow-slate-900/10"
             >
-              {loading ? <Loader2 className="animate-spin" size={20} /> : <>{'Entrar no Sistema'} <ArrowRight size={18} /></>}
+              {loading ? <Loader2 className="animate-spin" size={20} /> : <>Entrar no Sistema <ArrowRight size={18} /></>}
             </button>
           </form>
 
-          <div className="mt-16 pt-8 border-t border-slate-100 flex justify-between items-center">
+          {/* Rodapé Interno */}
+          <div className="mt-12 xl:mt-16 pt-8 border-t border-slate-100 flex justify-between items-center">
              <div>
                 <p className="text-[10px] text-slate-900 font-black uppercase italic">Rodhon<span className="text-blue-600">Baenf</span></p>
-                <p className="text-[8px] text-slate-400 font-bold uppercase mt-0.5">© 2026 Enterprise Edition</p>
+                <p className="text-[8px] text-slate-400 font-bold uppercase mt-1">© 2026 Enterprise Edition</p>
              </div>
-             <button onClick={() => setShowSupport(true)} className="group flex items-center gap-2 bg-slate-100 hover:bg-blue-600 hover:text-white px-5 py-2.5 rounded-full transition-all">
-                <LifeBuoy size={14} className="group-hover:rotate-45 transition-transform" />
+             <button onClick={() => setShowSupport(true)} className="flex items-center gap-2 bg-white border border-slate-100 hover:bg-slate-50 px-4 py-2 rounded-full transition-all shadow-sm">
+                <LifeBuoy size={14} className="text-blue-600" />
                 <span className="text-[9px] font-black uppercase tracking-widest">Suporte</span>
              </button>
           </div>
@@ -269,20 +278,18 @@ const Login = () => {
 
       {/* --- MODAL DE SUPORTE (MANTIDO) --- */}
       {showSupport && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white w-full max-w-md rounded-[40px] p-12 shadow-2xl relative border border-slate-100 overflow-hidden">
-            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900 transition-colors">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl relative border border-slate-100 animate-in zoom-in duration-300">
+            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900">
               <X size={24} />
             </button>
             <div className="text-center">
-              <div className="w-20 h-20 bg-blue-600 text-white rounded-[28px] flex items-center justify-center mx-auto mb-8 rotate-6 shadow-xl shadow-blue-600/30">
-                <MessageSquare size={36} />
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-lg shadow-blue-600/30">
+                <MessageSquare size={28} />
               </div>
-              <h3 className="text-3xl font-black text-slate-900 uppercase italic mb-3">Ajuda Especializada</h3>
-              <p className="text-slate-500 text-sm font-medium mb-10">Olá! Sou o Rodrigo. Como posso ajudar você hoje?</p>
-              <div className="space-y-4">
-                <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-5 rounded-[22px] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-green-500/20 hover:scale-[1.02] transition-transform">Chamado via WhatsApp</a>
-              </div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic mb-2">Ajuda Especializada</h3>
+              <p className="text-slate-500 text-sm font-medium mb-8">Olá Rodrigo! Como podemos ajudar hoje?</p>
+              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:scale-[1.02] transition-transform">WhatsApp Suporte</a>
             </div>
           </div>
         </div>
