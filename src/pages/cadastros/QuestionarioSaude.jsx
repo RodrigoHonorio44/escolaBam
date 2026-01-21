@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
+const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPastaDigital = !!dadosEdicao }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -40,15 +40,22 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
       { nome: '', telefone: '' }
     ],
     autorizacaoEmergencia: false,
-    pacienteId: '' // Guardamos o ID vinculado
+    pacienteId: '' 
   };
 
   const [formData, setFormData] = useState(estadoInicial);
 
-  // 1. LÓGICA DE BUSCA AUTOMÁTICA POR NOME
-  // Quando o usuário termina de digitar o nome (onBlur), buscamos na Pasta Digital
+  // Lógica de saída centralizada
+  const handleActionVoltar = () => {
+    if (modoPastaDigital && onClose) {
+      onClose();
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
   const buscarPacientePorNome = async (nomeDigitado) => {
-    if (!nomeDigitado || nomeDigitado.length < 3 || formData.pacienteId) return;
+    if (!nomeDigitado || nomeDigitado.length < 3 || formData.pacienteId || modoPastaDigital) return;
 
     setBuscandoNome(true);
     try {
@@ -65,9 +72,8 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
         const d = docSnap.data();
         const idEncontrado = docSnap.id;
 
-        toast.success("Paciente localizado na Pasta Digital!");
+        toast.success("Paciente localizado!");
         
-        // Tenta ver se já tem questionário para este ID
         const questRef = doc(db, "questionarios_saude", idEncontrado);
         const questSnap = await getDoc(questRef);
 
@@ -88,13 +94,11 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
         }
       }
     } catch (error) {
-      console.error("Erro na busca por nome:", error);
+      console.error("Erro na busca:", error);
     } finally {
       setBuscandoNome(false);
     }
   };
-
-  const voltarDash = () => navigate('/dashboard');
 
   const idadeCalculada = useMemo(() => {
     if (!formData.dataNascimento) return "";
@@ -112,7 +116,6 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
     return valor;
   };
 
-  // 2. CARREGAMENTO QUANDO VEM DA PASTA DIGITAL (dadosEdicao)
   useEffect(() => {
     const carregarViaProp = async () => {
       if (!dadosEdicao?.id) return;
@@ -162,7 +165,7 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
     const docId = formData.pacienteId || (dadosEdicao?.id ? String(dadosEdicao.id) : null);
     
     if (!docId) {
-      toast.error("Vincule um aluno da Pasta Digital primeiro.");
+      toast.error("Vincule um paciente da Pasta Digital primeiro.");
       return;
     }
 
@@ -184,8 +187,14 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
         lastUpdate: serverTimestamp()
       }, { merge: true });
 
-      toast.success("Sincronização concluída com sucesso!");
-      setFormData(estadoInicial);
+      toast.success("Ficha sincronizada com sucesso!");
+      
+      if (modoPastaDigital && onClose) {
+        onClose();
+      } else {
+        setFormData(estadoInicial);
+      }
+      
       if (onSucesso) onSucesso();
     } catch (error) {
       toast.error("Erro ao salvar.");
@@ -197,14 +206,14 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
   if (fetching) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8 animate-in fade-in">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 animate-in fade-in zoom-in-95 duration-300">
       <Toaster position="top-right" />
       
       <div className="flex justify-between items-center mb-8">
-        <button type="button" onClick={voltarDash} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-blue-600">
-          <ChevronLeft size={16} /> Dashboard
+        <button type="button" onClick={handleActionVoltar} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-blue-600 transition-colors">
+          <ChevronLeft size={16} /> {modoPastaDigital ? 'Voltar para Pasta' : 'Dashboard'}
         </button>
-        <button type="button" onClick={voltarDash} className="text-slate-300 hover:text-red-500 transition-colors">
+        <button type="button" onClick={handleActionVoltar} className="text-slate-300 hover:text-red-500 transition-colors">
             <X size={24} />
         </button>
       </div>
@@ -212,33 +221,37 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-5">
-            <div className="bg-blue-600 text-white p-4 rounded-3xl shadow-lg shadow-blue-100">
+            <div className="bg-rose-500 text-white p-4 rounded-3xl shadow-lg shadow-rose-100">
               {buscandoNome ? <Loader2 className="animate-spin" size={32} /> : <ClipboardCheck size={32} />}
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-800 uppercase italic leading-tight">Ficha Médica</h1>
-              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Busca Inteligente Ativa</p>
+              <h1 className="text-2xl font-black text-slate-800 uppercase italic leading-tight">
+                {modoPastaDigital ? 'Atualizar Ficha Médica' : 'Ficha Médica'}
+              </h1>
+              <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Sincronização Hospitalar</p>
             </div>
           </div>
-          <button type="submit" disabled={loading} className="w-full md:w-auto bg-slate-900 text-white px-10 py-5 rounded-[22px] font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl flex items-center justify-center gap-3">
-            {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Salvar e Sincronizar
+          <button type="submit" disabled={loading} className="w-full md:w-auto bg-slate-900 text-white px-10 py-5 rounded-[22px] font-black uppercase text-xs tracking-widest hover:bg-rose-500 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50">
+            {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} 
+            {modoPastaDigital ? 'Confirmar Atualização' : 'Salvar e Sincronizar'}
           </button>
         </div>
 
         <SectionCard icon={<Search size={18}/>} title="Busca e Identificação">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-6">
-              <InputBlock label="Nome do Paciente (Digite para buscar)">
+              <InputBlock label="Nome do Paciente">
                 <div className="relative">
                   <input 
-                    className={`input-estilo uppercase ${formData.pacienteId ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'}`}
+                    className={`input-estilo uppercase ${formData.pacienteId ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'} ${modoPastaDigital ? 'cursor-not-allowed opacity-75' : ''}`}
                     value={formData.alunoNome || ''} 
+                    readOnly={modoPastaDigital}
                     onChange={(e) => {
                         handleChange('alunoNome', e.target.value);
-                        if(formData.pacienteId) handleChange('pacienteId', ''); // Reseta ID se mudar o nome
+                        if(formData.pacienteId) handleChange('pacienteId', ''); 
                     }}
                     onBlur={(e) => buscarPacientePorNome(e.target.value)}
-                    placeholder="DIGITE O NOME COMPLETO..."
+                    placeholder="DIGITE PARA LOCALIZAR NA PASTA..."
                   />
                   {formData.pacienteId && <div className="absolute right-4 top-4 text-green-500 font-bold text-[9px] uppercase">Vinculado</div>}
                 </div>
@@ -246,7 +259,13 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
             </div>
             <div className="md:col-span-3">
               <InputBlock label="Data de Nascimento">
-                <input type="date" className="input-estilo bg-white border-slate-200" value={formData.dataNascimento || ''} onChange={(e) => handleChange('dataNascimento', e.target.value)} />
+                <input 
+                    type="date" 
+                    className={`input-estilo bg-white border-slate-200 ${modoPastaDigital ? 'cursor-not-allowed opacity-75' : ''}`} 
+                    value={formData.dataNascimento || ''} 
+                    readOnly={modoPastaDigital}
+                    onChange={(e) => handleChange('dataNascimento', e.target.value)} 
+                />
               </InputBlock>
             </div>
             <div className="md:col-span-1">
@@ -257,14 +276,13 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
               </InputBlock>
             </div>
             <div className="md:col-span-2">
-              <InputBlock label="Turma/Série">
+              <InputBlock label="Turma/Setor">
                 <input className="input-estilo bg-blue-50/50 border-blue-100 uppercase" value={formData.turma || ''} onChange={(e) => handleChange('turma', e.target.value)} />
               </InputBlock>
             </div>
           </div>
         </SectionCard>
 
-        {/* --- MANTENDO TODOS OS CAMPOS ABAIXO --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <SectionCard icon={<ShieldCheck size={18}/>} title="Status Vacinal">
             <div className="space-y-3">
@@ -278,7 +296,8 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
                 <option value="">Selecione...</option>
                 <option value="Mãe">Mãe</option>
                 <option value="Pai">Pai</option>
-                <option value="Avós">Avós</option>
+                <option value="Cônjuge">Cônjuge</option>
+                <option value="Filho(a)">Filho(a)</option>
                 <option value="Outro">Outro Responsável</option>
               </select>
             </InputBlock>
@@ -324,7 +343,7 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
               <div className={`mt-6 p-6 rounded-[28px] border-2 transition-all ${formData.autorizacaoEmergencia ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
                 <label className="flex gap-4 cursor-pointer items-start">
                   <input type="checkbox" className="w-6 h-6 rounded-lg text-green-600 mt-1" checked={formData.autorizacaoEmergencia} onChange={(e) => handleChange('autorizacaoEmergencia', e.target.checked)} />
-                  <span className="text-[10px] font-black leading-tight uppercase">Autorizo o encaminhamento para unidade de saúde.</span>
+                  <span className="text-[10px] font-black leading-tight uppercase">Autorizo o encaminhamento para unidade de saúde em caso de urgência.</span>
                 </label>
               </div>
             </div>
@@ -340,19 +359,21 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso }) => {
   );
 };
 
-// COMPONENTES AUXILIARES (Mesmos do anterior)
+// COMPONENTES AUXILIARES
 const SectionCard = ({ icon, title, children }) => (
   <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
     <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">{icon} {title}</h2>
     {children}
   </div>
 );
+
 const InputBlock = ({ label, children }) => (
   <div className="space-y-1.5">
     <label className="text-[9px] font-black text-slate-400 uppercase ml-1">{label}</label>
     {children}
   </div>
 );
+
 const RadioGroup = ({ label, name, value, onChange }) => (
   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
     <span className="text-[9px] font-black text-slate-400 uppercase block mb-3">{label}</span>
@@ -365,7 +386,8 @@ const RadioGroup = ({ label, name, value, onChange }) => (
     </div>
   </div>
 );
-const ToggleInput = ({ label, value, onChange, placeholder = "Especifique...", isTextArea = false }) => {
+
+const ToggleInput = ({ label, value, onChange, placeholder = "Especifique detalhes...", isTextArea = false }) => {
   const possui = value?.possui || 'Não';
   const detalhes = value?.detalhes || '';
   return (

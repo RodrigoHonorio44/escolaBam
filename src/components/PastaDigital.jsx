@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { 
   Search, Briefcase, GraduationCap, Calendar, PlusCircle, ShieldAlert,
   ChevronLeft, ChevronRight, Phone, Edit3, FileSearch, CheckCircle2, 
-  ClipboardList, ArrowLeft, Loader2, Pill, X
+  ClipboardList, ArrowLeft, Loader2, Pill, X, HeartPulse
 } from 'lucide-react';
 import { db } from '../firebase/firebaseConfig';
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -11,8 +11,10 @@ import { useBuscaPaciente } from '../hooks/useBuscaPaciente';
 
 import ModalDetalhesDigital from './ModalDetalhesDigital';
 import FormCadastroAluno from '../pages/cadastros/FormCadastroAluno'; 
+import FormCadastroFuncionario from '../pages/cadastros/FormCadastroFuncionario'; // Importado
+import QuestionarioSaude from '../pages/cadastros/QuestionarioSaude';
 
-const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoParaReabrir }) => {
+const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
   const [busca, setBusca] = useState('');
   const [resultado, setResultado] = useState(null);
   const [sugestoes, setSugestoes] = useState([]);
@@ -20,11 +22,15 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null);
   const [detalheExpandido, setDetalheExpandido] = useState(null);
+  
+  // Estados para Modais de Edição
   const [exibirModalEdicao, setExibirModalEdicao] = useState(false);
+  const [exibirModalSaude, setExibirModalSaude] = useState(false);
 
   const itensPorPagina = 5;
   const { buscarDadosCompletos, loading } = useBuscaPaciente();
 
+  // Reabrir pasta automaticamente
   useEffect(() => {
     if (alunoParaReabrir?.nomePaciente || alunoParaReabrir?.nome) {
       const nomeParaBusca = alunoParaReabrir.nomePaciente || alunoParaReabrir.nome;
@@ -33,6 +39,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
     }
   }, [alunoParaReabrir]);
 
+  // Autocomplete
   useEffect(() => {
     const carregarNomesRecentes = async () => {
       try {
@@ -58,7 +65,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
       const data = await buscarDadosCompletos(termoBusca);
       if (data) {
         setResultado(data);
-        console.log("Dados Recebidos no Componente:", data.perfil); // Debug para você ver no F12
       } else {
         toast.error("Paciente não encontrado");
       }
@@ -77,10 +83,8 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
     if (tipo === 'alergia') {
       const p = resultado.perfil || {};
       const s = resultado.saude || {};
-
       const fontesAlergia = [
-        { valor: p.qualAlergia, fonte: "Ficha Cadastral" },
-        { valor: p.alergia, fonte: "Ficha Cadastral" },
+        { valor: p.qualAlergia || p.historicoMedico, fonte: "Ficha Cadastral" },
         { valor: s.alergias?.detalhes, fonte: "Questionário de Saúde" },
         { valor: s.restricoesAlimentares?.detalhes, fonte: "Restrição Alimentar" }
       ];
@@ -204,7 +208,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
               
               <p className={`text-[10px] font-black uppercase tracking-widest mt-2 ${resultado.isFuncionario ? 'text-slate-500' : 'text-blue-600'}`}>
                 {resultado.isFuncionario 
-                  ? (resultado.perfil?.turma || 'COLABORADOR') 
+                  ? (resultado.perfil?.cargo || 'COLABORADOR') 
                   : `ALUNO • TURMA ${resultado.perfil?.turma || 'N/A'}`
                 }
               </p>
@@ -212,7 +216,8 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
               <div className="mt-8 space-y-2 text-left bg-slate-50 p-5 rounded-[30px] border border-slate-100">
                 <InfoRow label="SUS" value={resultado.perfil?.cartaoSus} icon={<FileSearch size={12}/>} />
                 <InfoRow label="Nascimento" value={resultado.perfil?.dataNascimento} icon={<Calendar size={12}/>} />
-                <InfoRow label="Idade" value={resultado.perfil?.idade ? `${resultado.perfil.idade} anos` : null} icon={<Calendar size={12}/>} />
+                <InfoRow label="Idade" value={resultado.perfil?.idade ? `${resultado.perfil.idade} ANOS` : null} icon={<Calendar size={12}/>} />
+                <InfoRow label="Gênero" value={resultado.perfil?.sexo || resultado.perfil?.genero} icon={<FileSearch size={12}/>} />
               </div>
 
               <div className="flex flex-col gap-2 mt-6">
@@ -229,7 +234,10 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
           {/* COLUNA PRINCIPAL */}
           <div className="lg:col-span-3 space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <Section title="Status Clínico" action={<button onClick={() => onAbrirQuestionario({tipo: resultado.isFuncionario ? 'FUNCIONARIO' : 'ALUNO', dados: resultado.dadosParaForm})} className="text-blue-600 hover:scale-110 transition-transform"><Edit3 size={16} /></button>}>
+              <Section 
+                title="Status Clínico" 
+                action={<button onClick={() => setExibirModalSaude(true)} className="text-blue-600 hover:scale-110 transition-transform"><HeartPulse size={18} /></button>}
+              >
                 <div className="grid grid-cols-2 gap-3">
                   <HealthStatusBadge label="Asma" status={resultado.statusClinico?.asma} />
                   <HealthStatusBadge label="Diabetes" status={resultado.statusClinico?.diabetes} />
@@ -299,7 +307,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
             <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm overflow-hidden">
               <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/30">
                 <h4 className="text-lg font-black uppercase italic flex items-center gap-3 text-slate-900">
-                  <ClipboardList className="text-blue-600" size={24} /> Histórico
+                  <ClipboardList className="text-blue-600" size={24} /> Histórico Clínico
                 </h4>
                 <div className="flex items-center gap-3">
                     <button onClick={() => setPaginaAtual(p => Math.max(1, p-1))} disabled={paginaAtual === 1} className="p-1.5 hover:bg-slate-100 rounded-lg disabled:opacity-30"><ChevronLeft size={18}/></button>
@@ -333,7 +341,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
                           </span>
                         </td>
                         <td className="px-8 py-6 text-right">
-                          <button onClick={() => setAtendimentoSelecionado(atend)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase hover:bg-blue-600">Ver Ficha</button>
+                          <button onClick={() => setAtendimentoSelecionado(atend)} className="bg-slate-900 text-white px-5 py-2.5 rounded-xl text-[9px] font-black uppercase hover:bg-blue-600 transition-colors">Ver Ficha</button>
                         </td>
                       </tr>
                     ))}
@@ -346,21 +354,39 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
       ) : (
         <div className="flex flex-col items-center justify-center py-32 bg-white rounded-[40px] border-2 border-dashed border-slate-200">
            <FileSearch size={32} className="text-slate-300 mb-4" />
-           <p className="text-slate-400 font-black uppercase italic text-xs tracking-widest">Aguardando busca...</p>
+           <p className="text-slate-400 font-black uppercase italic text-xs tracking-widest">Aguardando busca para sincronizar dados...</p>
         </div>
       )}
 
-      {/* MODAL DE EDIÇÃO */}
+      {/* MODAL EDIÇÃO CADASTRO (DINÂMICO) */}
       {exibirModalEdicao && (
-        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[40px]">
-            <FormCadastroAluno 
-              onVoltar={() => {
-                setExibirModalEdicao(false);
-                pesquisarPaciente(); 
-              }} 
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-[40px] shadow-2xl">
+            {resultado.isFuncionario ? (
+              <FormCadastroFuncionario 
+                onClose={() => { setExibirModalEdicao(false); pesquisarPaciente(); }}
+                dadosEdicao={resultado.dadosParaForm}
+                modoPastaDigital={true}
+              />
+            ) : (
+              <FormCadastroAluno 
+                onVoltar={() => { setExibirModalEdicao(false); pesquisarPaciente(); }} 
+                dadosEdicao={resultado.dadosParaForm}
+                modoPastaDigital={true} 
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* MODAL QUESTIONÁRIO SAÚDE */}
+      {exibirModalSaude && (
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-[40px] bg-white shadow-2xl">
+            <QuestionarioSaude 
+              onClose={() => { setExibirModalSaude(false); pesquisarPaciente(); }}
               dadosEdicao={resultado.dadosParaForm}
-              modoPastaDigital={true} 
+              modoPastaDigital={true}
             />
           </div>
         </div>
@@ -368,25 +394,23 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
 
       {/* OVERLAY DE DETALHES */}
       {detalheExpandido && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 md:p-6">
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 md:p-6">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm" onClick={() => setDetalheExpandido(null)} />
           <div className={`bg-white w-full max-w-lg rounded-[45px] shadow-2xl relative overflow-hidden border-b-[12px] ${detalheExpandido.tipo === 'alergia' ? 'border-rose-500' : 'border-blue-500'}`}>
             <div className={`p-8 text-white flex items-center justify-between ${detalheExpandido.tipo === 'alergia' ? 'bg-rose-600' : 'bg-blue-600'}`}>
               <div className="flex items-center gap-4">
                 {detalheExpandido.tipo === 'alergia' ? <ShieldAlert size={32} /> : <Pill size={32} />}
-                <div>
-                  <h4 className="font-black uppercase italic text-xl leading-none">{detalheExpandido.titulo}</h4>
-                </div>
+                <h4 className="font-black uppercase italic text-xl leading-none">{detalheExpandido.titulo}</h4>
               </div>
-              <button onClick={() => setDetalheExpandido(null)} className="bg-white/20 p-2 rounded-full"><X size={20} /></button>
+              <button onClick={() => setDetalheExpandido(null)} className="bg-white/20 p-2 rounded-full hover:bg-white/40 transition-colors"><X size={20} /></button>
             </div>
-            <div className="p-10">
+            <div className="p-10 text-center">
               <div className={`rounded-3xl p-8 border-2 mb-8 ${detalheExpandido.tipo === 'alergia' ? 'bg-rose-50 border-rose-100' : 'bg-blue-50 border-blue-100'}`}>
                 <p className={`font-black uppercase italic text-2xl leading-tight ${detalheExpandido.tipo === 'alergia' ? 'text-rose-900' : 'text-blue-900'}`}>
                   "{detalheExpandido.texto}"
                 </p>
               </div>
-              <button onClick={() => setDetalheExpandido(null)} className="w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase text-xs">Ciente</button>
+              <button onClick={() => setDetalheExpandido(null)} className="w-full bg-slate-900 text-white py-5 rounded-[25px] font-black uppercase text-xs hover:bg-blue-600 transition-all">Ciente</button>
             </div>
           </div>
         </div>
@@ -397,7 +421,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, onAbrirQuestionario, alunoP
   );
 };
 
-// SUBCOMPONENTES
+// SUBCOMPONENTES (Omitidos por brevidade, permanecem iguais ao original)
 const Section = ({ title, children, action }) => (
   <div className="bg-white rounded-[35px] border border-slate-200 p-8 shadow-sm h-full flex flex-col transition-all hover:shadow-md">
     <div className="flex justify-between items-center mb-6">
@@ -413,7 +437,7 @@ const Section = ({ title, children, action }) => (
 const HealthStatusBadge = ({ label, status }) => {
   const possui = status?.possui === "Sim" || status === "Sim";
   return (
-    <div className={`p-4 rounded-2xl border ${possui ? 'border-rose-200 bg-rose-50 shadow-sm' : 'border-slate-100 bg-white opacity-60'}`}>
+    <div className={`p-4 rounded-2xl border transition-all ${possui ? 'border-rose-200 bg-rose-50 shadow-sm' : 'border-slate-100 bg-white opacity-60'}`}>
       <div className="flex justify-between items-center">
         <span className="text-[9px] font-black text-slate-500 uppercase">{label}</span>
         <span className={`text-[8px] font-black px-2 py-0.5 rounded-md ${possui ? 'bg-rose-600 text-white' : 'bg-slate-100 text-slate-300'}`}>
@@ -427,9 +451,12 @@ const HealthStatusBadge = ({ label, status }) => {
 const DocStatus = ({ label, status, highlight }) => {
   const isOk = status === 'Sim' || status === true || status === 'Autorizado' || status === 'Ok';
   return (
-    <div className={`p-5 rounded-[28px] border flex flex-col items-center text-center ${highlight && isOk ? 'bg-blue-600 text-white border-blue-400 shadow-xl' : 'bg-white border-slate-200'}`}>
+    <div className={`p-5 rounded-[28px] border flex flex-col items-center text-center transition-all ${highlight && isOk ? 'bg-blue-600 text-white border-blue-400 shadow-xl' : 'bg-white border-slate-200'}`}>
       <p className={`text-[8px] font-black uppercase mb-2 ${highlight && isOk ? 'text-blue-200' : 'text-slate-400'}`}>{label}</p>
-      <p className="text-[11px] font-black uppercase italic">{isOk ? '✓ OK' : '✕ PENDENTE'}</p>
+      <div className="flex items-center gap-2">
+        {isOk ? <CheckCircle2 size={14} className={highlight ? 'text-white' : 'text-emerald-500'} /> : <ShieldAlert size={14} className="text-rose-500" />}
+        <p className="text-[11px] font-black uppercase italic">{isOk ? '✓ OK' : '✕ PENDENTE'}</p>
+      </div>
     </div>
   );
 };

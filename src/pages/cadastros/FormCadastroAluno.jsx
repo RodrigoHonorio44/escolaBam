@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEdicao }) => {
+// Mantive onClose e onVoltar para evitar erros de undefined
+const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEdicao, onClose }) => {
   const navigate = useNavigate();
   const [mostrarEndereco, setMostrarEndereco] = useState(false);
   const [mostrarSegundoContato, setMostrarSegundoContato] = useState(false);
@@ -79,6 +80,16 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
     }
   }, [watchDataNasc, setValue]);
 
+  // Lógica de saída centralizada
+  const handleActionVoltar = () => {
+    if (modoPastaDigital) {
+      if (onClose) onClose();
+      else if (onVoltar) onVoltar();
+    } else {
+      navigate('/dashboard');
+    }
+  };
+
   const onSubmit = async (data) => {
     const saveAction = async () => {
       const nomeLimpo = data.nome.trim();
@@ -103,15 +114,22 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
         createdAt: dadosEdicao?.createdAt || serverTimestamp()
       }, { merge: true });
 
-      // LIMPA O FORMULÁRIO E MANTÉM ABERTO
-      reset();
-      setMostrarEndereco(false);
-      setMostrarSegundoContato(false);
+      // LOGICA DE REDIRECIONAMENTO APÓS SALVAR
+      if (modoPastaDigital) {
+          // Pequeno delay para o usuário ver o feedback de sucesso antes de fechar
+          setTimeout(() => {
+            handleActionVoltar();
+          }, 800);
+      } else {
+          reset();
+          setMostrarEndereco(false);
+          setMostrarSegundoContato(false);
+      }
     };
 
     toast.promise(saveAction(), { 
       loading: 'Sincronizando Identidade Digital...', 
-      success: 'Aluno salvo! Formulário pronto para novo cadastro.', 
+      success: modoPastaDigital ? 'Dados atualizados!' : 'Aluno salvo! Formulário pronto para novo cadastro.', 
       error: 'Erro ao salvar aluno.' 
     });
   };
@@ -122,10 +140,9 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
       
       <div className="flex justify-between items-center mb-8 border-b pb-6">
         <div className="flex items-center gap-4">
-          {/* SETA VOLTAR PARA DASHBOARD */}
           <button 
             type="button" 
-            onClick={() => navigate('/dashboard')} 
+            onClick={handleActionVoltar} 
             className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-all"
           >
             <ArrowLeft size={24} />
@@ -139,10 +156,9 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
           </h2>
         </div>
 
-        {/* BOTÃO X PARA DASHBOARD */}
         <button 
           type="button" 
-          onClick={() => navigate('/dashboard')} 
+          onClick={handleActionVoltar} 
           className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"
         >
           <X size={28} />
@@ -278,8 +294,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                   <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Contato 02</label>
-                   <button type="button" onClick={() => { setMostrarSegundoContato(false); setValue("contato2", ""); setValue("nomeContato2", ""); }} className="text-[8px] font-bold text-red-400 hover:text-red-600 uppercase">[Remover]</button>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Contato 02</label>
+                    <button type="button" onClick={() => { setMostrarSegundoContato(false); setValue("contato2", ""); setValue("nomeContato2", ""); }} className="text-[8px] font-bold text-red-400 hover:text-red-600 uppercase">[Remover]</button>
                 </div>
                 <input {...register("nomeContato2", { pattern: { value: /^[A-Za-zÀ-ÖØ-öø-ÿ\s]+$/, message: "Apenas letras" } })} placeholder="Ex: José (Tio)" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold outline-none focus:border-blue-600" />
               </div>
@@ -332,7 +348,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
 
         {/* BOTÃO FINALIZAR */}
         <button type="submit" disabled={isSubmitting} className="md:col-span-2 mt-4 bg-blue-600 text-white py-5 rounded-[22px] font-black uppercase italic text-xs shadow-xl hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300">
-          {isSubmitting ? <Loader2 className="animate-spin" /> : <><Save size={18} /> Salvar e Iniciar Novo Cadastro</>}
+          {isSubmitting ? <Loader2 className="animate-spin" /> : <><Save size={18} /> {modoPastaDigital ? 'Atualizar Identificação' : 'Salvar e Iniciar Novo Cadastro'}</>}
         </button>
       </form>
     </div>
