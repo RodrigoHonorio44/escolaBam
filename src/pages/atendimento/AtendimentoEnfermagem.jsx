@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Save, ArrowLeft, ClipboardPlus, Loader2, Hospital, Home, 
   Activity, Clock, Calendar, AlertTriangle, Hash, School, 
-  User, Users, Briefcase, GraduationCap, UserCheck, Shield, History
+  User, Users, Briefcase, GraduationCap, UserCheck, Shield, History, Search 
 } from 'lucide-react';
 import { db } from '../../firebase/firebaseConfig'; 
-import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc, query, where, getDocs, limit } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 
 const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
@@ -16,7 +16,12 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
   const [houveMedicacao, setHouveMedicacao] = useState('Não');
   const [precisaEncaminhamento, setPrecisaEncaminhamento] = useState('Não');
   const [horaInicioReal, setHoraInicioReal] = useState(null);
-  const [temCadastro, setTemCadastro] = useState(false); // Novo: controla se exibe o botão histórico
+  const [temCadastro, setTemCadastro] = useState(false);
+
+  // Estados para o Autocomplete
+  const [sugestoes, setSugestoes] = useState([]);
+  const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
+  const wrapperRef = useRef(null);
 
   const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbwSkF-qYcbfqwivCBROWl3BKZta_0uyhvvVZXmGU_9Sfcu_sxxxe_LAbMRU0ZW0bUkg/exec";
 
@@ -52,10 +57,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
     if (dataNasc) {
       const dataLimpa = dataNasc.replace(/-/g, '');
       return `${nomeLimpo}-${dataLimpa}`;
-    } else {
-      const sufixo = "nd"; // Padronizado para facilitar busca de parciais
-      return `${nomeLimpo}-${sufixo}`;
     }
+    return `${nomeLimpo}-nd`;
   };
 
   const validarNomeCompleto = (nome) => {
@@ -97,47 +100,69 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
 
   const [formData, setFormData] = useState(getInitialState());
 
-  // Lógica de buscar dados automaticamente
+  // --- LOGICA AUTOCOMPLETE ---
   useEffect(() => {
-    const buscarDadosAutomaticos = async () => {
-      if (validarNomeCompleto(formData.nomePaciente) && (formData.dataNascimento || naoSabeDataNasc)) {
-        const idPasta = criarIdPaciente(formData.nomePaciente, formData.dataNascimento);
-        
-        try {
-          const docRef = doc(db, "pastas_digitais", idPasta);
-          const docSnap = await getDoc(docRef);
+    const buscarSugestoes = async () => {
+      const termo = formData.nomePaciente.trim().toUpperCase();
+      if (termo.length < 3) {
+        setSugestoes([]);
+        return;
+      }
 
-          if (docSnap.exists()) {
-            const dados = docSnap.data();
-            setTemCadastro(true);
-            toast.success("Prontuário encontrado!", { icon: '📂' });
-
-            setFormData(prev => ({
-              ...prev,
-              sexo: dados.sexo || prev.sexo,
-              turma: dados.turma || prev.turma,
-              cargo: dados.cargo || prev.cargo,
-              alunoPossuiAlergia: dados.alunoPossuiAlergia || 'Não',
-              qualAlergia: dados.qualAlergia || '',
-            }));
-          } else {
-            setTemCadastro(false);
-          }
-        } catch (error) {
-          console.error("Erro busca:", error);
-        }
+      try {
+        const q = query(
+          collection(db, "pastas_digitais"),
+          where("nomeBusca", ">=", termo),
+          where("nomeBusca", "<=", termo + "\uf8ff"),
+          limit(5)
+        );
+        const querySnapshot = await getDocs(q);
+        const resultados = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setSugestoes(resultados);
+        setMostrarSugestoes(resultados.length > 0);
+      } catch (error) {
+        console.error("Erro no autocomplete:", error);
       }
     };
 
-    const delayDebounce = setTimeout(buscarDadosAutomaticos, 1200);
-    return () => clearTimeout(delayDebounce);
-  }, [formData.nomePaciente, formData.dataNascimento, naoSabeDataNasc]);
+    const delay = setTimeout(buscarSugestoes, 400);
+    return () => clearTimeout(delay);
+  }, [formData.nomePaciente]);
 
+  // Fechar ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setMostrarSugestoes(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selecionarPaciente = (p) => {
+    setFormData(prev => ({
+      ...prev,
+      nomePaciente: p.nome || p.nomeBusca,
+      dataNascimento: p.dataNascimento !== "Não informada" ? p.dataNascimento : '',
+      sexo: p.sexo || '',
+      turma: p.turma || '',
+      cargo: p.cargo || '',
+      alunoPossuiAlergia: p.alunoPossuiAlergia || 'Não',
+      qualAlergia: p.qualAlergia || '',
+    }));
+    setNaoSabeDataNasc(p.dataNascimento === "Não informada");
+    setTemCadastro(true);
+    setMostrarSugestoes(false);
+    toast.success("Dados carregados!");
+  };
+
+  // Logica de Início Real (Mantida)
   useEffect(() => {
     if (formData.nomePaciente.length > 2 && !horaInicioReal) {
       setHoraInicioReal(new Date());
     }
-  }, [formData.nomePaciente]);
+  }, [formData.nomePaciente, horaInicioReal]);
 
   useEffect(() => {
     if (formData.dataNascimento && !naoSabeDataNasc) {
@@ -188,13 +213,11 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
         encaminhadoHospital: tipoAtendimento === 'hospital' ? 'sim' : 'não',
       };
 
-      // 1. Salva na coleção de atendimentos (Histórico Geral)
       await addDoc(collection(db, "atendimentos_enfermagem"), { 
         ...payload, 
         createdAt: serverTimestamp() 
       });
 
-      // 2. Atualiza a "Capa" da Pasta Digital (Dados que podem ter mudado)
       const pastaRef = doc(db, "pastas_digitais", idPasta);
       await setDoc(pastaRef, {
         nome: formData.nomePaciente,
@@ -297,23 +320,45 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
           </div>
         </div>
 
-        {/* IDENTIFICAÇÃO DO PACIENTE */}
+        {/* IDENTIFICAÇÃO DO PACIENTE COM AUTOCOMPLETE */}
         <div className="space-y-6 font-sans">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
-            <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Nome Completo *</label>
+            <div className="md:col-span-2 space-y-2 relative" ref={wrapperRef}>
+              <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest flex items-center gap-2">
+                <Search size={12} className="text-blue-500"/> Nome Completo *
+              </label>
               <input 
                 type="text" 
                 required 
-                placeholder="Ex: Maria Silva" 
-                className={`w-full border-2 rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 outline-none transition-all ${
+                placeholder="Digite para buscar..." 
+                className={`w-full border-2 rounded-2xl px-5 py-4 text-sm font-medium focus:ring-2 outline-none transition-all uppercase ${
                   formData.nomePaciente.trim() !== '' && !validarNomeCompleto(formData.nomePaciente)
                     ? 'bg-red-50 border-red-500 text-red-900' 
-                    : 'bg-slate-50 border-transparent focus:ring-blue-500 text-slate-900'
+                    : 'bg-slate-50 border-transparent focus:ring-blue-500 text-slate-900 shadow-sm'
                 }`} 
                 value={formData.nomePaciente} 
-                onChange={(e) => setFormData({...formData, nomePaciente: e.target.value})} 
+                onChange={(e) => setFormData({...formData, nomePaciente: e.target.value})}
+                onFocus={() => formData.nomePaciente.length >= 3 && setMostrarSugestoes(true)}
               />
+
+              {/* LISTA DE SUGESTÕES */}
+              {mostrarSugestoes && (
+                <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
+                  {sugestoes.map((p) => (
+                    <div 
+                      key={p.id}
+                      onClick={() => selecionarPaciente(p)}
+                      className="p-4 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-none flex flex-col gap-1 transition-colors"
+                    >
+                      <p className="text-xs font-black text-slate-800 uppercase">{p.nome}</p>
+                      <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase italic">
+                        <span>{p.turma || p.cargo}</span>
+                        <span className="bg-slate-100 px-2 py-0.5 rounded text-blue-600">{p.dataNascimento}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="md:col-span-2 space-y-2">
@@ -341,6 +386,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
             </div>
           </div>
 
+          {/* ... Restante do formulário igual ao anterior ... */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Data Atend.</label>
