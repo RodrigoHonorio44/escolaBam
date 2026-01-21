@@ -2,14 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { 
   Save, ArrowLeft, ClipboardPlus, Loader2, Hospital, Home, 
   Activity, Clock, Calendar, AlertTriangle, Hash, School, 
-  User, Users, Briefcase, GraduationCap, UserCheck, Shield 
+  User, Users, Briefcase, GraduationCap, UserCheck, Shield, History
 } from 'lucide-react';
 import { db } from '../../firebase/firebaseConfig'; 
 import { collection, addDoc, serverTimestamp, doc, getDoc, setDoc } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 
-const AtendimentoEnfermagem = ({ user, onVoltar }) => {
-  // ... (suas lógicas permanecem idênticas)
+const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
   const [loading, setLoading] = useState(false);
   const [tipoAtendimento, setTipoAtendimento] = useState('local');
   const [perfilPaciente, setPerfilPaciente] = useState('aluno');
@@ -17,6 +16,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
   const [houveMedicacao, setHouveMedicacao] = useState('Não');
   const [precisaEncaminhamento, setPrecisaEncaminhamento] = useState('Não');
   const [horaInicioReal, setHoraInicioReal] = useState(null);
+  const [temCadastro, setTemCadastro] = useState(false); // Novo: controla se exibe o botão histórico
 
   const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbwSkF-qYcbfqwivCBROWl3BKZta_0uyhvvVZXmGU_9Sfcu_sxxxe_LAbMRU0ZW0bUkg/exec";
 
@@ -53,9 +53,15 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
       const dataLimpa = dataNasc.replace(/-/g, '');
       return `${nomeLimpo}-${dataLimpa}`;
     } else {
-      const sufixo = Math.random().toString(36).substring(2, 6);
-      return `${nomeLimpo}-nd-${sufixo}`;
+      const sufixo = "nd"; // Padronizado para facilitar busca de parciais
+      return `${nomeLimpo}-${sufixo}`;
     }
+  };
+
+  const validarNomeCompleto = (nome) => {
+    const nomeLimpo = nome.trim();
+    const partes = nomeLimpo.split(/\s+/);
+    return partes.length >= 2 && partes[1].length >= 2;
   };
 
   const gerarBAENF = () => {
@@ -91,6 +97,42 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
 
   const [formData, setFormData] = useState(getInitialState());
 
+  // Lógica de buscar dados automaticamente
+  useEffect(() => {
+    const buscarDadosAutomaticos = async () => {
+      if (validarNomeCompleto(formData.nomePaciente) && (formData.dataNascimento || naoSabeDataNasc)) {
+        const idPasta = criarIdPaciente(formData.nomePaciente, formData.dataNascimento);
+        
+        try {
+          const docRef = doc(db, "pastas_digitais", idPasta);
+          const docSnap = await getDoc(docRef);
+
+          if (docSnap.exists()) {
+            const dados = docSnap.data();
+            setTemCadastro(true);
+            toast.success("Prontuário encontrado!", { icon: '📂' });
+
+            setFormData(prev => ({
+              ...prev,
+              sexo: dados.sexo || prev.sexo,
+              turma: dados.turma || prev.turma,
+              cargo: dados.cargo || prev.cargo,
+              alunoPossuiAlergia: dados.alunoPossuiAlergia || 'Não',
+              qualAlergia: dados.qualAlergia || '',
+            }));
+          } else {
+            setTemCadastro(false);
+          }
+        } catch (error) {
+          console.error("Erro busca:", error);
+        }
+      }
+    };
+
+    const delayDebounce = setTimeout(buscarDadosAutomaticos, 1200);
+    return () => clearTimeout(delayDebounce);
+  }, [formData.nomePaciente, formData.dataNascimento, naoSabeDataNasc]);
+
   useEffect(() => {
     if (formData.nomePaciente.length > 2 && !horaInicioReal) {
       setHoraInicioReal(new Date());
@@ -103,39 +145,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
       setFormData(prev => ({ ...prev, idade: idadeCalculada }));
     }
   }, [formData.dataNascimento, naoSabeDataNasc]);
-
-  useEffect(() => {
-    const buscarPastaDigital = async () => {
-      if (formData.nomePaciente.trim().includes(' ') && (formData.dataNascimento || naoSabeDataNasc)) {
-        const idPasta = criarIdPaciente(formData.nomePaciente, formData.dataNascimento);
-        try {
-          const docRef = doc(db, "pastas_digitais", idPasta);
-          const docSnap = await getDoc(docRef);
-
-          if (docSnap.exists()) {
-            const dados = docSnap.data();
-            toast.success("Pasta Digital encontrada!");
-            setFormData(prev => ({
-              ...prev,
-              sexo: dados.sexo || prev.sexo,
-              turma: dados.turma || prev.turma,
-              cargo: dados.cargo || prev.cargo,
-              alunoPossuiAlergia: dados.alunoPossuiAlergia || 'Não',
-              qualAlergia: dados.qualAlergia || ''
-            }));
-          }
-        } catch (error) { console.error("Erro ao buscar pasta:", error); }
-      }
-    };
-    const delayDebounceFn = setTimeout(buscarPastaDigital, 1500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [formData.nomePaciente, formData.dataNascimento, naoSabeDataNasc]);
-
-  const validarNomeCompleto = (nome) => {
-    const nomeLimpo = nome.trim();
-    const partes = nomeLimpo.split(/\s+/);
-    return partes.length >= 2 && partes[1].length >= 2;
-  };
 
   const handleTempChange = (e) => {
     let value = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '');
@@ -179,11 +188,13 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
         encaminhadoHospital: tipoAtendimento === 'hospital' ? 'sim' : 'não',
       };
 
+      // 1. Salva na coleção de atendimentos (Histórico Geral)
       await addDoc(collection(db, "atendimentos_enfermagem"), { 
         ...payload, 
         createdAt: serverTimestamp() 
       });
 
+      // 2. Atualiza a "Capa" da Pasta Digital (Dados que podem ter mudado)
       const pastaRef = doc(db, "pastas_digitais", idPasta);
       await setDoc(pastaRef, {
         nome: formData.nomePaciente,
@@ -209,6 +220,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
       setHoraInicioReal(null);
       setHouveMedicacao('Não');
       setPrecisaEncaminhamento('Não');
+      setTemCadastro(false);
       
     } catch (error) { 
       toast.error("Erro ao salvar.", { id: loadingToast }); 
@@ -233,14 +245,25 @@ const AtendimentoEnfermagem = ({ user, onVoltar }) => {
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] italic">SISTEMA DE ENFERMAGEM ESCOLAR</p>
           </div>
         </div>
-        <button onClick={onVoltar} className="px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-black transition-all border border-white/10 flex items-center gap-2 tracking-widest">
-          <ArrowLeft size={14} /> VOLTAR
-        </button>
+        <div className="flex gap-3">
+            {temCadastro && (
+                <button 
+                    type="button"
+                    onClick={() => onVerHistorico(criarIdPaciente(formData.nomePaciente, formData.dataNascimento))}
+                    className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-xs font-black transition-all shadow-lg flex items-center gap-2 tracking-widest text-white"
+                >
+                    <History size={14} /> VER HISTÓRICO
+                </button>
+            )}
+            <button onClick={onVoltar} className="px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-black transition-all border border-white/10 flex items-center gap-2 tracking-widest">
+                <ArrowLeft size={14} /> VOLTAR
+            </button>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="p-8 md:p-12 space-y-10">
         
-        {/* Info Bar - Usando tabular-nums para os códigos */}
+        {/* Info Bar */}
         <div className="flex flex-col md:flex-row justify-center items-center gap-4 font-sans">
           <div className="bg-slate-900 px-6 py-3 rounded-2xl border-2 border-blue-500/30 flex items-center gap-3">
             <Hash size={18} className="text-blue-400" />

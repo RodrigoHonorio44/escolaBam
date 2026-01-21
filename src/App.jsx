@@ -20,6 +20,7 @@ import ControleLicencas from './pages/Admin/ControleLicencas';
 // Formulários de Negócio
 import FormCadastroAluno from './pages/cadastros/FormCadastroAluno'; 
 import FormCadastroFuncionario from './pages/cadastros/FormCadastroFuncionario';
+import PastaDigital from './components/PastaDigital'; // <--- IMPORTADO AQUI
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -99,6 +100,9 @@ function App() {
               <Route path="cadastro-aluno" element={<FormCadastroAluno onVoltar={() => window.history.back()} />} />
               <Route path="cadastro-funcionario" element={<FormCadastroFuncionario onVoltar={() => window.history.back()} />} />
               
+              {/* ROTA PASTA DIGITAL ADICIONADA AQUI */}
+              <Route path="pasta-digital" element={<PastaDigital onVoltar={() => window.history.back()} />} />
+
               <Route path="admin/unidades" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Unidades Escolares</div>} />
               <Route path="admin/config" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Configurações Master</div>} />
             </Route>
