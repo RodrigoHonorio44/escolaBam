@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom'; // <--- IMPORTADO
+import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebaseConfig';
 import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
-  Briefcase, Save, Loader2, CreditCard, ChevronLeft, AlertCircle, MapPin, Phone, UserPlus2 
+  Briefcase, Save, Loader2, CreditCard, AlertCircle, MapPin, Phone, UserPlus2, X, ArrowLeft 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
-  const navigate = useNavigate(); // <--- INICIALIZADO
+  const navigate = useNavigate();
   const [mostrarEndereco, setMostrarEndereco] = useState(false);
   const [mostrarSegundoContato, setMostrarSegundoContato] = useState(false);
 
@@ -39,7 +39,15 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
   const naoSabeSus = watch("naoSabeSus");
   const temAlergia = watch("temAlergia");
 
-  // Cálculo de idade automático
+  // Máscara de telefone padronizada
+  const handleTelefoneChange = (e, fieldName) => {
+    let valor = e.target.value.replace(/\D/g, "");
+    if (valor.length > 11) valor = valor.slice(0, 11);
+    if (valor.length > 2) valor = `(${valor.substring(0, 2)}) ${valor.substring(2)}`;
+    if (valor.length > 10) valor = `${valor.substring(0, 10)}-${valor.substring(10)}`;
+    setValue(fieldName, valor);
+  };
+
   useEffect(() => {
     if (watchDataNasc) {
       const hoje = new Date();
@@ -50,14 +58,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
       setValue("idade", idade >= 0 ? idade : "");
     }
   }, [watchDataNasc, setValue]);
-
-  const formatarTelefone = (valor) => {
-    const tel = valor.replace(/\D/g, "");
-    if (tel.length <= 11) {
-      return tel.replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d)(\d{4})$/, "$1-$2");
-    }
-    return valor;
-  };
 
   useEffect(() => {
     if (dadosEdicao) {
@@ -80,7 +80,9 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
     const saveAction = async () => {
       const nomeLimpo = data.nome.trim();
       const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
-      const idPasta = `${nomeLimpo.toLowerCase().replace(/\s+/g, '-')}-${dataNascLimpa}`;
+      
+      // Geração de ID padrão
+      const idPasta = `${nomeLimpo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
 
       const payload = {
         ...data,
@@ -93,7 +95,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
         updatedAt: serverTimestamp()
       };
 
-      // 1. Salva na Pasta Digital (Centralizador)
+      // 1. Salva na Pasta Digital
       await setDoc(doc(db, "pastas_digitais", idPasta), payload, { merge: true });
 
       // 2. Salva na coleção específica
@@ -106,23 +108,15 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
         });
       }
 
-      // 3. REDIRECIONAMENTO COM ESTADO
-      // Pequeno delay para o usuário ver o toast de sucesso antes de mudar de página
-      setTimeout(() => {
-        navigate('/pasta-digital', { 
-          state: { 
-            alunoParaReabrir: { 
-              nome: nomeLimpo, 
-              reabrir: true 
-            } 
-          } 
-        });
-      }, 1000);
+      // 3. LIMPA O FORMULÁRIO PARA O PRÓXIMO (SEM SAIR DA PÁGINA)
+      reset();
+      setMostrarEndereco(false);
+      setMostrarSegundoContato(false);
     };
 
     toast.promise(saveAction(), {
       loading: 'SINCRONIZANDO STAFF...',
-      success: 'SUCESSO! ABRINDO PASTA...',
+      success: 'SUCESSO! CAMPOS LIMPOS PARA NOVO STAFF.',
       error: 'ERRO AO SALVAR.'
     });
   };
@@ -131,9 +125,16 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
     <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200">
       <Toaster position="top-center" />
       
-      {/* HEADER */}
+      {/* HEADER COM NAVEGAÇÃO */}
       <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-6">
         <div className="flex items-center gap-4">
+          <button 
+            type="button" 
+            onClick={() => navigate('/dashboard')} 
+            className="p-2 hover:bg-slate-100 text-slate-600 rounded-full transition-all"
+          >
+            <ArrowLeft size={24} />
+          </button>
           <div className="bg-slate-900 p-3 rounded-2xl text-white shadow-lg"><Briefcase size={24} /></div>
           <div>
             <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
@@ -142,18 +143,27 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Controle Interno de Funcionários</p>
           </div>
         </div>
-        <button onClick={onVoltar} className="text-[10px] font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest flex items-center gap-2 transition-colors">
-          <ChevronLeft size={14} /> Voltar
+
+        <button 
+          type="button" 
+          onClick={() => navigate('/dashboard')} 
+          className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"
+        >
+          <X size={28} />
         </button>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* NOME COM VALIDAÇÃO */}
+        {/* NOME COMPLETO */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo</label>
           <input 
-            {...register("nome", { required: "Obrigatório", pattern: { value: /\s+/, message: "Digite nome e sobrenome" } })} 
+            {...register("nome", { 
+                required: "Obrigatório", 
+                pattern: { value: /^[A-Za-zÀ-ÖØ-öø-ÿ\s]+$/, message: "Apenas letras são permitidas" } 
+            })} 
+            placeholder="Digite nome e sobrenome"
             className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all ${errors.nome ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
           />
         </div>
@@ -210,11 +220,16 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nome do Contato 01</label>
-              <input {...register("nomeContato1")} placeholder="Ex: Esposa, Mãe, Irmão" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
+              <input {...register("nomeContato1")} placeholder="Ex: Esposa, Mãe" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
             </div>
             <div className="space-y-2">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Telefone 01</label>
-              <input {...register("contato")} onChange={(e) => setValue("contato", formatarTelefone(e.target.value))} placeholder="(21) 90000-0000" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
+              <input 
+                {...register("contato")} 
+                onChange={(e) => handleTelefoneChange(e, "contato")} 
+                placeholder="(21) 90000-0000" 
+                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" 
+              />
             </div>
           </div>
           {mostrarSegundoContato && (
@@ -228,7 +243,12 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
               </div>
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Telefone 02</label>
-                <input {...register("contato2")} onChange={(e) => setValue("contato2", formatarTelefone(e.target.value))} placeholder="(21) 90000-0000" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
+                <input 
+                  {...register("contato2")} 
+                  onChange={(e) => handleTelefoneChange(e, "contato2")} 
+                  placeholder="(21) 90000-0000" 
+                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" 
+                />
               </div>
             </div>
           )}
@@ -268,7 +288,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso }) => {
 
         {/* BOTÃO SALVAR */}
         <button type="submit" disabled={isSubmitting} className="md:col-span-2 mt-4 bg-slate-900 text-white py-5 rounded-[22px] font-black uppercase italic text-xs shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300">
-          {isSubmitting ? <Loader2 className="animate-spin" /> : <><Save size={18} /> {dadosEdicao ? 'Atualizar Staff' : 'Finalizar Registro Staff'}</>}
+          {isSubmitting ? <Loader2 className="animate-spin" /> : <><Save size={18} /> {dadosEdicao ? 'Atualizar Staff' : 'Salvar e Próximo Staff'}</>}
         </button>
       </form>
     </div>

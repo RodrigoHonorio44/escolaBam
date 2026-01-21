@@ -5,7 +5,6 @@ import { collection, query, where, getDocs, limit, orderBy } from 'firebase/fire
 export const useBuscaPaciente = () => {
   const [loading, setLoading] = useState(false);
 
-  // --- 1. BUSCA ALUNOS ---
   const buscarAlunos = async (nomeUpper) => {
     try {
       const q = query(collection(db, "alunos"), where("nomeBusca", "==", nomeUpper.toUpperCase()), limit(1));
@@ -14,7 +13,6 @@ export const useBuscaPaciente = () => {
     } catch (err) { return null; }
   };
 
-  // --- 2. BUSCA FUNCIONÁRIOS ---
   const buscarFuncionarios = async (nomeUpper) => {
     try {
       const q = query(collection(db, "funcionarios"), where("nomeBusca", "==", nomeUpper.toUpperCase()), limit(1));
@@ -23,7 +21,14 @@ export const useBuscaPaciente = () => {
     } catch (err) { return null; }
   };
 
-  // --- 3. BUSCA QUESTIONÁRIO (SAÚDE) ---
+  const buscarPastasDigitais = async (nomeUpper) => {
+    try {
+      const q = query(collection(db, "pastas_digitais"), where("nomeBusca", "==", nomeUpper.toUpperCase()), limit(1));
+      const snap = await getDocs(q);
+      return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+    } catch (err) { return null; }
+  };
+
   const buscarQuestionario = async (nomeNormal) => {
     try {
       const q = query(collection(db, "questionarios_saude"), where("alunoNome", "==", nomeNormal), limit(1));
@@ -38,7 +43,6 @@ export const useBuscaPaciente = () => {
     } catch (err) { return null; }
   };
 
-  // --- 4. BUSCA ATENDIMENTOS ---
   const buscarAtendimentos = async (nomeUpper) => {
     try {
       const q = query(
@@ -55,7 +59,6 @@ export const useBuscaPaciente = () => {
     } catch (err) { return []; }
   };
 
-  // --- 5. BUSCA COMPLETA (CONSOLIDAÇÃO PASTA DIGITAL) ---
   const buscarDadosCompletos = async (nomePesquisado) => {
     if (!nomePesquisado) return null;
     setLoading(true);
@@ -63,70 +66,63 @@ export const useBuscaPaciente = () => {
     const nomeNormal = nomePesquisado.trim();
 
     try {
-      // Executa todas as buscas em paralelo para máxima performance
-      const [aluno, funcionario, saude, atendimentos] = await Promise.all([
+      const [aluno, funcionario, pasta, saude, atendimentos] = await Promise.all([
         buscarAlunos(nomeUpper),
         buscarFuncionarios(nomeUpper),
+        buscarPastasDigitais(nomeUpper),
         buscarQuestionario(nomeNormal),
         buscarAtendimentos(nomeUpper)
       ]);
 
-      const perfil = aluno || funcionario;
+      // Consolida o perfil (Pasta Digital tem prioridade total)
+      const perfilOriginal = pasta || aluno || funcionario;
       
-      // Limpeza de campos sujos para os formulários
       const limparString = (val) => {
         if (!val) return "";
         const proibidos = ["NÃO INFORMADO", "---", "UNDEFINED", "NULL", "NÃO"];
         return proibidos.includes(val.toString().toUpperCase()) ? "" : val;
       };
 
-      const susFinal = limparString(perfil?.cartaoSus) || limparString(saude?.cartaoSus) || "";
-      const nomeFinal = perfil?.nome || saude?.alunoNome || nomeNormal;
+      const nomeFinal = perfilOriginal?.nome || saude?.alunoNome || nomeNormal;
+
+      // Montamos um objeto perfil "blindado" para o componente não se perder
+      const perfilConsolidado = {
+        ...perfilOriginal,
+        nome: nomeFinal,
+        turma: perfilOriginal?.turma || perfilOriginal?.serie || (funcionario ? "STAFF" : "N/A"),
+        dataNascimento: perfilOriginal?.dataNascimento || perfilOriginal?.nascimento || "",
+        qualAlergia: perfilOriginal?.qualAlergia || perfilOriginal?.alergia || saude?.alergias?.detalhes || "",
+        cartaoSus: limparString(perfilOriginal?.cartaoSus || saude?.cartaoSus)
+      };
 
       return {
-        perfil,
+        perfil: perfilConsolidado, // Aqui agora tem TUDO (turma, nascimento, alergia)
         saude,
         atendimentos,
-        isFuncionario: !!funcionario,
+        isFuncionario: !!funcionario || perfilOriginal?.tipoPerfil === 'funcionario',
+        nome: nomeFinal,
         
-        // Consolidação para Badges e Alertas Visuais
         statusClinico: {
-          asma: saude?.asma?.possui || "Não",
-          diabetes: saude?.diabetes?.possui || "Não",
+          asma: saude?.asma?.possui || perfilOriginal?.possuiAsma || "Não",
+          diabetes: saude?.diabetes?.possui || perfilOriginal?.possuiDiabetes || "Não",
           cardiaco: saude?.doencasCardiacas?.possui || "Não",
-          epilepsia: saude?.epilepsia?.possui || "Não",
-          // Verifica alergia no perfil (aluno/func) OU no questionário
-          alergias: (saude?.alergias?.possui === "Sim" || perfil?.alergias?.possui === "Sim") ? "Sim" : "Não",
-          alergias_detalhes: saude?.alergias?.detalhes || perfil?.alergias?.detalhes || "Nenhuma registrada",
-          restricoes: saude?.restricoesAlimentares?.detalhes || "Nenhuma registrada"
+          epilepsia: saude?.epilepsia?.possui || "Não"
         },
 
-        // Objeto pronto para resetar o formulário de edição
         dadosParaForm: {
           ...saude,
-          ...perfil,
-          nome: nomeFinal,
-          turma: perfil?.turma || (funcionario ? "Funcionário" : "N/A"),
-          alunoNome: nomeFinal,
-          cartaoSus: susFinal,
-          isEdicao: !!(perfil || saude),
+          ...perfilConsolidado,
+          isEdicao: !!(perfilOriginal || saude),
           origem: 'pasta_digital'
         }
       };
     } catch (err) {
-      console.error("Erro na consolidação dos dados:", err);
+      console.error("Erro na consolidação:", err);
       return null;
     } finally {
       setLoading(false);
     }
   };
 
-  return { 
-    buscarDadosCompletos, 
-    buscarAlunos, 
-    buscarFuncionarios, 
-    buscarQuestionario, 
-    buscarAtendimentos, 
-    loading 
-  };
+  return { buscarDadosCompletos, loading };
 };
