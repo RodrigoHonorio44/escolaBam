@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { db } from '../../firebase/firebaseConfig'; 
+import { db, auth } from '../../firebase/firebaseConfig'; // Importado auth
+import { sendPasswordResetEmail } from 'firebase/auth'; // Importado serviço de reset
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, deleteField, serverTimestamp, addDoc } from 'firebase/firestore'; 
 import { 
   Users, Trash2, CheckCircle, XCircle, Search, 
   LayoutDashboard, UserRound, Stethoscope, ClipboardList, Lock, FolderSearch,
-  LogOut, HeartPulse, BarChart3 
+  LogOut, HeartPulse, BarChart3, KeyRound // Adicionado KeyRound para o reset
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -32,6 +33,25 @@ const GestaoUsuarios = () => {
         data: serverTimestamp()
       });
     } catch (e) { console.error("Erro ao salvar log"); }
+  };
+
+  // NOVA FUNÇÃO: RESET DE SENHA VIA FIREBASE AUTH
+  const resetarSenha = async (email, nome) => {
+    if (!email) return toast.error("E-mail não localizado para este usuário.");
+    
+    if (window.confirm(`Enviar e-mail de redefinição de senha para ${nome}?`)) {
+      try {
+        await sendPasswordResetEmail(auth, email);
+        registrarLog(nome, "Solicitação de reset de senha enviada por e-mail");
+        toast.success(`E-mail de recuperação enviado para ${email}`, {
+          icon: '📧',
+          style: { background: '#0f172a', color: '#fff' }
+        });
+      } catch (error) {
+        console.error("Erro ao resetar:", error);
+        toast.error("Erro ao disparar e-mail de recuperação.");
+      }
+    }
   };
 
   const derrubarSessao = async (id, nome) => {
@@ -65,21 +85,18 @@ const GestaoUsuarios = () => {
     } catch (error) { toast.error("Erro ao alterar módulo"); }
   };
 
-  // FUNÇÃO ATUALIZADA AQUI
   const alternarStatus = async (id, statusAtual, nome) => {
     const novoStatus = statusAtual === 'ativo' ? 'bloqueado' : 'ativo';
     const textoLicenca = novoStatus === 'ativo' ? 'ativa' : 'bloqueada';
     const liberado = novoStatus === 'ativo';
     const usuarioAlvo = usuarios.find(u => u.id === id);
-    
-    // Se estiver bloqueando, mata a sessão na hora
     const sessaoAtualizada = novoStatus === 'ativo' ? (usuarioAlvo?.currentSessionId || "") : "";
     
     try {
       await updateDoc(doc(db, "usuarios", id), { 
         "status": novoStatus,
-        "statusLicenca": textoLicenca, // Atualiza campo 1
-        "licencaStatus": textoLicenca, // Atualiza campo 2 (conforme seu log)
+        "statusLicenca": textoLicenca,
+        "licencaStatus": textoLicenca,
         "currentSessionId": sessaoAtualizada,
         "modulosSidebar.dashboard": liberado,
         "modulosSidebar.atendimento": liberado,
@@ -160,7 +177,6 @@ const GestaoUsuarios = () => {
                          {u.currentSessionId && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Sessão Ativa"></span>}
                       </div>
                       <span className="text-[10px] text-blue-500 font-bold uppercase">{u.escolaId || 'Sem Unidade'}</span>
-                      {/* Badge Visual do Status da Licença */}
                       <span className={`text-[8px] font-black uppercase mt-1 ${u.statusLicenca === 'ativa' ? 'text-emerald-500' : 'text-rose-500'}`}>
                         Licença: {u.statusLicenca}
                       </span>
@@ -180,10 +196,19 @@ const GestaoUsuarios = () => {
 
                   <td className="p-6">
                     <div className="flex items-center justify-center gap-2">
+                      {/* BOTÃO RESET DE SENHA */}
+                      <button 
+                        onClick={() => resetarSenha(u.email, u.nome)}
+                        className="p-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                        title="Enviar Reset de Senha por E-mail"
+                      >
+                        <KeyRound size={16} />
+                      </button>
+
                       <button 
                         disabled={!u.currentSessionId}
                         onClick={() => derrubarSessao(u.id, u.nome)}
-                        className={`p-2.5 rounded-xl transition-all ${u.currentSessionId ? 'bg-orange-100 text-orange-600 hover:bg-orange-600 hover:text-white' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
+                        className={`p-2.5 rounded-xl transition-all ${u.currentSessionId ? 'bg-orange-100 text-orange-600 hover:bg-orange-600 hover:text-white shadow-sm' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
                         title="Desconectar Máquina"
                       >
                         <LogOut size={16} />
@@ -191,7 +216,7 @@ const GestaoUsuarios = () => {
 
                       <button 
                         onClick={() => alternarStatus(u.id, u.status, u.nome)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all shadow-sm
                           ${u.status === 'ativo' ? 'bg-slate-100 text-slate-600 hover:bg-red-500 hover:text-white' : 'bg-emerald-500 text-white'}
                         `}
                       >

@@ -4,10 +4,10 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
-// ADICIONADO 'export' para que os outros serviços possam ler estas chaves
+// Atualizado para usar o domínio oficial cept.rodhonsystem.com.br
 export const firebaseConfig = {
   apiKey: "AIzaSyB5Ivo0ibsVjChKbcK4Ko02-JWcKNQhN48",
-  authDomain: "bamescolar.firebaseapp.com",
+  authDomain: "cept.rodhonsystem.com.br", // <-- Domínio atualizado aqui
   projectId: "bamescolar",
   storageBucket: "bamescolar.firebasestorage.app",
   messagingSenderId: "470515542256",

@@ -3,11 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase/firebaseConfig'; 
 import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'firebase/auth';
 import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
   doc, 
+  getDoc, 
   updateDoc, 
   setDoc, 
   serverTimestamp, 
@@ -27,31 +24,48 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
-  // --- LÓGICA DE SESSÃO ÚNICA ---
+  // --- 1. MONITORAMENTO EM TEMPO REAL (EXPULSÃO) ---
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
-        const q = query(collection(db, "usuarios"), where("email", "==", user.email));
-        const unsubscribeSnapshot = onSnapshot(q, (querySnapshot) => {
-          if (!querySnapshot.empty) {
-            const userData = querySnapshot.docs[0].data();
+        const userDocRef = doc(db, "usuarios", user.uid);
+        
+        const unsubscribeSnapshot = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
             const localSessionId = localStorage.getItem("current_session_id");
 
-            if (localSessionId && userData.currentSessionId && userData.currentSessionId !== localSessionId) {
-              toast.error("ESTA CONTA FOI CONECTADA EM OUTRO DISPOSITIVO.", {
-                duration: 6000,
+            // A) TRAVA DE SESSÃO ÚNICA (Derruba se IDs forem diferentes)
+            // Se for 'root' (Rodrigo), ele é IMUNE a essa trava para facilitar testes
+            if (userData.role !== 'root' && localSessionId && userData.currentSessionId && userData.currentSessionId !== localSessionId) {
+              toast.error("ACESSO ENCERRADO: OUTRO DISPOSITIVO CONECTOU.", {
+                duration: 8000,
                 icon: '🚫',
-                style: { background: '#020617', color: '#fff', fontSize: '12px' }
+                style: { background: '#991b1b', color: '#fff', fontWeight: 'bold' }
               });
-              
               setTimeout(() => {
-                localStorage.removeItem("current_session_id");
+                localStorage.clear();
                 signOut(auth);
                 navigate('/login');
-              }, 2500);
+              }, 3000);
+              return;
+            }
+
+            // B) TRAVA DE BLOQUEIO EM TEMPO REAL
+            const isBloqueado = 
+              userData.status === "bloqueado" || 
+              userData.statusLicenca === "bloqueada" || 
+              userData.licencaStatus === "bloqueada";
+
+            if (isBloqueado && userData.role !== 'root') {
+              toast.error("ACESSO SUSPENSO PELO ADMINISTRADOR.", { icon: '🛑' });
+              localStorage.clear();
+              signOut(auth);
+              navigate('/login');
             }
           }
         });
+
         return () => unsubscribeSnapshot();
       }
     });
@@ -65,17 +79,15 @@ const Login = () => {
     const loginLogic = async () => {
       const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = userCredential.user;
-      const newSessionId = Date.now().toString();
+      
+      const newSessionId = `sess_${Date.now()}`;
+      const userDocRef = doc(db, "usuarios", user.uid);
+      const userSnap = await getDoc(userDocRef);
 
-      const usuariosRef = collection(db, "usuarios");
-      const q = query(usuariosRef, where("email", "==", user.email));
-      const querySnapshot = await getDocs(q);
-
-      // --- LOGICA PARA USUÁRIO ROOT ---
+      // --- LOGICA PARA USUÁRIO ROOT (RODRIGO) ---
       if (user.email === "rodrigohono21@gmail.com") {
-        const rootRef = doc(db, "usuarios", user.uid);
-        if (querySnapshot.empty) {
-          await setDoc(rootRef, {
+        if (!userSnap.exists()) {
+          await setDoc(userDocRef, {
             nome: "Rodrigo Honório",
             email: user.email,
             role: "root",
@@ -85,9 +97,10 @@ const Login = () => {
             ultimoLogin: serverTimestamp()
           });
         } else {
-          await updateDoc(querySnapshot.docs[0].ref, {
+          await updateDoc(userDocRef, {
             currentSessionId: newSessionId,
-            ultimoLogin: serverTimestamp()
+            ultimoLogin: serverTimestamp(),
+            role: "root" // Garante que o role seja root no banco
           });
         }
         localStorage.setItem("current_session_id", newSessionId);
@@ -96,54 +109,39 @@ const Login = () => {
       }
 
       // --- LOGICA PARA USUÁRIOS COMUNS ---
-      if (querySnapshot.empty) {
+      if (!userSnap.exists()) {
         await signOut(auth);
         throw new Error("USUÁRIO NÃO LOCALIZADO NA BASE DE DADOS");
       }
 
-      const userDoc = querySnapshot.docs[0];
-      const userData = userDoc.data();
+      const userData = userSnap.data();
 
-      // 1. CHECAR BLOQUEIOS
-      const isBloqueado = 
-        userData.status === "bloqueado" || 
-        userData.statusLicenca === "bloqueada" || 
-        userData.licencaStatus === "bloqueada";
-
+      // Checar Bloqueios
+      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
       if (isBloqueado) {
         await signOut(auth);
         throw new Error("ACESSO SUSPENSO: CONSULTE O ADMINISTRADOR");
       }
 
-      // 🚨 2. NOVA TRAVA RÍGIDA (BASEADA NO SEU BANCO)
-      // Se NÃO tem 'dataUltimaTroca', ele é obrigado a trocar a senha (Caso do Marcelo)
-      const nuncaTrocouSenha = !userData.dataUltimaTroca;
-      const forcarPeloBooleano = userData.primeiroAcesso === true;
-
-      if (nuncaTrocouSenha || forcarPeloBooleano) {
-        localStorage.setItem("current_session_id", newSessionId);
-        await updateDoc(userDoc.ref, {
-          currentSessionId: newSessionId
-          // Não atualizamos ultimoLogin aqui para manter a trava ativa até ele concluir a troca
-        });
-        navigate('/trocar-senha'); 
-        return "SEGURANÇA: ALTERE SUA SENHA INICIAL";
-      }
-
-      // 3. ACESSO NORMAL (Caso do Carlos)
+      // Gravar sessão e entrar
       localStorage.setItem("current_session_id", newSessionId);
-      await updateDoc(userDoc.ref, {
+      await updateDoc(userDocRef, {
         currentSessionId: newSessionId,
         ultimoLogin: serverTimestamp(),
         primeiroAcesso: false 
       });
+
+      if (!userData.dataUltimaTroca || userData.primeiroAcesso === true) {
+        navigate('/trocar-senha'); 
+        return "SEGURANÇA: ALTERE SUA SENHA INICIAL";
+      }
 
       navigate('/');
       return `BEM-VINDO, ${userData.nome.split(' ')[0].toUpperCase()}`;
     };
 
     toast.promise(loginLogic(), {
-      loading: 'VERIFICANDO CREDENCIAIS...',
+      loading: 'AUTENTICANDO...',
       success: (data) => data,
       error: (err) => {
         setLoading(false);
@@ -151,14 +149,7 @@ const Login = () => {
         return err.message.toUpperCase();
       },
     }, {
-      style: {
-        minWidth: '280px',
-        background: '#0f172a',
-        color: '#fff',
-        borderRadius: '16px',
-        fontSize: '10px',
-        fontWeight: 'bold',
-      },
+      style: { minWidth: '280px', background: '#0f172a', color: '#fff', borderRadius: '16px', fontSize: '11px', fontWeight: 'bold' }
     });
   };
 
@@ -166,20 +157,15 @@ const Login = () => {
     <div className="h-screen w-full flex flex-col lg:flex-row bg-white overflow-hidden font-sans relative">
       <Toaster position="top-right" />
 
-      {/* --- LADO ESQUERDO: BRANDING CENTRALIZADO --- */}
+      {/* LADO ESQUERDO: BRANDING (Reativado os textos explicativos) */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-center items-center border-r border-white/5 overflow-hidden">
         <div className="absolute top-[-10%] left-[-10%] w-[45vw] h-[45vw] bg-blue-600/10 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[35vw] h-[35vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10 w-full flex flex-col items-center text-center max-w-lg">
-          <div className="mb-8 animate-in fade-in zoom-in duration-1000">
-             <div className="relative inline-block group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 to-cyan-500 rounded-full blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
-                <img src="/logo2.png" alt="Logo Institucional" className="relative w-28 xl:w-40 h-auto drop-shadow-2xl transition-transform duration-500 hover:scale-105" />
-             </div>
-          </div>
-
-          <div className="flex flex-col items-center gap-3 mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-200">
+          <img src="/logo2.png" alt="Logo" className="w-32 xl:w-40 h-auto mb-8 drop-shadow-2xl" />
+          
+          <div className="flex flex-col items-center gap-3 mb-8">
             <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
               <GraduationCap className="text-blue-500" size={24} />
               <h3 className="text-white font-black text-xl xl:text-2xl tracking-[0.1em] uppercase italic leading-none">C . E . P . T</h3>
@@ -187,37 +173,38 @@ const Login = () => {
             <p className="text-blue-400 text-[9px] font-black tracking-[0.4em] uppercase">Unidade Escolar</p>
           </div>
 
-          <h1 className="text-5xl xl:text-7xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-8 animate-in fade-in slide-in-from-bottom duration-700 delay-300">
+          <h1 className="text-5xl xl:text-7xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-8">
             SISTEMA <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400">DE SAÚDE</span>
           </h1>
-
           <div className="h-1 w-20 bg-gradient-to-r from-blue-600 to-cyan-500 mb-8 rounded-full"></div>
+          
+          {/* TEXTO EXPLICATIVO REATIVADO */}
           <p className="text-slate-400 max-w-sm font-medium text-sm xl:text-base leading-relaxed opacity-70">
             Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
           </p>
         </div>
       </div>
 
-      {/* --- LADO DIREITO: FORMULÁRIO --- */}
-      <div className="flex-1 flex flex-col justify-center items-center p-6 xl:p-12 bg-slate-50/40 relative">
-        <div className="w-full max-w-[360px] xl:max-w-[400px] animate-in fade-in slide-in-from-right duration-700">
-          <div className="text-center mb-8 xl:mb-12">
-            <h2 className="text-3xl xl:text-4xl font-black text-slate-900 tracking-tighter uppercase italic leading-none">
+      {/* LADO DIREITO: FORMULÁRIO */}
+      <div className="flex-1 flex flex-col justify-center items-center p-6 bg-slate-50/40 relative">
+        <div className="w-full max-w-[360px]">
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-black text-slate-900 italic uppercase leading-none">
               RODHON<span className="text-blue-600">SYSTEM</span>
             </h2>
-            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.2em] mt-4">Painel de Acesso</p>
+            <p className="text-slate-400 font-bold text-[10px] uppercase tracking-[0.3em] mt-4">Painel de Acesso</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4 xl:space-y-5">
-            <div className="group space-y-1.5">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">E-mail Corporativo</label>
-              <div className="relative">
-                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
+              <div className="relative group">
+                <Mail className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type="email"
-                  className="w-full pl-12 pr-6 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
-                  placeholder="exemplo@rodhon.com"
+                  className="w-full pl-13 pr-6 py-4.5 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
+                  placeholder="admin@rodhon.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -225,13 +212,13 @@ const Login = () => {
               </div>
             </div>
 
-            <div className="group space-y-1.5">
+            <div className="space-y-1.5">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Senha de Segurança</label>
-              <div className="relative">
-                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" size={18} />
+              <div className="relative group">
+                <Lock className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={18} />
                 <input
                   type={showPassword ? "text" : "password"}
-                  className="w-full pl-12 pr-12 py-4 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
+                  className="w-full pl-13 pr-12 py-4.5 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -243,17 +230,16 @@ const Login = () => {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="w-full bg-[#020617] text-white py-4 xl:py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300 mt-6 shadow-xl">
+            <button type="submit" disabled={loading} className="w-full bg-[#020617] text-white py-5 rounded-2xl font-black uppercase tracking-[0.2em] text-[11px] hover:bg-blue-600 hover:-translate-y-1 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300 shadow-xl mt-6 active:scale-[0.98]">
               {loading ? <Loader2 className="animate-spin" size={20} /> : <>Entrar no Sistema <ArrowRight size={18} /></>}
             </button>
           </form>
 
-          <div className="mt-12 xl:mt-16 pt-8 border-t border-slate-100 flex justify-between items-center">
-             <div>
-                <p className="text-[10px] text-slate-900 font-black uppercase italic">Rodhon<span className="text-blue-600">Baenf</span></p>
-                <p className="text-[8px] text-slate-400 font-bold uppercase mt-1">© 2026 Enterprise Edition</p>
+          <div className="mt-16 pt-8 border-t border-slate-100 flex justify-between items-center">
+             <div className="text-[8px] text-slate-400 font-bold uppercase leading-tight">
+                Rodhon Intelligence<br/>Enterprise 2026
              </div>
-             <button onClick={() => setShowSupport(true)} className="flex items-center gap-2 bg-white border border-slate-100 hover:bg-slate-50 px-4 py-2 rounded-full transition-all shadow-sm">
+             <button onClick={() => setShowSupport(true)} className="flex items-center gap-2 bg-white border border-slate-100 px-4 py-2 rounded-full shadow-sm hover:bg-slate-50 transition-all">
                 <LifeBuoy size={14} className="text-blue-600" />
                 <span className="text-[9px] font-black uppercase tracking-widest">Suporte</span>
              </button>
@@ -261,16 +247,16 @@ const Login = () => {
         </div>
       </div>
 
-      {/* MODAL SUPORTE (Mantido) */}
+      {/* MODAL SUPORTE */}
       {showSupport && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-sm rounded-[40px] p-10 shadow-2xl relative border border-slate-100 animate-in zoom-in duration-300">
-            <button onClick={() => setShowSupport(false)} className="absolute top-8 right-8 p-2 text-slate-300 hover:text-slate-900"><X size={24} /></button>
+          <div className="bg-white w-full max-w-sm rounded-[30px] p-10 relative shadow-2xl animate-in zoom-in duration-300">
+            <button onClick={() => setShowSupport(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors"><X size={24} /></button>
             <div className="text-center">
-              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 rotate-6 shadow-lg shadow-blue-600/30"><MessageSquare size={28} /></div>
-              <h3 className="text-2xl font-black text-slate-900 uppercase italic mb-2">Suporte</h3>
-              <p className="text-slate-500 text-sm mb-8">Olá Rodrigo! Como podemos ajudar?</p>
-              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center gap-3 w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md">WhatsApp</a>
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30"><MessageSquare size={28} /></div>
+              <h3 className="text-2xl font-black text-slate-900 uppercase italic">Suporte</h3>
+              <p className="text-slate-500 text-sm mt-2 mb-8">Olá Rodrigo! Como podemos ajudar hoje?</p>
+              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:scale-[1.02] transition-transform">WhatsApp</a>
             </div>
           </div>
         </div>

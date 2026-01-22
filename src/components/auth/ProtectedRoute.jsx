@@ -1,48 +1,57 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 export const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
   const location = useLocation();
 
+  // 1. TELA DE CARREGAMENTO (ESTILIZADA)
   if (loading) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-slate-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-900 mb-4"></div>
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Verificando Credenciais...</p>
+        <Loader2 className="animate-spin text-blue-600 mb-4" size={40} />
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 italic">
+          Rodhon Security <span className="text-blue-500">· Validando...</span>
+        </p>
       </div>
     );
   }
 
-  // 1. Se não estiver logado, manda para o login
+  // 2. SE NÃO ESTIVER LOGADO
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // 2. VERIFICAÇÃO DE BLOQUEIO REFORÇADA
-  // Checamos todas as variantes de campos de status para garantir o bloqueio
-  const isBloqueado = 
-    user.status === 'bloqueado' || 
-    user.licencaStatus === 'bloqueada' || 
-    user.statusLicenca === 'bloqueada';
+  // 3. IMUNIDADE ROOT (Rodrigo pula as travas de bloqueio e expiração aqui)
+  const isRoot = user.role === 'root' || user.email === "rodrigohono21@gmail.com";
 
-  if (isBloqueado) {
-    // Redireciona para uma tela de aviso ou de volta para o login
-    // Se você não tiver a rota "/bloqueio", pode usar "/login"
-    return <Navigate to="/login" replace />;
+  if (!isRoot) {
+    // 🛡️ VERIFICAÇÃO DE BLOQUEIO / EXPIRAÇÃO REFORÇADA
+    const isBloqueado = 
+      user.status === 'bloqueado' || 
+      user.licencaStatus === 'bloqueada' || 
+      user.statusLicenca === 'bloqueada';
+
+    if (isBloqueado) {
+      return <Navigate to="/login" replace />;
+    }
+
+    // 🛡️ TRAVA DE PRIMEIRO ACESSO (Obriga a trocar senha)
+    // Importante: Verifique se a rota no seu App.js é '/trocar-senha' ou '/alterar-senha'
+    const rotaSeguranca = '/trocar-senha'; 
+    
+    if (user.primeiroAcesso === true && location.pathname !== rotaSeguranca) {
+      return <Navigate to={rotaSeguranca} replace />;
+    }
   }
 
-  // 3. Verificação de Primeiro Acesso
-  // Se ele for um usuário comum e for o primeiro acesso, obriga a troca de senha
-  if (user.primeiroAcesso === true && location.pathname !== '/alterar-senha') {
-    return <Navigate to="/alterar-senha" replace />;
+  // 4. VERIFICAÇÃO DE PERMISSÕES (ROLES)
+  if (allowedRoles && !isRoot && !allowedRoles.includes(user.role)) {
+    // Se não tiver permissão, volta para a home
+    return <Navigate to="/" replace />; 
   }
 
-  // 4. Verificação de Papéis (Roles)
-  // O root sempre tem acesso, os demais verificamos o array de permissões
-  if (allowedRoles && user.role !== 'root' && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" replace />; // Ou uma página de "Sem permissão"
-  }
-
+  // 5. SE PASSOU POR TUDO, LIBERA O ACESSO
   return children;
 };

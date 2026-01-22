@@ -15,39 +15,61 @@ import {
 import { initializeApp, deleteApp } from 'firebase/app';
 
 /**
- * LOGIN COM TRAVA DE EXPIRAÇÃO
+ * LOGIN COM TRAVA DE EXPIRAÇÃO E SESSÃO ÚNICA
  */
 export const loginService = async (email, password) => {
   try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
     const user = userCredential.user;
 
     const userRef = doc(db, "usuarios", user.uid);
     const userSnap = await getDoc(userRef);
 
+    // 1. Se o usuário não existe no Firestore (Excessão para o Root Criar o Perfil)
     if (!userSnap.exists()) {
-      await signOut(auth);
-      throw new Error("Perfil não encontrado.");
+      if (user.email === "rodrigohono21@gmail.com") {
+        const rootData = {
+          nome: "Rodrigo Honório",
+          email: user.email,
+          role: "root",
+          status: "ativo",
+          statusLicenca: "ativa",
+          dataExpiracao: "2039-12-31T23:59:59Z", // Data vitalícia
+          primeiroAcesso: false
+        };
+        await setDoc(userRef, rootData);
+        return { ...user, ...rootData };
+      } else {
+        await signOut(auth);
+        throw new Error("Perfil não encontrado no banco de dados.");
+      }
     }
 
     const userData = userSnap.data();
 
-    // 🛡️ TRAVA: Verificação de Licença Expirada
-    if (userData.dataExpiracao) {
+    // 🛡️ TRAVA: Verificação de Licença (IGNORA SE FOR ROOT)
+    if (userData.role !== 'root' && userData.dataExpiracao) {
       const dataAtual = new Date();
       const dataExpiracao = new Date(userData.dataExpiracao);
+      
       if (dataAtual > dataExpiracao) {
-        await updateDoc(userRef, { status: 'bloqueado', statusLicenca: 'expirada' });
+        await updateDoc(userRef, { 
+          status: 'bloqueado', 
+          statusLicenca: 'expirada',
+          licencaStatus: 'bloqueada' 
+        });
         await signOut(auth);
         throw new Error("Licença expirada. Contate o administrador.");
       }
     }
 
-    if (userData.status === 'bloqueado') {
+    // 🛡️ TRAVA: Verificação de Bloqueio Manual (IGNORA SE FOR ROOT)
+    if (userData.role !== 'root' && userData.status === 'bloqueado') {
       await signOut(auth);
-      throw new Error("Acesso bloqueado.");
+      throw new Error("Seu acesso foi suspenso pelo administrador.");
     }
 
+    // 🔑 GERAÇÃO DE SESSÃO ÚNICA
     const newSessionId = `sess_${Date.now()}`;
     localStorage.setItem('current_session_id', newSessionId);
 
@@ -58,16 +80,16 @@ export const loginService = async (email, password) => {
 
     return { ...user, ...userData };
   } catch (error) {
+    console.error("Erro no loginService:", error);
+    if (error.code === 'auth/invalid-credential') throw new Error("E-mail ou senha inválidos.");
     throw new Error(error.message);
   }
 };
 
 /**
- * CADASTRO SEM DESLOGAR O ADMIN (USANDO APP TEMPORÁRIO)
- * Salva Coren, Módulos e Prazos via ...dadosParaSalvar
+ * CADASTRO SEM DESLOGAR O ADMIN
  */
 export const cadastrarUsuarioService = async (dados) => {
-  // 1. Criamos uma instância temporária para o cadastro não afetar o seu login
   const tempAppName = `tempApp_${Date.now()}`;
   const tempApp = initializeApp(firebaseConfig, tempAppName);
   const tempAuth = getAuth(tempApp); 
@@ -80,19 +102,21 @@ export const cadastrarUsuarioService = async (dados) => {
     );
     const newUser = userCredential.user;
 
-    // 2. Removemos a senha para não salvar no banco
     const { password, ...dadosParaSalvar } = dados;
 
-    // 3. Salvamos TUDO no banco (Coren, Módulos, etc)
     const userRef = doc(db, "usuarios", newUser.uid);
+    
+    // Salvando com campos padrão de segurança
     await setDoc(userRef, {
-      ...dadosParaSalvar, // <--- Aqui entra o Coren e os Módulos marcados
+      ...dadosParaSalvar,
       uid: newUser.uid,
+      status: dadosParaSalvar.status || "ativo",
+      statusLicenca: dadosParaSalvar.statusLicenca || "ativa",
+      primeiroAcesso: true, // Força a tela de TrocarSenha no primeiro login
       currentSessionId: "", 
-      dataCadastro: serverTimestamp(), 
+      dataCadastro: serverTimestamp(),
     });
 
-    // 4. Limpamos a instância temporária
     await signOut(tempAuth);
     await deleteApp(tempApp);
 
@@ -100,6 +124,11 @@ export const cadastrarUsuarioService = async (dados) => {
   } catch (error) {
     if (tempApp) await deleteApp(tempApp);
     console.error("Erro no cadastro:", error);
-    throw new Error(error.code === 'auth/email-already-in-use' ? "E-mail já cadastrado." : "Erro ao cadastrar.");
+    
+    let mensagem = "Erro ao cadastrar usuário.";
+    if (error.code === 'auth/email-already-in-use') mensagem = "Este e-mail já está em uso.";
+    if (error.code === 'auth/weak-password') mensagem = "A senha deve ter pelo menos 6 caracteres.";
+    
+    throw new Error(mensagem);
   }
 };

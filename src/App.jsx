@@ -20,7 +20,7 @@ import ControleLicencas from './pages/Admin/ControleLicencas';
 // Formulários de Negócio
 import FormCadastroAluno from './pages/cadastros/FormCadastroAluno'; 
 import FormCadastroFuncionario from './pages/cadastros/FormCadastroFuncionario';
-import PastaDigital from './components/PastaDigital'; // <--- IMPORTADO AQUI
+import PastaDigital from './components/PastaDigital';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -38,32 +38,33 @@ const PrivateRoute = ({ children }) => {
   
   if (!user) return <Navigate to="/login" replace />;
 
-  // 🚨 LÓGICA REFORÇADA: Se não tiver data de troca OU primeiroAcesso for true, manda para a ROTA de troca
-  const nuncaTrocou = !user?.dataUltimaTroca;
-  const forcarTroca = user?.primeiroAcesso === true;
+  // 🛡️ DEFINIÇÃO DE ROOT (IMUNIDADE TOTAL)
+  const isRoot = user?.role === 'root' || user?.email === "rodrigohono21@gmail.com";
 
-  if ((nuncaTrocou || forcarTroca) && user?.role !== 'root') {
-    // Redireciona para a URL física, para sair de dentro de qualquer Layout travado
-    return <Navigate to="/trocar-senha" replace />;
-  }
+  if (!isRoot) {
+    // 1. TRAVA DE TROCA DE SENHA
+    const precisaTrocar = user?.primeiroAcesso === true || !user?.dataUltimaTroca;
+    if (precisaTrocar) {
+      return <Navigate to="/trocar-senha" replace />;
+    }
 
-  // --- TRAVA DE BLOQUEIO ---
-  const estaBloqueado = 
-    user?.status === "bloqueado" || 
-    user?.licencaStatus === "bloqueado" || 
-    user?.statusLicenca === "bloqueada";
+    // 2. TRAVA DE BLOQUEIO
+    const estaBloqueado = 
+      user?.status === "bloqueado" || 
+      user?.licencaStatus === "bloqueada" || 
+      user?.statusLicenca === "bloqueada";
 
-  if (estaBloqueado && user?.role !== 'root') {
-    return <Navigate to="/bloqueado" replace />;
-  }
+    if (estaBloqueado) {
+      return <Navigate to="/bloqueado" replace />;
+    }
 
-  // --- TRAVA DE EXPIRAÇÃO ---
-  if (user?.role !== 'root' && user?.dataExpiracao) {
-    const hoje = new Date();
-    const dataExp = new Date(user.dataExpiracao);
-    
-    if (dataExp < hoje) {
-      return <Navigate to="/expirado" replace />;
+    // 3. TRAVA DE EXPIRAÇÃO
+    if (user?.dataExpiracao) {
+      const hoje = new Date();
+      const dataExp = new Date(user.dataExpiracao);
+      if (dataExp < hoje) {
+        return <Navigate to="/expirado" replace />;
+      }
     }
   }
   
@@ -75,15 +76,15 @@ function App() {
     <AuthProvider> 
       <BrowserRouter>
         <Routes>
-          {/* ROTAS PÚBLICAS OU FORA DE LAYOUT (LIVRES PARA SCROLL) */}
+          {/* ROTAS PÚBLICAS / INDEPENDENTES */}
           <Route path="/login" element={<Login />} />
           <Route path="/bloqueado" element={<Bloqueado />} />
           <Route path="/expirado" element={<Expirado />} />
           
-          {/* Deixando a troca de senha como rota independente para evitar conflito de CSS de Layout */}
+          {/* A rota de troca de senha deve ficar FORA do PrivateRoute para evitar o loop de redirecionamento */}
           <Route path="/trocar-senha" element={<TrocarSenha />} />
           
-          {/* ROTAS PROTEGIDAS */}
+          {/* BLOCO DE ROTAS PROTEGIDAS */}
           <Route 
             path="/" 
             element={
@@ -92,22 +93,24 @@ function App() {
               </PrivateRoute>
             }
           >
+            {/* O Layout só renderiza se o PrivateRoute e o Guardiao permitirem */}
             <Route element={<Layout />}>
               <Route index element={<DashboardMain />} />
               <Route path="cadastrar-usuario" element={<CadastrarUsuario />} />
               <Route path="usuarios" element={<GestaoUsuarios />} />
               <Route path="licencas" element={<ControleLicencas />} /> 
+              
               <Route path="cadastro-aluno" element={<FormCadastroAluno onVoltar={() => window.history.back()} />} />
               <Route path="cadastro-funcionario" element={<FormCadastroFuncionario onVoltar={() => window.history.back()} />} />
-              
-              {/* ROTA PASTA DIGITAL ADICIONADA AQUI */}
               <Route path="pasta-digital" element={<PastaDigital onVoltar={() => window.history.back()} />} />
 
+              {/* Placeholders para Admin */}
               <Route path="admin/unidades" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Unidades Escolares</div>} />
               <Route path="admin/config" element={<div className="p-20 font-black uppercase italic text-slate-300 text-3xl tracking-tighter opacity-20">Configurações Master</div>} />
             </Route>
           </Route>
 
+          {/* CATCH ALL */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

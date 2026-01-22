@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { cadastrarUsuarioService } from '../../services/authService';
+import { db } from '../../firebase/firebaseConfig'; // Importamos o db
+import { Timestamp } from 'firebase/firestore'; // Importamos o Timestamp oficial
 import toast, { Toaster } from 'react-hot-toast'; 
 import { 
   UserPlus, CheckCircle2, 
@@ -14,7 +16,7 @@ const CadastrarUsuario = () => {
     email: '', 
     senha: '', 
     role: 'enfermeiro', 
-    prazo: '365', // Valor padrão: 1 ano
+    prazo: '365', 
     registroProfissional: ''
   });
 
@@ -61,19 +63,26 @@ const CadastrarUsuario = () => {
 
     setLoading(true);
     try {
-      const expira = new Date();
-      expira.setDate(expira.getDate() + parseInt(formData.prazo));
+      // --- CÁLCULO DE EXPIRAÇÃO BLINDADO ---
+      const dataHoje = new Date();
+      const dataExpira = new Date();
+      dataExpira.setDate(dataHoje.getDate() + parseInt(formData.prazo));
 
       const dadosParaCadastro = {
         nome: nomeLimpo,
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.senha,
         role: formData.role,
         registroProfissional: formData.registroProfissional.toUpperCase(),
         escolaId: "E. M. Anísio Teixeira",
-        dataExpiracao: expira.toISOString(),
-        dataCadastro: new Date(), 
-        createdAt: new Date().toISOString(),
+        
+        // Convertendo para Timestamps Oficiais do Firebase
+        dataExpiracao: Timestamp.fromDate(dataExpira), 
+        dataCadastro: Timestamp.fromDate(dataHoje),
+        
+        // Mantemos o createdAt como string ISO apenas para log se desejar
+        createdAt: dataHoje.toISOString(),
+        
         modulosSidebar: modulos, 
         primeiroAcesso: true, 
         status: 'ativo',
@@ -82,11 +91,15 @@ const CadastrarUsuario = () => {
       };
 
       await cadastrarUsuarioService(dadosParaCadastro);
-      toast.success(`Acesso liberado: ${nomeLimpo}`);
+      
+      toast.success(`Acesso liberado: ${nomeLimpo.toUpperCase()}`, {
+        style: { background: '#0f172a', color: '#fff', fontWeight: 'bold' }
+      });
+
       setFormData({ ...formData, nome: '', email: '', senha: '', registroProfissional: '', prazo: '365' });
 
     } catch (error) { 
-      toast.error("Erro: " + error.message); 
+      toast.error("ERRO NO CADASTRO: " + error.message.toUpperCase()); 
     } finally {
       setLoading(false);
     }
@@ -94,38 +107,40 @@ const CadastrarUsuario = () => {
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 font-sans animate-in fade-in duration-500">
-      <Toaster /> 
+      <Toaster position="top-right" /> 
       
+      {/* Cabeçalho */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase flex items-center gap-3">
             <Stethoscope size={40} className="text-blue-600" /> Gestão de Acessos
           </h1>
-          <p className="text-slate-500 font-medium tracking-tight">Vincule os módulos e defina o tempo de licença.</p>
+          <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-2">Controle de Licenças e Módulos Profissionais</p>
         </div>
         <div className="flex gap-3">
-          <button type="button" onClick={() => selecionarPlano('basico')} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-[10px] font-black uppercase hover:bg-slate-200 border border-slate-200 transition-all">Plano Básico</button>
-          <button type="button" onClick={() => selecionarPlano('premium')} className="px-4 py-2 bg-amber-50 text-amber-600 border border-amber-100 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-amber-100 transition-all"><Gem size={12}/> Plano Premium</button>
+          <button type="button" onClick={() => selecionarPlano('basico')} className="px-5 py-2.5 bg-white text-slate-600 rounded-xl text-[10px] font-black uppercase hover:bg-slate-50 border border-slate-200 shadow-sm transition-all">Plano Básico</button>
+          <button type="button" onClick={() => selecionarPlano('premium')} className="px-5 py-2.5 bg-amber-50 text-amber-600 border border-amber-200 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-amber-100 shadow-sm transition-all"><Gem size={14}/> Plano Premium</button>
         </div>
       </div>
 
       <form onSubmit={handleCadastro} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Coluna Dados */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200">
-            <h2 className="text-xl font-black mb-8 flex items-center gap-3 text-slate-800 uppercase italic">
-              <UserPlus className="text-blue-600" size={24} /> Identificação Profissional
+          <div className="bg-white p-10 rounded-[45px] shadow-sm border border-slate-100">
+            <h2 className="text-xl font-black mb-10 flex items-center gap-3 text-slate-800 uppercase italic">
+              <UserPlus className="text-blue-600" size={24} /> Identificação do Usuário
             </h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="md:col-span-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Nome Completo</label>
-                <input required className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-700" 
-                  placeholder="Nome do Profissional" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Nome Completo</label>
+                <input required className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all" 
+                  placeholder="Ex: Marcelo Silva" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Cargo</label>
-                <select className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-700 cursor-pointer"
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Função / Cargo</label>
+                <select className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 cursor-pointer transition-all"
                   value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
                   <option value="enfermeiro">Enfermeiro(a)</option>
                   <option value="tecnico_enfermagem">Técnico(a) Enfermagem</option>
@@ -134,40 +149,46 @@ const CadastrarUsuario = () => {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 mb-2 block">Registro Profissional (COREN/CRM)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Registro (COREN/CRM)</label>
                 <div className="relative">
-                  <Hash size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input required className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 outline-none font-bold text-slate-700 uppercase" 
+                  <Hash size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input required className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 uppercase transition-all" 
                     placeholder="000000-UF" value={formData.registroProfissional} onChange={e => setFormData({...formData, registroProfissional: e.target.value})} />
                 </div>
               </div>
 
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-100 pt-8 mt-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">E-mail de Login</label>
-                  <input required type="email" className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none text-slate-700" placeholder="email@baenf.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8 border-t border-slate-50 pt-10 mt-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-4">E-mail de Acesso</label>
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input required type="email" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl font-bold border-none text-slate-700 focus:ring-2 ring-blue-500/20" placeholder="usuario@sistema.com" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Senha Inicial</label>
-                  <input required type="password" minLength={6} className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none text-slate-700" placeholder="******" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} />
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase ml-4">Senha Temporária</label>
+                  <input required type="password" minLength={6} className="w-full p-4 bg-slate-50 rounded-2xl font-bold border-none text-slate-700 focus:ring-2 ring-blue-500/20" placeholder="******" value={formData.senha} onChange={e => setFormData({...formData, senha: e.target.value})} />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
+        {/* Coluna Sidebar/Prazo */}
         <div className="space-y-6">
-          <div className="bg-slate-900 p-8 rounded-[40px] shadow-2xl text-white border border-white/5">
-            <h2 className="text-xl font-black mb-8 flex items-center gap-3 italic uppercase text-blue-400">
-              <ShieldCheck size={24} /> Acesso Sidebar
+          <div className="bg-slate-900 p-10 rounded-[45px] shadow-2xl text-white border border-white/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
+            
+            <h2 className="text-xl font-black mb-8 flex items-center gap-3 italic uppercase text-blue-400 relative z-10">
+              <ShieldCheck size={24} /> Configurações
             </h2>
 
-            {/* ✅ SELETOR DE PRAZO ATUALIZADO: 30, 90, 180, 365 */}
-            <div className="mb-6">
-              <label className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1 mb-2 block flex items-center gap-2">
-                <Calendar size={12} /> Período da Licença
+            {/* SELETOR DE PRAZO */}
+            <div className="mb-8 relative z-10">
+              <label className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 mb-3 block flex items-center gap-2">
+                <Calendar size={14} /> Validade da Licença
               </label>
-              <select className="w-full p-4 bg-slate-800 rounded-2xl border-2 border-slate-700 outline-none font-bold text-sm text-white cursor-pointer hover:border-blue-500 transition-colors"
+              <select className="w-full p-5 bg-slate-800/50 rounded-[24px] border-2 border-slate-700 outline-none font-bold text-sm text-white cursor-pointer hover:border-blue-500 transition-all"
                 value={formData.prazo} onChange={e => setFormData({...formData, prazo: e.target.value})}>
                 <option value="30">30 dias (Mensal)</option>
                 <option value="90">90 dias (Trimestral)</option>
@@ -176,21 +197,21 @@ const CadastrarUsuario = () => {
               </select>
             </div>
 
-            <div className="space-y-2 mb-8">
+            <div className="space-y-3 mb-10 relative z-10">
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 mb-2">Módulos Habilitados</p>
               {Object.keys(modulos).map(m => (
-                <label key={m} className={`flex items-center justify-between p-4 rounded-2xl cursor-pointer transition-all border ${modulos[m] ? 'bg-blue-600/10 border-blue-500/50 text-white' : 'bg-slate-800/30 border-transparent text-slate-500'}`}>
+                <label key={m} className={`flex items-center justify-between p-4 rounded-[22px] cursor-pointer transition-all border ${modulos[m] ? 'bg-blue-600/20 border-blue-500/40 text-white' : 'bg-slate-800/20 border-transparent text-slate-600'}`}>
                   <div className="flex items-center gap-3">
-                    {!modulos[m] && <Lock size={12} className="text-slate-600" />}
                     <span className="text-[10px] font-black uppercase tracking-widest">{moduloLabels[m]}</span>
                   </div>
                   <input type="checkbox" className="hidden" checked={modulos[m]} onChange={() => setModulos({...modulos, [m]: !modulos[m]})} />
-                  {modulos[m] ? <CheckCircle2 size={16} className="text-blue-400" /> : <div className="w-[16px] h-[16px] rounded-full border border-slate-600" />}
+                  {modulos[m] ? <CheckCircle2 size={18} className="text-blue-400" /> : <Lock size={14} className="text-slate-700" />}
                 </label>
               ))}
             </div>
 
-            <button type="submit" disabled={loading} className={`w-full py-6 rounded-[24px] font-black uppercase text-[11px] tracking-widest transition-all ${loading ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-600/40'}`}>
-              {loading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Liberar Acesso Profissional'}
+            <button type="submit" disabled={loading} className={`w-full py-6 rounded-[28px] font-black uppercase text-[11px] tracking-widest transition-all relative z-10 ${loading ? 'bg-slate-700' : 'bg-blue-600 hover:bg-blue-500 shadow-2xl shadow-blue-600/30 hover:-translate-y-1'}`}>
+              {loading ? <Loader2 className="animate-spin mx-auto" size={22} /> : 'Ativar Acesso'}
             </button>
           </div>
         </div>
