@@ -45,15 +45,23 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
 
   const [formData, setFormData] = useState(estadoInicial);
 
-  // Lógica de saída centralizada
   const handleActionVoltar = () => {
     if (modoPastaDigital && onClose) {
       onClose();
+    } else if (onVoltar) {
+      onVoltar();
     } else {
       navigate('/dashboard');
     }
   };
 
+  const formatarTelefone = (valor) => {
+    const tel = (valor || "").replace(/\D/g, "");
+    if (tel.length <= 11) return tel.replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d)(\d{4})$/, "$1-$2");
+    return valor;
+  };
+
+  // Busca inteligente para quando digitar o nome fora da pasta digital
   const buscarPacientePorNome = async (nomeDigitado) => {
     if (!nomeDigitado || nomeDigitado.length < 3 || formData.pacienteId || modoPastaDigital) return;
 
@@ -110,39 +118,37 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
     return idade >= 0 ? `${idade} ANOS` : "";
   }, [formData.dataNascimento]);
 
-  const formatarTelefone = (valor) => {
-    const tel = (valor || "").replace(/\D/g, "");
-    if (tel.length <= 11) return tel.replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d)(\d{4})$/, "$1-$2");
-    return valor;
-  };
-
   useEffect(() => {
-    const carregarViaProp = async () => {
+    const carregarDados = async () => {
       if (!dadosEdicao?.id) return;
       setFetching(true);
-      const idLimpo = String(dadosEdicao.id);
-      
-      const questRef = doc(db, "questionarios_saude", idLimpo);
-      const questSnap = await getDoc(questRef);
+      try {
+        const idLimpo = String(dadosEdicao.id);
+        const questRef = doc(db, "questionarios_saude", idLimpo);
+        const questSnap = await getDoc(questRef);
 
-      if (questSnap.exists()) {
-        setFormData({ ...estadoInicial, ...questSnap.data(), pacienteId: idLimpo });
-      } else {
-        setFormData(prev => ({
-          ...prev,
-          pacienteId: idLimpo,
-          alunoNome: dadosEdicao.nome || '',
-          dataNascimento: dadosEdicao.dataNascimento || '',
-          turma: dadosEdicao.turma || '',
-          contatos: [
-            { nome: dadosEdicao.nomeContato1 || '', telefone: dadosEdicao.contato || '' },
-            { nome: dadosEdicao.nomeContato2 || '', telefone: dadosEdicao.contato2 || '' }
-          ]
-        }));
+        if (questSnap.exists()) {
+          setFormData({ ...estadoInicial, ...questSnap.data(), pacienteId: idLimpo });
+        } else {
+          setFormData(prev => ({
+            ...prev,
+            pacienteId: idLimpo,
+            alunoNome: dadosEdicao.nome || '',
+            dataNascimento: dadosEdicao.dataNascimento || '',
+            turma: dadosEdicao.turma || '',
+            contatos: [
+              { nome: dadosEdicao.nomeContato1 || '', telefone: dadosEdicao.contato || '' },
+              { nome: dadosEdicao.nomeContato2 || '', telefone: dadosEdicao.contato2 || '' }
+            ]
+          }));
+        }
+      } catch (error) {
+        toast.error("Erro ao carregar dados.");
+      } finally {
+        setFetching(false);
       }
-      setFetching(false);
     };
-    carregarViaProp();
+    carregarDados();
   }, [dadosEdicao]);
 
   const handleChange = (path, value) => {
@@ -169,17 +175,23 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
       return;
     }
 
+    if (!formData.autorizacaoEmergencia) {
+      toast.error("É necessário autorizar o encaminhamento de emergência.");
+      return;
+    }
+
     setLoading(true);
     try {
       const nomeBusca = (formData.alunoNome || "").trim().toUpperCase();
-      
-      await setDoc(doc(db, "questionarios_saude", docId), {
+      const dadosParaSalvar = {
         ...formData,
         pacienteId: docId,
         nomeBusca,
         updatedAt: serverTimestamp(),
         statusFicha: 'Concluída'
-      }, { merge: true });
+      };
+
+      await setDoc(doc(db, "questionarios_saude", docId), dadosParaSalvar, { merge: true });
       
       await setDoc(doc(db, "pastas_digitais", docId), {
         temQuestionarioSaude: true,
@@ -187,17 +199,11 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
         lastUpdate: serverTimestamp()
       }, { merge: true });
 
-      toast.success("Ficha sincronizada com sucesso!");
-      
-      if (modoPastaDigital && onClose) {
-        onClose();
-      } else {
-        setFormData(estadoInicial);
-      }
-      
+      toast.success("Ficha Sincronizada com Sucesso!");
       if (onSucesso) onSucesso();
+      if (modoPastaDigital && onClose) onClose();
     } catch (error) {
-      toast.error("Erro ao salvar.");
+      toast.error("Erro ao salvar ficha.");
     } finally {
       setLoading(false);
     }
@@ -206,83 +212,74 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
   if (fetching) return <div className="flex justify-center p-20"><Loader2 className="animate-spin text-blue-600" size={40}/></div>;
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-8 animate-in fade-in zoom-in-95 duration-300">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 animate-in fade-in duration-500">
       <Toaster position="top-right" />
       
       <div className="flex justify-between items-center mb-8">
-        <button type="button" onClick={handleActionVoltar} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-blue-600 transition-colors">
-          <ChevronLeft size={16} /> {modoPastaDigital ? 'Voltar para Pasta' : 'Dashboard'}
+        <button type="button" onClick={handleActionVoltar} className="flex items-center gap-2 text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-blue-600">
+          <ChevronLeft size={16} /> Voltar
         </button>
-        <button type="button" onClick={handleActionVoltar} className="text-slate-300 hover:text-red-500 transition-colors">
-            <X size={24} />
-        </button>
+        <div className="bg-rose-50 px-4 py-2 rounded-full flex items-center gap-2">
+            <Heart size={14} className="text-rose-500 fill-rose-500"/>
+            <span className="text-rose-600 font-black uppercase text-[9px] tracking-tighter">Prontuário Ativo</span>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* HEADER */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-5">
-            <div className="bg-rose-500 text-white p-4 rounded-3xl shadow-lg shadow-rose-100">
-              {buscandoNome ? <Loader2 className="animate-spin" size={32} /> : <ClipboardCheck size={32} />}
+            <div className="bg-blue-600 text-white p-4 rounded-3xl shadow-lg shadow-blue-100">
+                {buscandoNome ? <Loader2 className="animate-spin" size={32} /> : <ClipboardCheck size={32} />}
             </div>
             <div>
-              <h1 className="text-2xl font-black text-slate-800 uppercase italic leading-tight">
-                {modoPastaDigital ? 'Atualizar Ficha Médica' : 'Ficha Médica'}
-              </h1>
-              <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Sincronização Hospitalar</p>
+              <h1 className="text-2xl font-black text-slate-800 uppercase italic leading-tight">Ficha Médica</h1>
+              <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">{formData.alunoNome || 'Selecione um Aluno'}</p>
             </div>
           </div>
-          <button type="submit" disabled={loading} className="w-full md:w-auto bg-slate-900 text-white px-10 py-5 rounded-[22px] font-black uppercase text-xs tracking-widest hover:bg-rose-500 transition-all shadow-xl flex items-center justify-center gap-3 disabled:opacity-50">
-            {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} 
-            {modoPastaDigital ? 'Confirmar Atualização' : 'Salvar e Sincronizar'}
+          <button type="submit" disabled={loading} className="w-full md:w-auto bg-slate-900 text-white px-10 py-5 rounded-[22px] font-black uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl flex items-center justify-center gap-3">
+            {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Finalizar e Sincronizar
           </button>
         </div>
 
-        <SectionCard icon={<Search size={18}/>} title="Busca e Identificação">
+        {/* IDENTIFICAÇÃO */}
+        <SectionCard icon={<Search size={18}/>} title="Identificação e Localização">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             <div className="md:col-span-6">
-              <InputBlock label="Nome do Paciente">
-                <div className="relative">
-                  <input 
-                    className={`input-estilo uppercase ${formData.pacienteId ? 'bg-green-50 border-green-200' : 'bg-white border-slate-200'} ${modoPastaDigital ? 'cursor-not-allowed opacity-75' : ''}`}
-                    value={formData.alunoNome || ''} 
-                    readOnly={modoPastaDigital}
-                    onChange={(e) => {
-                        handleChange('alunoNome', e.target.value);
-                        if(formData.pacienteId) handleChange('pacienteId', ''); 
-                    }}
-                    onBlur={(e) => buscarPacientePorNome(e.target.value)}
-                    placeholder="DIGITE PARA LOCALIZAR NA PASTA..."
-                  />
-                  {formData.pacienteId && <div className="absolute right-4 top-4 text-green-500 font-bold text-[9px] uppercase">Vinculado</div>}
-                </div>
+              <InputBlock label="Nome do Aluno">
+                <input 
+                  className={`input-estilo uppercase ${formData.pacienteId ? 'bg-green-50 border-green-200' : ''}`}
+                  value={formData.alunoNome} 
+                  onChange={(e) => {
+                    handleChange('alunoNome', e.target.value);
+                    if(formData.pacienteId) handleChange('pacienteId', '');
+                  }}
+                  onBlur={(e) => buscarPacientePorNome(e.target.value)}
+                  placeholder="DIGITE PARA BUSCAR NA PASTA..."
+                />
               </InputBlock>
             </div>
             <div className="md:col-span-3">
-              <InputBlock label="Data de Nascimento">
-                <input 
-                    type="date" 
-                    className={`input-estilo bg-white border-slate-200 ${modoPastaDigital ? 'cursor-not-allowed opacity-75' : ''}`} 
-                    value={formData.dataNascimento || ''} 
-                    readOnly={modoPastaDigital}
-                    onChange={(e) => handleChange('dataNascimento', e.target.value)} 
-                />
+              <InputBlock label="Nascimento">
+                <input type="date" className="input-estilo" value={formData.dataNascimento} onChange={(e) => handleChange('dataNascimento', e.target.value)} />
               </InputBlock>
             </div>
             <div className="md:col-span-1">
               <InputBlock label="Idade">
-                <div className="input-estilo bg-slate-50 text-blue-600 border-none flex items-center justify-center font-black">
-                  {idadeCalculada || "--"}
+                <div className="input-estilo bg-slate-50 flex items-center justify-center font-black text-blue-600">
+                    {idadeCalculada || '--'}
                 </div>
               </InputBlock>
             </div>
             <div className="md:col-span-2">
-              <InputBlock label="Turma/Setor">
-                <input className="input-estilo bg-blue-50/50 border-blue-100 uppercase" value={formData.turma || ''} onChange={(e) => handleChange('turma', e.target.value)} />
+              <InputBlock label="Turma">
+                <input className="input-estilo bg-blue-50/50 border-blue-100" value={formData.turma} onChange={(e) => handleChange('turma', e.target.value)} />
               </InputBlock>
             </div>
           </div>
         </SectionCard>
 
+        {/* STATUS VACINAL E PRIORIDADE */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <SectionCard icon={<ShieldCheck size={18}/>} title="Status Vacinal">
             <div className="space-y-3">
@@ -290,23 +287,27 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
               <RadioGroup label="Está em dia?" name="v_dia" value={formData.vacinaAtualizada} onChange={(v) => handleChange('vacinaAtualizada', v)} />
             </div>
           </SectionCard>
+
           <SectionCard icon={<AlertTriangle size={18}/>} title="Prioridade de Contato">
             <InputBlock label="Quem avisar primeiro?">
-              <select className="input-estilo bg-white border-slate-200" value={formData.contatoEmergenciaPrioridade} onChange={(e) => handleChange('contatoEmergenciaPrioridade', e.target.value)}>
+              <select className="input-estilo" value={formData.contatoEmergenciaPrioridade} onChange={(e) => handleChange('contatoEmergenciaPrioridade', e.target.value)}>
                 <option value="">Selecione...</option>
                 <option value="Mãe">Mãe</option>
                 <option value="Pai">Pai</option>
                 <option value="Cônjuge">Cônjuge</option>
-                <option value="Filho(a)">Filho(a)</option>
                 <option value="Outro">Outro Responsável</option>
               </select>
             </InputBlock>
+            {formData.contatoEmergenciaPrioridade === 'Outro' && (
+              <input placeholder="Especificar..." className="input-estilo mt-2" value={formData.contatoEmergenciaOutro} onChange={(e) => handleChange('contatoEmergenciaOutro', e.target.value)} />
+            )}
           </SectionCard>
         </div>
 
+        {/* CONDIÇÕES MÉDICAS */}
         <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
           <h2 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-            <HeartPulse className="text-rose-500" size={20}/> Histórico Clínico
+            <HeartPulse className="text-rose-500" size={20}/> Histórico Clínico Detalhado
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             <ToggleInput label="1. Alergias graves?" value={formData.alergias} onChange={(v) => handleChange('alergias', v)} />
@@ -320,12 +321,13 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
           </div>
         </div>
 
+        {/* RESTRIÇÕES E CONTATOS */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <SectionCard icon={<FileText size={18}/>} title="Observações Especiais">
+          <SectionCard icon={<FileText size={18}/>} title="Restrições e Planos">
             <div className="space-y-4">
                <ToggleInput label="Restrição Alimentar?" value={formData.restricoesAlimentares} onChange={(v) => handleChange('restricoesAlimentares', v)} isTextArea />
                <ToggleInput label="Necessidades Especiais?" value={formData.necessidadesEspeciais} onChange={(v) => handleChange('necessidadesEspeciais', v)} isTextArea />
-               <ToggleInput label="Plano de Saúde?" value={formData.planoSaude} onChange={(v) => handleChange('planoSaude', v)} />
+               <ToggleInput label="Possui Plano de Saúde?" value={formData.planoSaude} onChange={(v) => handleChange('planoSaude', v)} />
                <ToggleInput label="Histórico de Violência?" value={formData.historicoViolencia} onChange={(v) => handleChange('historicoViolencia', v)} />
             </div>
           </SectionCard>
@@ -334,16 +336,20 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
             <div className="space-y-4">
               {formData.contatos.map((contato, idx) => (
                 <div key={idx} className="p-4 bg-slate-50 rounded-2xl space-y-2 border border-slate-100">
+                  <p className="text-[9px] font-black text-slate-400 uppercase">Contato Auxiliar {idx + 1}</p>
                   <div className="grid grid-cols-2 gap-2">
-                    <input placeholder="Nome" className="input-estilo !bg-white border-slate-100" value={contato.nome || ''} onChange={(e) => handleContactChange(idx, 'nome', e.target.value)} />
-                    <input placeholder="Telefone" className="input-estilo !bg-white border-slate-100" value={contato.telefone || ''} onChange={(e) => handleContactChange(idx, 'telefone', e.target.value)} />
+                    <input placeholder="Nome" className="input-estilo !bg-white" value={contato.nome} onChange={(e) => handleContactChange(idx, 'nome', e.target.value)} />
+                    <input placeholder="Telefone" className="input-estilo !bg-white" value={contato.telefone} onChange={(e) => handleContactChange(idx, 'telefone', e.target.value)} />
                   </div>
                 </div>
               ))}
+              
               <div className={`mt-6 p-6 rounded-[28px] border-2 transition-all ${formData.autorizacaoEmergencia ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
-                <label className="flex gap-4 cursor-pointer items-start">
-                  <input type="checkbox" className="w-6 h-6 rounded-lg text-green-600 mt-1" checked={formData.autorizacaoEmergencia} onChange={(e) => handleChange('autorizacaoEmergencia', e.target.checked)} />
-                  <span className="text-[10px] font-black leading-tight uppercase">Autorizo o encaminhamento para unidade de saúde em caso de urgência.</span>
+                <label className="flex gap-4 cursor-pointer">
+                  <input type="checkbox" className="w-6 h-6 mt-1 rounded-lg text-green-600" checked={formData.autorizacaoEmergencia} onChange={(e) => handleChange('autorizacaoEmergencia', e.target.checked)} />
+                  <span className={`text-[11px] font-black leading-tight uppercase ${formData.autorizacaoEmergencia ? 'text-green-700' : 'text-amber-700'}`}>
+                    Autorizo o encaminhamento para unidade de saúde em caso de emergência hospitalar.
+                  </span>
                 </label>
               </div>
             </div>
@@ -352,8 +358,8 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
       </form>
 
       <style>{`
-        .input-estilo { width: 100%; height: 52px; padding: 0 1rem; background-color: #f8fafc; border-radius: 14px; font-weight: 800; font-size: 0.8rem; outline: none; border: 2px solid transparent; transition: all 0.2s; color: #1e293b; }
-        .input-estilo:focus { border-color: #3b82f6; background-color: #fff; }
+        .input-estilo { width: 100%; padding: 0.8rem 1rem; background-color: #f8fafc; border-radius: 14px; font-weight: 800; font-size: 0.75rem; outline: none; border: 2px solid transparent; transition: all 0.2s; color: #1e293b; }
+        .input-estilo:focus { background-color: #fff; border-color: #3b82f6; }
       `}</style>
     </div>
   );
@@ -380,38 +386,35 @@ const RadioGroup = ({ label, name, value, onChange }) => (
     <div className="flex gap-4">
       {['Sim', 'Não'].map(opt => (
         <label key={opt} className="flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer">
-          <input type="radio" name={name} value={opt} checked={(value || 'Não') === opt} onChange={(e) => onChange(e.target.value)} className="w-5 h-5" /> {opt}
+          <input type="radio" name={name} value={opt} checked={value === opt} onChange={(e) => onChange(e.target.value)} className="w-4 h-4" /> {opt}
         </label>
       ))}
     </div>
   </div>
 );
 
-const ToggleInput = ({ label, value, onChange, placeholder = "Especifique detalhes...", isTextArea = false }) => {
-  const possui = value?.possui || 'Não';
-  const detalhes = value?.detalhes || '';
-  return (
-    <div className="p-4 bg-slate-50/50 rounded-3xl border border-slate-100/50 mb-2">
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-black text-slate-600 uppercase italic tracking-tight">{label}</span>
-        <div className="flex gap-2">
-          {['Sim', 'Não'].map((opt) => (
-            <button key={opt} type="button" onClick={() => onChange({ ...value, possui: opt })}
-              className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${possui === opt ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}
-            >{opt}</button>
-          ))}
-        </div>
+const ToggleInput = ({ label, value, onChange, placeholder = "Especifique detalhes...", isTextArea = false }) => (
+  <div className="p-4 bg-slate-50/50 rounded-3xl border border-slate-100/50">
+    <div className="flex items-center justify-between mb-2">
+      <span className="text-[10px] font-black text-slate-600 uppercase italic tracking-tight">{label}</span>
+      <div className="flex gap-2">
+        {['Sim', 'Não'].map((opt) => (
+          <button key={opt} type="button" onClick={() => onChange({ ...value, possui: opt })}
+            className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${value.possui === opt ? 'bg-slate-900 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}
+          >{opt}</button>
+        ))}
       </div>
-      {possui === 'Sim' && (
-        <div className="animate-in slide-in-from-top-1 duration-200">
-          {isTextArea ? 
-            <textarea className="input-estilo min-h-[80px] mt-2 !bg-white border-slate-200" placeholder={placeholder} value={detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} /> :
-            <input className="input-estilo mt-2 !bg-white border-slate-200" placeholder={placeholder} value={detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} />
-          }
-        </div>
-      )}
     </div>
-  );
-};
+    {value.possui === 'Sim' && (
+      <div className="animate-in slide-in-from-top-1 duration-200">
+        {isTextArea ? 
+          <textarea className="input-estilo min-h-[70px] mt-2 !bg-white border-slate-100" placeholder={placeholder} value={value.detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} />
+          : 
+          <input className="input-estilo mt-2 !bg-white border-slate-100" placeholder={placeholder} value={value.detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} />
+        }
+      </div>
+    )}
+  </div>
+);
 
 export default QuestionarioSaude;

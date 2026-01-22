@@ -148,74 +148,76 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
             <p className="text-slate-300 font-black uppercase text-xs tracking-[0.2em]">Nenhuma ocorrência encontrada</p>
           </div>
         ) : (
-          atendimentosFiltrados.map((atend) => (
-            <div 
-              key={atend.id}
-              className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${atend.statusAtendimento === 'Finalizado' ? 'bg-slate-50/30' : ''}`}
-            >
-              <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${atend.statusAtendimento === 'Finalizado' ? 'bg-emerald-500' : 'bg-orange-500 animate-pulse'}`}></div>
-              
-              <div className="flex items-center gap-5 w-full md:w-auto">
-                <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center transition-transform group-hover:scale-110 ${atend.statusAtendimento === 'Finalizado' ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
-                  {atend.statusAtendimento === 'Finalizado' ? <CheckCircle2 size={28} /> : <AlertCircle size={28} />}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-black text-slate-800 uppercase italic tracking-tighter text-xl">
-                      {atend.nomePaciente}
-                    </h3>
-                    <button 
-                      onClick={() => onVerPasta && onVerPasta(atend)}
-                      className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
-                      title="Ver Pasta Digital Completa"
-                    >
-                      <FileSearch size={16} />
-                    </button>
+          atendimentosFiltrados.map((atend) => {
+            // LÓGICA DE INTELIGÊNCIA CLÍNICA
+            const foiHospital = atend.encaminhadoHospital?.toString().toLowerCase().trim() === 'sim';
+            const isAberto = atend.statusAtendimento === 'Aberto';
+            const precisaResolver = isAberto && foiHospital;
+
+            return (
+              <div 
+                key={atend.id}
+                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${atend.statusAtendimento === 'Finalizado' ? 'bg-slate-50/30' : ''}`}
+              >
+                <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${precisaResolver ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                
+                <div className="flex items-center gap-5 w-full md:w-auto">
+                  <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center transition-transform group-hover:scale-110 ${precisaResolver ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    {precisaResolver ? <Hospital size={28} /> : <CheckCircle2 size={28} />}
                   </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
-                    <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">{atend.perfilPaciente === 'aluno' ? `TURMA ${atend.turma}` : atend.cargo}</span>
-                    <span className="tabular-nums">{atend.data} • {atend.horario}</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
-                <div className="flex flex-col md:items-end gap-1.5">
-                  <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.15em] ${atend.statusAtendimento === 'Finalizado' ? 'bg-emerald-500 text-white' : 'bg-orange-500 text-white shadow-lg shadow-orange-100'}`}>
-                    {atend.statusAtendimento}
-                  </span>
-                  {atend.encaminhadoHospital === 'sim' && (
-                    <span className="text-[10px] font-black text-blue-600 flex items-center gap-1.5 uppercase italic tracking-tight">
-                      <Hospital size={12}/> {atend.destinoHospital}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={() => setViewPrint(atend)}
-                    className="w-12 h-12 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                    title="Imprimir BAM"
-                  >
-                    <Printer size={20} />
-                  </button>
-
-                  {atend.statusAtendimento === 'Aberto' ? (
-                    <button 
-                      onClick={() => setSelectedAtend(atend)}
-                      className="h-12 px-6 bg-slate-900 text-white rounded-2xl hover:bg-orange-600 transition-all shadow-lg font-black uppercase text-[10px] tracking-widest flex items-center gap-2"
-                    >
-                      Resolver <ChevronRight size={16} />
-                    </button>
-                  ) : (
-                    <div className="w-12 h-12 flex items-center justify-center text-emerald-500 bg-emerald-50 rounded-2xl" title="Caso Encerrado">
-                       <CheckCircle2 size={22} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-black text-slate-800 uppercase italic tracking-tighter text-xl">
+                        {atend.nomePaciente}
+                      </h3>
+                      <button 
+                        onClick={() => onVerPasta && onVerPasta(atend)}
+                        className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                        title="Ver Pasta Digital Completa"
+                      >
+                        <FileSearch size={16} />
+                      </button>
                     </div>
-                  )}
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
+                      <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">{atend.perfilPaciente === 'aluno' ? `TURMA ${atend.turma}` : atend.cargo}</span>
+                      <span className="tabular-nums">{atend.data} • {atend.horario}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
+                  <div className="flex flex-col md:items-end gap-1.5">
+                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.15em] ${precisaResolver ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-emerald-500 text-white'}`}>
+                      {precisaResolver ? 'Aguardando Retorno' : 'Atendimento Concluído'}
+                    </span>
+                    <span className="text-[10px] font-black text-slate-400 flex items-center gap-1.5 uppercase italic tracking-tight">
+                      {foiHospital ? <><Hospital size={12}/> {atend.destinoHospital}</> : "Liberado na Unidade"}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => setViewPrint(atend)}
+                      className="w-12 h-12 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                      title="Imprimir BAM"
+                    >
+                      <Printer size={20} />
+                    </button>
+
+                    {/* SÓ MOSTRA O BOTÃO "RESOLVER" SE FOI PARA O HOSPITAL E ESTÁ EM ABERTO */}
+                    {precisaResolver && (
+                      <button 
+                        onClick={() => setSelectedAtend(atend)}
+                        className="h-12 px-6 bg-slate-900 text-white rounded-2xl hover:bg-orange-600 transition-all shadow-lg font-black uppercase text-[10px] tracking-widest flex items-center gap-2"
+                      >
+                        Dar Alta <ChevronRight size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
