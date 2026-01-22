@@ -2,29 +2,40 @@ import React from 'react';
 import { 
   X, Thermometer, Activity, MapPin, Clock, 
   Stethoscope, Building2, User, UserCheck, 
-  ShieldAlert, ClipboardList 
+  ShieldAlert, ClipboardList, AlertTriangle
 } from 'lucide-react';
 
 const ModalDetalhesDigital = ({ atendimento, onClose }) => {
   if (!atendimento) return null;
+
+  // LÓGICA DE TRATAMENTO DE CAMPOS VARIÁVEIS DO FIREBASE
+  const queixaDisplay = atendimento.queixaPrincipal || atendimento.motivoAtendimento || "NÃO INFORMADA";
+  const horarioDisplay = atendimento.horario || atendimento.horarioReferencia || atendimento.horaInicio || "--:--";
+  const profissionalRegistro = atendimento.profissionalRegistro || "S/I";
+  
+  // Verifica se está em aberto
+  const statusTexto = (atendimento.statusAtendimento || "").toLowerCase();
+  const estaAberto = statusTexto.includes("aberto") || statusTexto.includes("aguardando");
 
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-end bg-slate-900/80 backdrop-blur-md p-4">
       <div className="bg-white w-full max-w-3xl h-[95vh] rounded-[45px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-500">
         
         {/* HEADER */}
-        <div className="p-10 bg-slate-900 text-white flex justify-between items-start relative overflow-hidden">
+        <div className={`p-10 text-white flex justify-between items-start relative overflow-hidden transition-colors ${estaAberto ? 'bg-orange-600' : 'bg-slate-900'}`}>
           <div className="relative z-10">
             <div className="flex items-center gap-2 mb-2">
-              <span className="bg-blue-600 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter">Documento BAM</span>
-              <span className="text-[9px] font-black text-slate-400 uppercase">
-                {atendimento.dataAtendimento} às {atendimento.horario}
+              <span className={`${estaAberto ? 'bg-orange-800' : 'bg-blue-600'} text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter`}>
+                {estaAberto ? 'ATENDIMENTO EM ABERTO' : 'DOCUMENTO BAM'}
+              </span>
+              <span className="text-[9px] font-black text-white/60 uppercase">
+                {atendimento.dataAtendimento} às {horarioDisplay}
               </span>
             </div>
             <h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">
               {atendimento.baenf || 'S/N'}
             </h3>
-            <p className="text-blue-400 text-xs font-black uppercase italic mt-2 flex items-center gap-1">
+            <p className="text-white/80 text-xs font-black uppercase italic mt-2 flex items-center gap-1">
               <UserCheck size={14}/> {atendimento.nomePaciente}
             </p>
           </div>
@@ -38,12 +49,23 @@ const ModalDetalhesDigital = ({ atendimento, onClose }) => {
         
         <div className="flex-1 overflow-y-auto p-10 space-y-8 bg-slate-50/30">
           
+          {/* AVISO DE STATUS ABERTO */}
+          {estaAberto && (
+            <div className="bg-orange-50 border-2 border-orange-200 p-6 rounded-[30px] flex items-center gap-4 animate-pulse">
+              <AlertTriangle className="text-orange-600" size={32} />
+              <div>
+                <p className="text-orange-900 font-black uppercase italic text-sm leading-none">Aguardando Desfecho</p>
+                <p className="text-orange-700 text-[10px] font-bold uppercase mt-1">Este atendimento ainda não foi finalizado no sistema.</p>
+              </div>
+            </div>
+          )}
+
           {/* GRID DE SINAIS VITAIS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <VitalCard icon={<Thermometer size={18} className="text-rose-500"/>} label="TEMPERATURA" value={`${atendimento.temperatura || '--'}°C`} />
             <VitalCard icon={<Activity size={18} className="text-blue-500"/>} label="PRESSÃO" value={atendimento.pressaoArterial || '--'} />
-            <VitalCard icon={<MapPin size={18} className="text-green-500"/>} label="DESTINO" value={atendimento.destinoHospital || 'Escola'} />
-            <VitalCard icon={<Clock size={18} className="text-orange-500"/>} label="DURAÇÃO" value={atendimento.tempoAtendimento || '--'} />
+            <VitalCard icon={<MapPin size={18} className="text-green-500"/>} label="DESTINO" value={atendimento.destinoHospital || (estaAberto ? 'EM ANÁLISE' : 'ESCOLA')} />
+            <VitalCard icon={<Clock size={18} className="text-orange-500"/>} label="DURAÇÃO" value={atendimento.tempoDuracao || '--'} />
           </div>
 
           {/* CONTEÚDO TÉCNICO */}
@@ -52,7 +74,7 @@ const ModalDetalhesDigital = ({ atendimento, onClose }) => {
               <div className="space-y-4">
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Motivo / Queixa Principal</p>
-                  <p className="text-sm font-black text-slate-900 uppercase italic leading-tight">{atendimento.motivoAtendimento}</p>
+                  <p className="text-sm font-black text-slate-900 uppercase italic leading-tight">{queixaDisplay}</p>
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Evolução de Enfermagem</p>
@@ -68,13 +90,13 @@ const ModalDetalhesDigital = ({ atendimento, onClose }) => {
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Procedimentos Realizados</p>
                   <div className="p-5 bg-blue-50/50 rounded-3xl border border-blue-100 text-[11px] text-blue-900 font-black uppercase italic min-h-[80px]">
-                    {atendimento.procedimentos || "Procedimentos de rotina."}
+                    {atendimento.procedimentos || "Nenhum procedimento registrado."}
                   </div>
                 </div>
                 <div>
                   <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Medicações Administradas</p>
                   <div className="p-5 bg-white rounded-3xl border border-slate-200 text-[11px] text-slate-800 font-black uppercase italic">
-                    {atendimento.medicacao || "Nenhuma medicação informada."}
+                    {atendimento.medicacao || atendimento.medicacaoDose || "Nenhuma medicação informada."}
                   </div>
                 </div>
               </div>
@@ -87,16 +109,16 @@ const ModalDetalhesDigital = ({ atendimento, onClose }) => {
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><Stethoscope size={12}/> Profissional</p>
                 <p className="text-xs font-black text-slate-900 uppercase italic">{atendimento.profissionalNome || 'Não Identificado'}</p>
-                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Coren: {atendimento.profissionalCoren || '---'}</p>
+                <p className="text-[9px] font-bold text-slate-400 mt-0.5">Registro: {profissionalRegistro}</p>
               </div>
               <div>
                 <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><Building2 size={12}/> Unidade</p>
-                <p className="text-xs font-black text-slate-900 uppercase italic">{atendimento.escola}</p>
+                <p className="text-xs font-black text-slate-900 uppercase italic">{atendimento.escola || 'Não informada'}</p>
               </div>
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><User size={12}/> Responsável Avisado?</p>
-                <span className={`text-[10px] font-black px-3 py-1 rounded-full ${atendimento.avisadoResponsavel === 'sim' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {atendimento.avisadoResponsavel === 'sim' ? 'SIM, CIENTE' : 'NÃO INFORMADO'}
+                <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><User size={12}/> Status do Registro</p>
+                <span className={`text-[10px] font-black px-4 py-1.5 rounded-full ${estaAberto ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {estaAberto ? 'AGUARDANDO DESFECHO' : 'FINALIZADO'}
                 </span>
               </div>
             </div>
@@ -107,7 +129,7 @@ const ModalDetalhesDigital = ({ atendimento, onClose }) => {
   );
 };
 
-// Sub-componentes internos para o modal
+// Sub-componentes internos permanecem os mesmos
 const VitalCard = ({ icon, label, value }) => (
   <div className="bg-white p-4 rounded-3xl flex flex-col items-center gap-2 border border-slate-200 shadow-sm text-center">
     <div className="p-2 bg-slate-50 rounded-xl shadow-inner">{icon}</div>

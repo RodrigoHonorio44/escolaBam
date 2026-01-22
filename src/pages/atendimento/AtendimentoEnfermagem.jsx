@@ -23,7 +23,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const wrapperRef = useRef(null);
 
-  const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbwSkF-qYcbfqwivCBROWl3BKZta_0uyhvvVZXmGU_9Sfcu_sxxxe_LAbMRU0ZW0bUkg/exec";
+  const URL_PLANILHA = "https://script.google.com/macros/s/AKfycbzatnvLRrgck2e0qnahUKs4qmu8_aZNjg1mIWZV-ivNnf2Q6kLwN4pagy85I5LiwUNt/exec";
 
   const queixasComuns = [
     "Febre", "Dor de Cabeça", "Dor Abdominal", "Náusea/Vômito", 
@@ -67,6 +67,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
     return partes.length >= 2 && partes[1].length >= 2;
   };
 
+  // ATUALIZAÇÃO SOLICITADA: Novo formato do BAENF
   const gerarBAENF = () => {
     const ano = 2026; 
     const aleatorio = Math.random().toString(36).substring(2, 6).toUpperCase();
@@ -129,7 +130,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
     return () => clearTimeout(delay);
   }, [formData.nomePaciente]);
 
-  // Fechar ao clicar fora
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
@@ -157,7 +157,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
     toast.success("Dados carregados!");
   };
 
-  // Logica de Início Real (Mantida)
   useEffect(() => {
     if (formData.nomePaciente.length > 2 && !horaInicioReal) {
       setHoraInicioReal(new Date());
@@ -197,20 +196,33 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
       const idPasta = criarIdPaciente(formData.nomePaciente, formData.dataNascimento);
       
       const payload = {
-        ...formData,
+        baenf: formData.baenf, 
+        dataAtendimento: formData.data,
+        horarioReferencia: formData.horario,
         horaInicio: horaInicioReal ? horaInicioReal.toLocaleTimeString('pt-BR') : formData.horario,
         horaFinalizacao: horaFinalizacao.toLocaleTimeString('pt-BR'),
         tempoDuracao: `${tempoTotalMinutos} min`,
         pacienteId: idPasta,
+        nomePaciente: formData.nomePaciente.trim(),
         nomePacienteBusca: formData.nomePaciente.trim().toUpperCase(),
+        dataNascimento: formData.dataNascimento || "Não informada",
+        idade: formData.idade,
+        sexo: formData.sexo,
         perfilPaciente,
-        relatoCurto: tipoAtendimento === 'local' ? formData.motivoAtendimento : formData.motivoEncaminhamento,
-        dataAtendimento: formData.data,
+        turma: formData.turma,
+        cargo: formData.cargo,
+        temperatura: formData.temperatura,
+        alergias: formData.alunoPossuiAlergia === 'Sim' ? formData.qualAlergia : 'Não possui',
+        queixaPrincipal: tipoAtendimento === 'local' ? formData.motivoAtendimento : formData.motivoEncaminhamento,
+        procedimentos: formData.procedimentos,
+        medicacaoDose: houveMedicacao === 'Sim' ? formData.medicacao : 'Nenhuma',
+        encaminhamento: precisaEncaminhamento === 'Sim' ? formData.destinoHospital : 'Não',
+        observacoes: formData.observacoes,
         escola: user?.escolaId || "E. M. Anísio Teixeira", 
         profissionalNome: user?.nome || 'Profissional',
         profissionalRegistro: user?.registroProfissional || user?.coren || 'Não Informado',
-        statusAtendimento: tipoAtendimento === 'local' ? "Finalizado" : "Aberto",
-        encaminhadoHospital: tipoAtendimento === 'hospital' ? 'sim' : 'não',
+        statusAtendimento: tipoAtendimento === 'local' ? "Finalizado" : "Remoção/Aberto",
+        tipoRegistro: tipoAtendimento
       };
 
       await addDoc(collection(db, "atendimentos_enfermagem"), { 
@@ -233,7 +245,12 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
       }, { merge: true });
 
       try {
-        await fetch(URL_PLANILHA, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+        await fetch(URL_PLANILHA, { 
+          method: 'POST', 
+          mode: 'no-cors', 
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload) 
+        });
       } catch (err) { console.error("Erro Planilha:", err); }
       
       toast.success(`BAENF ${formData.baenf} salvo!`, { id: loadingToast });
@@ -320,7 +337,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
           </div>
         </div>
 
-        {/* IDENTIFICAÇÃO DO PACIENTE COM AUTOCOMPLETE */}
         <div className="space-y-6 font-sans">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
             <div className="md:col-span-2 space-y-2 relative" ref={wrapperRef}>
@@ -341,7 +357,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                 onFocus={() => formData.nomePaciente.length >= 3 && setMostrarSugestoes(true)}
               />
 
-              {/* LISTA DE SUGESTÕES */}
               {mostrarSugestoes && (
                 <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2">
                   {sugestoes.map((p) => (
@@ -386,7 +401,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
             </div>
           </div>
 
-          {/* ... Restante do formulário igual ao anterior ... */}
           <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Data Atend.</label>
@@ -521,7 +535,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
           </div>
         )}
 
-        {/* ASSINATURA E BOTÃO SALVAR */}
         <div className="pt-10 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6 font-sans">
           <div className="flex items-center gap-4 bg-slate-900 px-8 py-5 rounded-[25px] border-2 border-blue-500/20 w-full md:w-auto shadow-xl">
             <div className="bg-blue-600 p-2.5 rounded-xl"><UserCheck size={22} className="text-white" /></div>

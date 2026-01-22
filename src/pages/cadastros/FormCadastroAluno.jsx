@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebaseConfig';
 import { collection, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
-  UserPlus, Save, Loader2, AlertCircle, MapPin, Phone, CreditCard, UserPlus2, School, X, ArrowLeft
+  UserPlus, Save, Loader2, AlertCircle, MapPin, Phone, CreditCard, UserPlus2, School, X, ArrowLeft,
+  Ruler, Weight, Fingerprint
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -24,6 +25,10 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
       dataNascimento: '',
       idade: '',
       turma: '',
+      // Campos Novos
+      etnia: '',
+      peso: '',
+      altura: '',
       parentesco: 'Mãe',
       responsavel: '',
       nomeContato1: '',
@@ -37,6 +42,12 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
       endereco_bairro: ''
     }
   });
+
+  // --- MÁSCARA DE PESO/ALTURA (Apenas números e ponto) ---
+  const handleNumericInput = (e, fieldName) => {
+    let valor = e.target.value.replace(/[^0-9.]/g, ""); 
+    setValue(fieldName, valor);
+  };
 
   // --- MÁSCARA DE TELEFONE ---
   const handleTelefoneChange = (e, fieldName) => {
@@ -204,6 +215,43 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 border-2 border-transparent rounded-2xl font-bold text-blue-700 outline-none cursor-not-allowed" />
         </div>
 
+        {/* --- INÍCIO DA NOVA SEÇÃO: ETNIA, PESO E ALTURA --- */}
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 shadow-inner">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Fingerprint size={12}/> Etnia</label>
+            <select {...register("etnia")} className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm">
+              <option value="">Selecione...</option>
+              <option value="Branca">Branca</option>
+              <option value="Preta">Preta</option>
+              <option value="Parda">Parda</option>
+              <option value="Amarela">Amarela</option>
+              <option value="Indígena">Indígena</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Weight size={12}/> Peso (kg)</label>
+            <input 
+              {...register("peso")} 
+              onChange={(e) => handleNumericInput(e, "peso")}
+              placeholder="Ex: 45.8" 
+              className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Ruler size={12}/> Altura (m)</label>
+            <input 
+              {...register("altura")} 
+              onChange={(e) => handleNumericInput(e, "altura")}
+              placeholder="Ex: 1.55" 
+              className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm"
+            />
+          </div>
+        </div>
+        {/* --- FIM DA NOVA SEÇÃO --- */}
+
         {/* TURMA */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><School size={12}/> Turma / Ano</label>
@@ -339,9 +387,9 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
           </button>
           {mostrarEndereco && (
             <div className="mt-4 p-6 bg-slate-50 rounded-[30px] border-2 border-blue-100 grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-               <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} placeholder="Rua das Flores, 123" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-               <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">CEP</label><input {...register("endereco_cep")} placeholder="24000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-               <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} placeholder="Ex: Centro, Maricá/RJ" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} placeholder="Rua das Flores, 123" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">CEP</label><input {...register("endereco_cep")} placeholder="24000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} placeholder="Ex: Centro, Maricá/RJ" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
             </div>
           )}
         </div>

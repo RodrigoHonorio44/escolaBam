@@ -90,8 +90,16 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   };
 
   const atendimentosFiltrados = atendimentos.filter(atend => {
-    const matchesStatus = filtroStatus === 'Todos' ? true : atend.statusAtendimento === filtroStatus;
-    const matchesData = filtroData ? atend.data === filtroData : true;
+    const statusDoc = atend.statusAtendimento || 'Aberto';
+    const matchesStatus = filtroStatus === 'Todos' 
+      ? true 
+      : (filtroStatus === 'Aberto' 
+          ? statusDoc.includes('Aberto') 
+          : statusDoc === filtroStatus);
+
+    const dataDoc = atend.dataAtendimento || atend.data || "";
+    const matchesData = filtroData ? dataDoc === filtroData : true;
+    
     return matchesStatus && matchesData;
   });
 
@@ -149,15 +157,26 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
           </div>
         ) : (
           atendimentosFiltrados.map((atend) => {
-            // LÓGICA DE INTELIGÊNCIA CLÍNICA
+            // LÓGICA DE INTELIGÊNCIA CLÍNICA ATUALIZADA
+            const statusAtual = atend.statusAtendimento || 'Aberto';
             const foiHospital = atend.encaminhadoHospital?.toString().toLowerCase().trim() === 'sim';
-            const isAberto = atend.statusAtendimento === 'Aberto';
-            const precisaResolver = isAberto && foiHospital;
+            const isRemocao = statusAtual.includes('Remoção');
+            const isAberto = statusAtual.includes('Aberto');
+            const precisaResolver = isAberto && (foiHospital || isRemocao);
+            
+            // --- TRATAMENTO ROBUSTO DE ALERGIAS ---
+            // Verifica campos novos e antigos (qualAlergia, alergias, alunoPossuiAlergia)
+            const detalheAlergia = atend.qualAlergia || atend.alergias || "";
+            const confirmacaoAlergia = atend.alunoPossuiAlergia === "Sim" || detalheAlergia.length > 2;
+            
+            // Filtra para não mostrar "Não" ou "Nenhuma" como se fosse uma alergia real
+            const temAlergiaReal = confirmacaoAlergia && 
+              !["não", "nao", "nenhuma", "n/a"].includes(detalheAlergia.toLowerCase().trim());
 
             return (
               <div 
                 key={atend.id}
-                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${atend.statusAtendimento === 'Finalizado' ? 'bg-slate-50/30' : ''}`}
+                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${statusAtual === 'Finalizado' ? 'bg-slate-50/30' : ''}`}
               >
                 <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${precisaResolver ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                 
@@ -170,6 +189,14 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                       <h3 className="font-black text-slate-800 uppercase italic tracking-tighter text-xl">
                         {atend.nomePaciente}
                       </h3>
+                      
+                      {/* TAG DE ALERGIA ATUALIZADA */}
+                      {temAlergiaReal && (
+                        <span className="bg-rose-600 text-white text-[8px] font-black px-2 py-1 rounded-full flex items-center gap-1 animate-pulse shadow-sm">
+                          <AlertCircle size={10} /> ALERGIA: {detalheAlergia.toUpperCase() || "SIM"}
+                        </span>
+                      )}
+
                       <button 
                         onClick={() => onVerPasta && onVerPasta(atend)}
                         className="p-1.5 text-slate-300 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
@@ -179,8 +206,10 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                       </button>
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">{atend.perfilPaciente === 'aluno' ? `TURMA ${atend.turma}` : atend.cargo}</span>
-                      <span className="tabular-nums">{atend.data} • {atend.horario}</span>
+                      <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">
+                        {atend.perfilPaciente === 'aluno' ? `TURMA ${atend.turma}` : atend.cargo}
+                      </span>
+                      <span className="tabular-nums">{atend.dataAtendimento || atend.data} • {atend.horario || atend.horarioReferencia}</span>
                     </p>
                   </div>
                 </div>
@@ -204,7 +233,6 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                       <Printer size={20} />
                     </button>
 
-                    {/* SÓ MOSTRA O BOTÃO "RESOLVER" SE FOI PARA O HOSPITAL E ESTÁ EM ABERTO */}
                     {precisaResolver && (
                       <button 
                         onClick={() => setSelectedAtend(atend)}
@@ -242,7 +270,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
               <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50">
                 <p className="text-[9px] font-black text-blue-500 uppercase mb-2 tracking-widest italic">Queixa Inicial na Escola:</p>
                 <p className="text-sm font-bold text-slate-700 leading-relaxed italic">
-                  "{selectedAtend.motivoAtendimento || selectedAtend.motivoEncaminhamento || "Não especificado"}"
+                  "{selectedAtend.motivoAtendimento || selectedAtend.motivoEncaminhamento || selectedAtend.relatoCurto || "Não especificado"}"
                 </p>
               </div>
 

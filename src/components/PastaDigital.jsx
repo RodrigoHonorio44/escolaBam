@@ -68,7 +68,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
 
   const consolidarSaude = () => {
     if (!resultado) return { alertas: [], listaAlergias: [], listaMedicacao: [], restricoes: [], necessidades: [] };
-    
     const p = resultado.perfil || {};
     const s = resultado.saude || {};
     const alertas = [];
@@ -76,46 +75,38 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
     const listaMedicacao = [];
     const restricoes = [];
     const necessidades = [];
-
     const normalizar = (txt) => txt?.toString().toLowerCase().trim();
     const termosNegativos = ["não", "nao", "n", "nenhuma", "negativo", "-", "não informado", "n/a", "sem", "null", ""];
-
     const doencas = [
       { id: 'diabetes', label: 'DIABETES' },
       { id: 'asma', label: 'ASMA' },
       { id: 'epilepsia', label: 'EPILEPSIA' },
       { id: 'doencasCardiacas', label: 'CARDIOPATA' }
     ];
-
     doencas.forEach(d => {
       if (s[d.id]?.possui === "Sim" || p[d.id] === "Sim") {
         const detalhe = s[d.id]?.detalhes;
         alertas.push(detalhe && !termosNegativos.includes(normalizar(detalhe)) ? `${d.label}: ${detalhe}` : d.label);
       }
     });
-
     const fontesAlergia = [p.qualAlergia, s.alergias?.detalhes];
     fontesAlergia.forEach(val => {
       if (val && !termosNegativos.includes(normalizar(val))) {
         if (!listaAlergias.includes(val)) listaAlergias.push(val);
       }
     });
-
     if (s.restricoesAlimentares?.detalhes && !termosNegativos.includes(normalizar(s.restricoesAlimentares.detalhes))) {
         restricoes.push(s.restricoesAlimentares.detalhes);
     }
-
     if (s.necessidadesEspeciais?.detalhes && !termosNegativos.includes(normalizar(s.necessidadesEspeciais.detalhes))) {
         necessidades.push(s.necessidadesEspeciais.detalhes);
     }
-
     const fontesMed = [s.medicacaoContinua?.detalhes, p.medicacao];
     fontesMed.forEach(val => {
       if (val && !termosNegativos.includes(normalizar(val))) {
         if (!listaMedicacao.includes(val)) listaMedicacao.push(val);
       }
     });
-
     return { alertas, listaAlergias, listaMedicacao, restricoes, necessidades };
   };
 
@@ -250,22 +241,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                             ))}
                           </div>
                         )}
-                        {infoSaude.restricoes.length > 0 && (
-                          <div className="pt-2 border-t border-slate-200">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2">RESTRIÇÕES ALIMENTARES</p>
-                            {infoSaude.restricoes.map((r, idx) => (
-                              <p key={idx} className="text-sm font-black text-slate-600 uppercase italic">● {r}</p>
-                            ))}
-                          </div>
-                        )}
-                        {infoSaude.necessidades.length > 0 && (
-                          <div className="pt-2 border-t border-slate-200">
-                            <p className="text-[10px] font-black text-slate-400 uppercase mb-2">NECESSIDADES ESPECIAIS</p>
-                            {infoSaude.necessidades.map((n, idx) => (
-                              <p key={idx} className="text-sm font-black text-slate-600 uppercase italic">● {n}</p>
-                            ))}
-                          </div>
-                        )}
                       </div>
 
                       <button onClick={() => setFormAtivo('saude')} className="w-full py-5 border-2 border-dashed border-slate-200 rounded-3xl text-xs font-black text-slate-400 hover:border-blue-300 hover:text-blue-600 transition-all uppercase italic">
@@ -279,18 +254,8 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                       <CheckCircle2 size={18}/> STATUS DOCUMENTAL
                     </h3>
                     <div className="space-y-4">
-                       <StatusLine 
-                         label="VACINAÇÃO EM DIA" 
-                         status={resultado.perfil?.vacinaDia === "Sim" || resultado.perfil?.carteiraVacina === "Sim" || resultado.saude?.vacinaAtualizada === "Sim"} 
-                       />
-                       <StatusLine 
-                         label="AUTORIZAÇÃO HOSPITALAR" 
-                         status={
-                           resultado.perfil?.autorizacaoEmergencia === true || 
-                           resultado.saude?.autorizacaoEmergencia === true ||
-                           resultado.perfil?.autorizacaoHospitalar === "Sim"
-                         } 
-                       />
+                       <StatusLine label="VACINAÇÃO EM DIA" status={resultado.perfil?.vacinaDia === "Sim" || resultado.perfil?.carteiraVacina === "Sim"} />
+                       <StatusLine label="AUTORIZAÇÃO HOSPITALAR" status={resultado.perfil?.autorizacaoEmergencia === true || resultado.perfil?.autorizacaoHospitalar === "Sim"} />
                        <StatusLine label="FICHA MÉDICA PREENCHIDA" status={!!resultado.saude} />
                     </div>
                   </div>
@@ -300,33 +265,90 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                   <table className="w-full text-left">
                     <thead className="bg-slate-50 border-b border-slate-100">
                       <tr className="text-xs font-black text-slate-400 uppercase">
-                        <th className="px-8 py-6">DATA / HORA</th>
+                        <th className="px-8 py-6">DATA / HORÁRIOS</th>
                         <th className="px-8 py-6">QUEIXA PRINCIPAL</th>
-                        <th className="px-8 py-6">CONDUTA</th>
+                        <th className="px-8 py-6">CONDUTA / STATUS</th>
                         <th className="px-8 py-6 text-right">AÇÕES</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {resultado.atendimentos?.length > 0 ? resultado.atendimentos.map((atend, i) => {
-                        // LÓGICA DE CORREÇÃO AQUI: Verifica explicitamente por "Sim" ou true
-                        const foiParaHospital = atend.destinoHospital === "Sim" || atend.destinoHospital === true;
+                        // LÓGICA DE STATUS: Aberto se o status contiver "Aberto" ou se não houver hora de finalização
+                        const statusTexto = (atend.statusAtendimento || "").toLowerCase();
+                        const estaAberto = statusTexto.includes("aberto") || statusTexto.includes("aguardando") || !atend.horaFinalizacao;
+                        
+                        // LÓGICA DE CORES DE CONDUTA
+                        const foiParaHospital = atend.destinoHospital?.toLowerCase().includes("hospital") || atend.tipoRegistro === "hospital";
+
+                        // CAPTURA DE QUEIXA (Tenta os dois nomes de campo que você tem no Firebase)
+                        const queixaDisplay = atend.queixaPrincipal || atend.motivoAtendimento || "NÃO INFORMADA";
+
+                        // CAPTURA DE HORÁRIOS
+                        const hInicio = atend.horaInicio || atend.horario || atend.horarioReferencia || "--:--";
+                        const hFim = atend.horaFinalizacao || null;
 
                         return (
-                          <tr key={i} className="hover:bg-blue-50/30 transition-colors">
-                            <td className="px-8 py-8 text-sm font-bold text-slate-600">{atend.dataAtendimento}</td>
-                            <td className="px-8 py-8 text-base font-black text-slate-800 uppercase italic tracking-tight">{atend.motivoAtendimento}</td>
-                            <td className="px-8 py-8">
-                               <span className={`text-[10px] font-black px-4 py-2 rounded-xl border ${foiParaHospital ? 'bg-orange-50 text-orange-600 border-orange-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>
-                                {foiParaHospital ? 'ENCAMINHADO HOSPITAL' : 'ALTA AMBULATORIAL'}
-                              </span>
+                          <tr key={i} className={`hover:bg-blue-50/30 transition-colors ${estaAberto ? 'bg-orange-50/30' : ''}`}>
+                            <td className="px-8 py-8 text-sm font-bold text-slate-600">
+                              <div className="flex flex-col gap-1">
+                                <span className="tabular-nums">{atend.dataAtendimento}</span>
+                                <div className="flex items-center gap-1 mt-1">
+                                  <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-500 font-black">
+                                    INÍCIO: {hInicio}
+                                  </span>
+                                  {hFim && (
+                                    <span className="text-[10px] bg-blue-50 px-2 py-0.5 rounded text-blue-600 font-black">
+                                      FIM: {hFim}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
                             </td>
+
+                            <td className="px-8 py-8">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-base font-black text-slate-800 uppercase italic tracking-tight">
+                                  {queixaDisplay}
+                                </span>
+                                {estaAberto && (
+                                  <span className="flex items-center gap-1 text-[9px] font-black text-orange-600 uppercase italic">
+                                    <AlertTriangle size={12} className="animate-pulse" /> Aguardando Desfecho
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="px-8 py-8">
+                               <div className="flex flex-col gap-2">
+                                  <span className={`text-[10px] font-black px-4 py-2 rounded-xl border w-fit ${
+                                    estaAberto 
+                                      ? 'bg-white text-orange-500 border-orange-200' 
+                                      : foiParaHospital 
+                                        ? 'bg-orange-50 text-orange-600 border-orange-200' 
+                                        : 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                                  }`}>
+                                    {estaAberto ? 'STATUS: EM ABERTO' : foiParaHospital ? 'ENCAMINHADO HOSPITAL' : 'ALTA AMBULATORIAL'}
+                                  </span>
+                                  {!estaAberto && (
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase italic ml-1">
+                                      Finalizado por: {atend.profissionalNome || 'S/I'}
+                                    </span>
+                                  )}
+                               </div>
+                            </td>
+
                             <td className="px-8 py-8 text-right">
-                              <button onClick={() => setAtendimentoSelecionado(atend)} className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase hover:bg-blue-600 transition-all">VER FICHA</button>
+                              <button 
+                                onClick={() => setAtendimentoSelecionado(atend)} 
+                                className="bg-slate-900 text-white px-6 py-3 rounded-xl font-black text-[10px] uppercase hover:bg-blue-600 transition-all shadow-md active:scale-95"
+                              >
+                                {estaAberto ? 'DETALHAR' : 'VER FICHA'}
+                              </button>
                             </td>
                           </tr>
                         );
                       }) : (
-                        <tr><td colSpan="4" className="p-20 text-center font-black text-slate-300 uppercase italic">Nenhum atendimento registrado</td></tr>
+                        <tr><td colSpan="4" className="p-20 text-center font-black text-slate-300 uppercase italic">Nenhum atendimento registrado nesta pasta</td></tr>
                       )}
                     </tbody>
                   </table>

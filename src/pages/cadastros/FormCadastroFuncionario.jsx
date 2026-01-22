@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebaseConfig';
 import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import { 
-  Briefcase, Save, Loader2, CreditCard, AlertCircle, MapPin, Phone, UserPlus2, X, ArrowLeft 
+  Briefcase, Save, Loader2, CreditCard, AlertCircle, MapPin, Phone, UserPlus2, X, ArrowLeft,
+  Ruler, Weight, Fingerprint
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -23,6 +24,10 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
       dataNascimento: '',
       idade: '',
       cargo: '',
+      // Novos Campos
+      etnia: '',
+      peso: '',
+      altura: '',
       nomeContato1: '',
       contato: '',
       nomeContato2: '',
@@ -47,6 +52,12 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     } else {
       navigate('/dashboard');
     }
+  };
+
+  // Máscara para peso e altura (aceita números e ponto)
+  const handleNumericInput = (e, fieldName) => {
+    let valor = e.target.value.replace(/[^0-9.]/g, "");
+    setValue(fieldName, valor);
   };
 
   const handleTelefoneChange = (e, fieldName) => {
@@ -98,16 +109,14 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
         pacienteId: idPasta,
         tipoPerfil: 'funcionario',
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
-        alunoPossuiAlergia: data.temAlergia, // Mantendo compatibilidade com a pasta
+        alunoPossuiAlergia: data.temAlergia, 
         qualAlergia: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma informada",
         alergias: data.temAlergia === "Sim" ? data.historicoMedico : "",
         updatedAt: serverTimestamp()
       };
 
-      // 1. Atualiza a Pasta Digital
       await setDoc(doc(db, "pastas_digitais", idPasta), payload, { merge: true });
 
-      // 2. Atualiza a coleção de Funcionários
       if (modoPastaDigital) {
         await setDoc(doc(db, "funcionario", idPasta), payload, { merge: true });
       } else {
@@ -117,7 +126,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
         });
       }
 
-      // 3. Feedback e Redirecionamento
       if (modoPastaDigital) {
         setTimeout(() => {
           handleActionVoltar();
@@ -199,6 +207,43 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
           <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 italic">Idade (Automática)</label>
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 border-2 border-transparent rounded-2xl font-bold text-blue-700 outline-none cursor-not-allowed" />
         </div>
+
+        {/* --- INÍCIO DA NOVA SEÇÃO: ETNIA, PESO E ALTURA --- */}
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 shadow-inner">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Fingerprint size={12}/> Etnia</label>
+            <select {...register("etnia")} className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm">
+              <option value="">Selecione...</option>
+              <option value="Branca">Branca</option>
+              <option value="Preta">Preta</option>
+              <option value="Parda">Parda</option>
+              <option value="Amarela">Amarela</option>
+              <option value="Indígena">Indígena</option>
+              <option value="Outros">Outros</option>
+            </select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Weight size={12}/> Peso (kg)</label>
+            <input 
+              {...register("peso")} 
+              onChange={(e) => handleNumericInput(e, "peso")}
+              placeholder="Ex: 75.4" 
+              className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Ruler size={12}/> Altura (m)</label>
+            <input 
+              {...register("altura")} 
+              onChange={(e) => handleNumericInput(e, "altura")}
+              placeholder="Ex: 1.75" 
+              className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm"
+            />
+          </div>
+        </div>
+        {/* --- FIM DA NOVA SEÇÃO --- */}
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cargo / Função</label>
@@ -284,9 +329,9 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
           </button>
           {mostrarEndereco && (
             <div className="mt-4 p-6 bg-slate-50 rounded-[30px] border-2 border-blue-100 grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-               <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-               <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">CEP</label><input {...register("endereco_cep")} placeholder="00000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-               <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">CEP</label><input {...register("endereco_cep")} placeholder="00000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
             </div>
           )}
         </div>
