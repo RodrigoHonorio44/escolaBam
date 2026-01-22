@@ -6,7 +6,7 @@ import {
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
   ChevronDown, LogOut, FolderSearch, Lock,
   Settings, Bell, FileBarChart, Menu, ChevronLeft, 
-  Sun, Moon, LifeBuoy, ShieldAlert
+  Sun, Moon, LifeBuoy, ShieldAlert, BarChart3
 } from "lucide-react";
 
 // Importações de páginas
@@ -17,7 +17,7 @@ import FormCadastroAluno from "../../pages/cadastros/FormCadastroAluno";
 import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionario";
 import PastaDigital from "../PastaDigital";
 import QuestionarioSaude from "../../pages/cadastros/QuestionarioSaude"; 
-import RelatorioMedicoPro from "../../components/RelatorioMedicoPro"; // <--- ADICIONADO
+import RelatorioMedicoPro from "../../components/RelatorioMedicoPro"; 
 
 // --- COMPONENTES AUXILIARES ---
 const TelaBloqueioLicenca = ({ darkMode, onLogout }) => (
@@ -102,6 +102,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     setActiveTab("pasta_digital");
   };
 
+  // --- MENU ATUALIZADO ---
   const menuItems = [
     { id: "home", label: "Dashboard", icon: <LayoutDashboard size={20} />, key: "dashboard" },
     { id: "atendimento", label: "Atendimento", icon: <Stethoscope size={20} />, key: "atendimento" },
@@ -118,7 +119,9 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       ]
     }, 
     { id: "historico", label: "BAENF Antigos", icon: <ClipboardList size={20} />, key: "relatorios" },
-    { id: "relatorio_geral", label: "Relatório Geral", icon: <FileBarChart size={20} />, key: "dashboard" },
+    
+    // NOVO NOME E ÍCONE PARA A AUDITORIA
+    { id: "auditoria", label: "Auditoria de Saúde", icon: <BarChart3 size={20} />, key: "dashboard" },
   ];
 
   const theme = {
@@ -155,8 +158,8 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
         return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
       
-      // ABA DO NOVO RELATÓRIO CONECTADA AQUI
-      case "relatorio_geral": 
+      // LOGICA DE REDERIZAÇÃO DA AUDITORIA
+      case "auditoria": 
         return <RelatorioMedicoPro darkMode={darkMode} onVoltar={() => setActiveTab("home")} />;
       
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
