@@ -17,6 +17,7 @@ import FormCadastroAluno from "../../pages/cadastros/FormCadastroAluno";
 import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionario";
 import PastaDigital from "../PastaDigital";
 import QuestionarioSaude from "../../pages/cadastros/QuestionarioSaude"; 
+import RelatorioMedicoPro from "../../components/RelatorioMedicoPro"; // <--- ADICIONADO
 
 // --- COMPONENTES AUXILIARES ---
 const TelaBloqueioLicenca = ({ darkMode, onLogout }) => (
@@ -153,6 +154,11 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
         }
         return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
+      
+      // ABA DO NOVO RELATÓRIO CONECTADA AQUI
+      case "relatorio_geral": 
+        return <RelatorioMedicoPro darkMode={darkMode} onVoltar={() => setActiveTab("home")} />;
+      
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
       default: return <HomeEnfermeiro user={user} darkMode={darkMode} />;
     }
@@ -260,7 +266,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           </div>
         </header>
 
-        {/* ✅ ALTERAÇÃO AQUI: Removido 'max-w-7xl' e 'mx-auto' para ocupar 100% da tela */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 w-full animate-in fade-in duration-500">
             {renderContent()}
         </main>
