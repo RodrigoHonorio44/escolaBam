@@ -13,6 +13,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
   const navigate = useNavigate();
   const [mostrarEndereco, setMostrarEndereco] = useState(false);
   const [mostrarSegundoContato, setMostrarSegundoContato] = useState(false);
+  const [carregandoCep, setCarregandoCep] = useState(false);
 
   const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting, errors } } = useForm({
     mode: "onChange",
@@ -24,7 +25,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
       dataNascimento: '',
       idade: '',
       cargo: '',
-      // Novos Campos
       etnia: '',
       peso: '',
       altura: '',
@@ -43,8 +43,32 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
   const watchDataNasc = watch("dataNascimento");
   const naoSabeSus = watch("naoSabeSus");
   const temAlergia = watch("temAlergia");
+  const watchCep = watch("endereco_cep");
 
-  // Lógica de saída centralizada
+  // Lógica de busca de CEP Inteligente
+  useEffect(() => {
+    const buscarCep = async () => {
+      const cepLimpo = watchCep?.replace(/\D/g, '');
+      if (cepLimpo?.length === 8) {
+        setCarregandoCep(true);
+        try {
+          const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+          const data = await response.json();
+          if (!data.erro) {
+            setValue("endereco_rua", data.logradouro.toUpperCase());
+            setValue("endereco_bairro", `${data.bairro.toUpperCase()} - ${data.localidade.toUpperCase()}/${data.uf.toUpperCase()}`);
+            toast.success("ENDEREÇO LOCALIZADO!");
+          }
+        } catch (error) {
+          toast.error("ERRO AO BUSCAR CEP");
+        } finally {
+          setCarregandoCep(false);
+        }
+      }
+    };
+    buscarCep();
+  }, [watchCep, setValue]);
+
   const handleActionVoltar = () => {
     if (modoPastaDigital) {
       if (onClose) onClose();
@@ -54,7 +78,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     }
   };
 
-  // Máscara para peso e altura (aceita números e ponto)
   const handleNumericInput = (e, fieldName) => {
     let valor = e.target.value.replace(/[^0-9.]/g, "");
     setValue(fieldName, valor);
@@ -81,15 +104,10 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
 
   useEffect(() => {
     if (dadosEdicao) {
-      const possuiAlergia = dadosEdicao.alunoPossuiAlergia || dadosEdicao.temAlergia || 'Não';
-      const detalhesAlergia = dadosEdicao.historicoMedico || dadosEdicao.qualAlergia || "";
-
       reset({
         ...dadosEdicao,
         cartaoSus: dadosEdicao.cartaoSus === "NÃO INFORMADO" ? "" : (dadosEdicao.cartaoSus || ''),
         naoSabeSus: dadosEdicao.cartaoSus === "NÃO INFORMADO",
-        temAlergia: possuiAlergia,
-        historicoMedico: detalhesAlergia === "Nenhuma informada" ? "" : detalhesAlergia
       });
       if (dadosEdicao.endereco_rua) setMostrarEndereco(true);
       if (dadosEdicao.contato2) setMostrarSegundoContato(true);
@@ -98,39 +116,34 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
 
   const onSubmit = async (data) => {
     const saveAction = async () => {
-      const nomeLimpo = data.nome.trim();
-      const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
-      const idPasta = `${nomeLimpo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
+      // Transformar strings em CAIXA ALTA antes de salvar
+      const dataUpper = Object.keys(data).reduce((acc, key) => {
+        const value = data[key];
+        acc[key] = (typeof value === 'string' && key !== 'pacienteId') ? value.toUpperCase().trim() : value;
+        return acc;
+      }, {});
+
+      const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'SEM-DATA';
+      const idPasta = `${dataUpper.nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-').toLowerCase()}-${dataNascLimpa}`;
 
       const payload = {
-        ...data,
-        nome: nomeLimpo,
-        nomeBusca: nomeLimpo.toUpperCase(),
+        ...dataUpper,
         pacienteId: idPasta,
-        tipoPerfil: 'funcionario',
+        nomeBusca: dataUpper.nome,
+        tipoPerfil: 'FUNCIONARIO',
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
-        alunoPossuiAlergia: data.temAlergia, 
-        qualAlergia: data.temAlergia === "Sim" ? data.historicoMedico.trim() : "Nenhuma informada",
-        alergias: data.temAlergia === "Sim" ? data.historicoMedico : "",
+        alunoPossuiAlergia: dataUpper.temAlergia,
+        qualAlergia: dataUpper.temAlergia === "SIM" ? dataUpper.historicoMedico : "NENHUMA INFORMADA",
         updatedAt: serverTimestamp()
       };
 
       await setDoc(doc(db, "pastas_digitais", idPasta), payload, { merge: true });
-
+      
       if (modoPastaDigital) {
         await setDoc(doc(db, "funcionario", idPasta), payload, { merge: true });
+        setTimeout(() => handleActionVoltar(), 800);
       } else {
-        await addDoc(collection(db, "funcionario"), {
-          ...payload,
-          createdAt: serverTimestamp()
-        });
-      }
-
-      if (modoPastaDigital) {
-        setTimeout(() => {
-          handleActionVoltar();
-        }, 800);
-      } else {
+        await addDoc(collection(db, "funcionario"), { ...payload, createdAt: serverTimestamp() });
         reset();
         setMostrarEndereco(false);
         setMostrarSegundoContato(false);
@@ -141,7 +154,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
 
     toast.promise(saveAction(), {
       loading: 'SINCRONIZANDO STAFF...',
-      success: modoPastaDigital ? 'STAFF ATUALIZADO!' : 'SUCESSO! CAMPOS LIMPOS PARA NOVO STAFF.',
+      success: 'DADOS SALVOS COM SUCESSO!',
       error: 'ERRO AO SALVAR STAFF.'
     });
   };
@@ -150,13 +163,10 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     <div className="max-w-4xl mx-auto p-8 bg-white rounded-[40px] shadow-sm border border-slate-200 animate-in fade-in zoom-in-95 duration-300">
       <Toaster position="top-center" />
       
+      {/* Header */}
       <div className="flex items-center justify-between mb-8 border-b border-slate-100 pb-6">
         <div className="flex items-center gap-4">
-          <button 
-            type="button" 
-            onClick={handleActionVoltar} 
-            className="p-2 hover:bg-slate-100 text-slate-600 rounded-full transition-all"
-          >
+          <button type="button" onClick={handleActionVoltar} className="p-2 hover:bg-slate-100 text-slate-600 rounded-full transition-all">
             <ArrowLeft size={24} />
           </button>
           <div className="bg-slate-900 p-3 rounded-2xl text-white shadow-lg"><Briefcase size={24} /></div>
@@ -167,40 +177,28 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Controle Interno de Funcionários</p>
           </div>
         </div>
-
-        <button 
-          type="button" 
-          onClick={handleActionVoltar} 
-          className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"
-        >
+        <button type="button" onClick={handleActionVoltar} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all">
           <X size={28} />
         </button>
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
+        {/* Nome */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo</label>
           <input 
-            {...register("nome", { 
-                required: "Obrigatório", 
-                pattern: { value: /^[A-Za-zÀ-ÖØ-öø-ÿ\s]+$/, message: "Apenas letras são permitidas" } 
-            })} 
+            {...register("nome", { required: "Obrigatório" })} 
             readOnly={modoPastaDigital}
-            placeholder="Digite nome e sobrenome"
-            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all ${modoPastaDigital ? 'bg-slate-100 cursor-not-allowed border-transparent text-slate-500' : errors.nome ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
+            placeholder="NOME COMPLETO"
+            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold uppercase outline-none transition-all ${modoPastaDigital ? 'bg-slate-100 cursor-not-allowed border-transparent text-slate-500' : errors.nome ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
           />
         </div>
 
+        {/* Nasc e Idade */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
-          <input 
-            type="date" 
-            {...register("dataNascimento")} 
-            readOnly={modoPastaDigital}
-            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none ${modoPastaDigital ? 'bg-slate-100 cursor-not-allowed border-transparent' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
-            required 
-          />
+          <input type="date" {...register("dataNascimento")} readOnly={modoPastaDigital} className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none ${modoPastaDigital ? 'bg-slate-100 border-transparent' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} required />
         </div>
 
         <div className="space-y-2">
@@ -208,64 +206,46 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 border-2 border-transparent rounded-2xl font-bold text-blue-700 outline-none cursor-not-allowed" />
         </div>
 
-        {/* --- INÍCIO DA NOVA SEÇÃO: ETNIA, PESO E ALTURA --- */}
+        {/* Etnia, Peso e Altura */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 shadow-inner">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Fingerprint size={12}/> Etnia</label>
-            <select {...register("etnia")} className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm">
-              <option value="">Selecione...</option>
-              <option value="Branca">Branca</option>
-              <option value="Preta">Preta</option>
-              <option value="Parda">Parda</option>
-              <option value="Amarela">Amarela</option>
-              <option value="Indígena">Indígena</option>
-              <option value="Outros">Outros</option>
+            <select {...register("etnia")} className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm uppercase">
+              <option value="">SELECIONE...</option>
+              <option value="BRANCA">BRANCA</option>
+              <option value="PRETA">PRETA</option>
+              <option value="PARDA">PARDA</option>
+              <option value="AMARELA">AMARELA</option>
+              <option value="INDÍGENA">INDÍGENA</option>
             </select>
           </div>
-
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Weight size={12}/> Peso (kg)</label>
-            <input 
-              {...register("peso")} 
-              onChange={(e) => handleNumericInput(e, "peso")}
-              placeholder="Ex: 75.4" 
-              className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm"
-            />
+            <input {...register("peso")} onChange={(e) => handleNumericInput(e, "peso")} placeholder="75.4" className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm" />
           </div>
-
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Ruler size={12}/> Altura (m)</label>
-            <input 
-              {...register("altura")} 
-              onChange={(e) => handleNumericInput(e, "altura")}
-              placeholder="Ex: 1.75" 
-              className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm"
-            />
+            <input {...register("altura")} onChange={(e) => handleNumericInput(e, "altura")} placeholder="1.75" className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm" />
           </div>
         </div>
-        {/* --- FIM DA NOVA SEÇÃO --- */}
 
+        {/* Cargo e Sexo */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Cargo / Função</label>
-          <input 
-            {...register("cargo")} 
-            readOnly={modoPastaDigital}
-            placeholder="Ex: Professor, Zelador..." 
-            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none ${modoPastaDigital ? 'bg-slate-100 cursor-not-allowed border-transparent' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
-            required 
-          />
+          <input {...register("cargo")} readOnly={modoPastaDigital} placeholder="EX: PROFESSOR" className={`w-full px-5 py-4 border-2 rounded-2xl font-bold uppercase outline-none ${modoPastaDigital ? 'bg-slate-100 border-transparent' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} required />
         </div>
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
-          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none shadow-sm" required>
-            <option value="">Selecione...</option>
-            <option value="Masculino">Masculino</option>
-            <option value="Feminino">Feminino</option>
-            <option value="Outros">Outros</option>
+          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-slate-900 outline-none uppercase" required>
+            <option value="">SELECIONE...</option>
+            <option value="MASCULINO">MASCULINO</option>
+            <option value="FEMININO">FEMININO</option>
+            <option value="OUTROS">OUTROS</option>
           </select>
         </div>
 
+        {/* Cartão SUS */}
         <div className="md:col-span-2 space-y-2">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><CreditCard size={12}/> Cartão SUS</label>
@@ -277,11 +257,12 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
           <input {...register("cartaoSus")} disabled={naoSabeSus} placeholder={naoSabeSus ? "NÃO INFORMADO" : "000 0000 0000 0000"} className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all ${naoSabeSus ? "bg-slate-100 border-slate-200 text-slate-400" : "bg-slate-50 border-transparent focus:border-slate-900"}`} />
         </div>
 
+        {/* Contatos */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-6">
           <div className="flex items-center justify-between">
             <h3 className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 italic"><Phone size={14} className="text-blue-600"/> Contatos de Emergência</h3>
             {!mostrarSegundoContato && (
-              <button type="button" onClick={() => setMostrarSegundoContato(true)} className="text-[9px] font-black text-blue-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-blue-100 hover:bg-blue-50">
+              <button type="button" onClick={() => setMostrarSegundoContato(true)} className="text-[9px] font-black text-blue-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-blue-100 hover:bg-blue-50 flex items-center gap-2">
                 <UserPlus2 size={12}/> ADICIONAR 2º CONTATO
               </button>
             )}
@@ -289,16 +270,11 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nome do Contato 01</label>
-              <input {...register("nomeContato1")} placeholder="Ex: Esposa, Mãe" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
+              <input {...register("nomeContato1")} placeholder="NOME DO CONTATO" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold uppercase focus:border-slate-900 outline-none" />
             </div>
             <div className="space-y-2">
               <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Telefone 01</label>
-              <input 
-                {...register("contato")} 
-                onChange={(e) => handleTelefoneChange(e, "contato")} 
-                placeholder="(21) 90000-0000" 
-                className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" 
-              />
+              <input {...register("contato")} onChange={(e) => handleTelefoneChange(e, "contato")} placeholder="(21) 90000-0000" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
             </div>
           </div>
           {mostrarSegundoContato && (
@@ -308,34 +284,34 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
                   <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Nome do Contato 02</label>
                   <button type="button" onClick={() => { setMostrarSegundoContato(false); setValue("contato2", ""); setValue("nomeContato2", ""); }} className="text-[8px] font-bold text-red-400 hover:text-red-600 uppercase">[REMOVER]</button>
                 </div>
-                <input {...register("nomeContato2")} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
+                <input {...register("nomeContato2")} className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold uppercase focus:border-slate-900 outline-none" />
               </div>
               <div className="space-y-2">
                 <label className="text-[9px] font-black text-slate-400 uppercase ml-1">Telefone 02</label>
-                <input 
-                  {...register("contato2")} 
-                  onChange={(e) => handleTelefoneChange(e, "contato2")} 
-                  placeholder="(21) 90000-0000" 
-                  className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" 
-                />
+                <input {...register("contato2")} onChange={(e) => handleTelefoneChange(e, "contato2")} placeholder="(21) 90000-0000" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold focus:border-slate-900 outline-none" />
               </div>
             </div>
           )}
         </div>
 
+        {/* Endereço Inteligente */}
         <div className="md:col-span-2">
           <button type="button" onClick={() => setMostrarEndereco(!mostrarEndereco)} className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-3 rounded-2xl hover:bg-blue-100 transition-all">
             <MapPin size={14} /> {mostrarEndereco ? '[-] Ocultar Endereço' : '[+] Adicionar Endereço'}
           </button>
           {mostrarEndereco && (
             <div className="mt-4 p-6 bg-slate-50 rounded-[30px] border-2 border-blue-100 grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-                <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-                <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">CEP</label><input {...register("endereco_cep")} placeholder="00000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-                <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-2">CEP {carregandoCep && <Loader2 className="animate-spin w-3 h-3 text-blue-500"/>}</label>
+                  <input {...register("endereco_cep")} placeholder="00000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" />
+                </div>
+                <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} className="w-full px-4 py-3 rounded-xl border-none font-bold uppercase outline-none shadow-sm" /></div>
+                <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} className="w-full px-4 py-3 rounded-xl border-none font-bold uppercase outline-none shadow-sm" /></div>
             </div>
           )}
         </div>
 
+        {/* Alergias */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex items-center justify-between">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2"><AlertCircle size={14} className="text-orange-500"/> Alergias?</label>
@@ -349,10 +325,11 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
             </div>
           </div>
           {temAlergia === "Sim" && (
-            <textarea {...register("historicoMedico")} className="w-full px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold text-slate-700 focus:border-orange-500 resize-none animate-in fade-in" rows="2" placeholder="Detalhes da alergia..."></textarea>
+            <textarea {...register("historicoMedico")} className="w-full px-5 py-4 bg-white border-2 border-orange-200 rounded-2xl outline-none font-bold uppercase text-slate-700 focus:border-orange-500 resize-none animate-in fade-in" rows="2" placeholder="DETALHES DA ALERGIA..."></textarea>
           )}
         </div>
 
+        {/* Submit */}
         <button type="submit" disabled={isSubmitting} className="md:col-span-2 mt-4 bg-slate-900 text-white py-5 rounded-[22px] font-black uppercase italic text-xs shadow-xl hover:bg-blue-600 transition-all flex items-center justify-center gap-3 disabled:bg-slate-300">
           {isSubmitting ? <Loader2 className="animate-spin" /> : <><Save size={18} /> {modoPastaDigital ? 'Atualizar Staff' : 'Salvar e Próximo Staff'}</>}
         </button>

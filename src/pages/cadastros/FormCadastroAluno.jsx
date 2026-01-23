@@ -44,6 +44,30 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
     }
   });
 
+  // --- LÓGICA DE BUSCA DE CEP ---
+  const handleCEPChange = async (e) => {
+    const cep = e.target.value.replace(/\D/g, "");
+    setValue("endereco_cep", cep);
+
+    if (cep.length === 8) {
+      const loadingCep = toast.loading("Buscando CEP...");
+      try {
+        const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await response.json();
+
+        if (!data.erro) {
+          setValue("endereco_rua", data.logradouro.toUpperCase());
+          setValue("endereco_bairro", `${data.bairro.toUpperCase()}, ${data.localidade.toUpperCase()}/${data.uf.toUpperCase()}`);
+          toast.success("Endereço preenchido!", { id: loadingCep });
+        } else {
+          toast.error("CEP não encontrado", { id: loadingCep });
+        }
+      } catch (error) {
+        toast.error("Erro ao buscar CEP", { id: loadingCep });
+      }
+    }
+  };
+
   // --- FUNÇÃO DE BUSCA DE ALUNO ---
   const buscarAluno = async () => {
     const nomeParaBusca = watch("nome")?.trim().toUpperCase();
@@ -82,6 +106,11 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
       e.preventDefault();
       buscarAluno();
     }
+  };
+
+  // --- HANDLER PARA FORÇAR CAIXA ALTA ---
+  const handleUpperCase = (fieldName, value) => {
+    setValue(fieldName, value.toUpperCase());
   };
 
   const handleNumericInput = (e, fieldName) => {
@@ -136,21 +165,25 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
 
   const onSubmit = async (data) => {
     const saveAction = async () => {
-      const nomeLimpo = data.nome.trim();
+      const nomeLimpo = data.nome.trim().toUpperCase();
       const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
       const idGerado = `${nomeLimpo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
       
       const payload = { 
         ...data, 
         nome: nomeLimpo,
-        nomeBusca: nomeLimpo.toUpperCase(),
+        nomeBusca: nomeLimpo,
+        responsavel: data.responsavel?.toUpperCase(),
+        turma: data.turma?.toUpperCase(),
+        endereco_rua: data.endereco_rua?.toUpperCase(),
+        endereco_bairro: data.endereco_bairro?.toUpperCase(),
         pacienteId: idGerado,
         tipoPerfil: 'aluno',
         matriculaInteligente: data.naoSabeMatricula ? "PENDENTE" : data.matriculaInteligente,
         cartaoSus: data.naoSabeSus ? "NÃO INFORMADO" : data.cartaoSus,
         updatedAt: serverTimestamp(),
         alunoPossuiAlergia: data.temAlergia,
-        alergias: data.temAlergia === "Sim" ? data.historicoMedico : ""
+        alergias: data.temAlergia === "Sim" ? data.historicoMedico.toUpperCase() : ""
       };
       
       await setDoc(doc(db, "pastas_digitais", idGerado), payload, { merge: true });
@@ -217,16 +250,17 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
             </label>
         </div>
 
-        {/* NOME COMPLETO COM BUSCA */}
+        {/* NOME COMPLETO COM BUSCA E CAIXA ALTA */}
         <div className="md:col-span-2 space-y-2">
-          <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno (Aperte Enter para buscar)</label>
+          <label className={`text-[10px] font-black uppercase tracking-widest ml-1 ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno (Busca por Enter)</label>
           <div className="relative group">
             <input 
               {...register("nome", { required: "Nome obrigatório" })} 
               onKeyDown={handleKeyPress}
+              onChange={(e) => handleUpperCase("nome", e.target.value)}
               readOnly={modoPastaDigital}
-              placeholder="Ex: CAIO GIROMBA" 
-              className={`w-full px-5 py-4 pr-14 border-2 rounded-2xl font-bold outline-none transition-all uppercase
+              placeholder="EX: CAIO GIROMBA" 
+              className={`w-full px-5 py-4 pr-14 border-2 rounded-2xl font-bold outline-none transition-all
               ${modoPastaDigital ? 'bg-slate-100 border-transparent text-slate-500' : errors.nome ? 'bg-red-50 border-red-500' : 'bg-slate-50 border-transparent focus:border-blue-600'}`} 
             />
             <button 
@@ -252,34 +286,17 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 border-2 border-transparent rounded-2xl font-bold text-blue-700 outline-none cursor-not-allowed" />
         </div>
 
-        {/* ETNIA, PESO E ALTURA */}
-        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 shadow-inner">
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Fingerprint size={12}/> Etnia</label>
-            <select {...register("etnia")} className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm">
-              <option value="">Selecione...</option>
-              <option value="Branca">Branca</option>
-              <option value="Preta">Preta</option>
-              <option value="Parda">Parda</option>
-              <option value="Amarela">Amarela</option>
-              <option value="Indígena">Indígena</option>
-              <option value="Outros">Outros</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Weight size={12}/> Peso (kg)</label>
-            <input {...register("peso")} onChange={(e) => handleNumericInput(e, "peso")} placeholder="Ex: 45.8" className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm" />
-          </div>
-          <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><Ruler size={12}/> Altura (m)</label>
-            <input {...register("altura")} onChange={(e) => handleNumericInput(e, "altura")} placeholder="Ex: 1.55" className="w-full px-5 py-4 bg-white border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm" />
-          </div>
-        </div>
-
-        {/* TURMA E SEXO */}
+        {/* TURMA E SEXO (CAIXA ALTA NA TURMA) */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><School size={12}/> Turma / Ano</label>
-          <input {...register("turma")} readOnly={modoPastaDigital} placeholder="Ex: 1º Ano A" className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none shadow-sm ${modoPastaDigital ? 'bg-slate-100' : 'bg-slate-50 border-transparent focus:border-blue-600'}`} required />
+          <input 
+            {...register("turma")} 
+            onChange={(e) => handleUpperCase("turma", e.target.value)}
+            readOnly={modoPastaDigital} 
+            placeholder="EX: 1º ANO A" 
+            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none shadow-sm ${modoPastaDigital ? 'bg-slate-100' : 'bg-slate-50 border-transparent focus:border-blue-600'}`} 
+            required 
+          />
         </div>
 
         <div className="space-y-2">
@@ -292,19 +309,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
           </select>
         </div>
 
-        {/* CARTÃO SUS */}
-        <div className="md:col-span-2 space-y-2">
-          <div className="flex justify-between items-center px-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><CreditCard size={12}/> Cartão SUS</label>
-            <label className="flex items-center gap-2 cursor-pointer group">
-              <input type="checkbox" {...register("naoSabeSus")} className="w-3 h-3 rounded" />
-              <span className="text-[9px] font-black text-slate-400 group-hover:text-orange-500 uppercase transition-colors">Não informado</span>
-            </label>
-          </div>
-          <input {...register("cartaoSus")} disabled={naoSabeSus} placeholder={naoSabeSus ? "NÃO INFORMADO" : "000 0000 0000 0000"} className={`w-full px-5 py-4 border-2 rounded-2xl outline-none font-bold transition-all ${naoSabeSus ? "bg-slate-100 border-slate-200" : "bg-slate-50 border-transparent focus:border-blue-600 shadow-sm"}`} />
-        </div>
-
-        {/* RESPONSÁVEL */}
+        {/* RESPONSÁVEL (CAIXA ALTA) */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Vínculo</label>
           <select {...register("parentesco")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm">
@@ -318,47 +323,16 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Responsável</label>
-          <input {...register("responsavel")} placeholder="Nome de quem assina" className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm" required />
+          <input 
+            {...register("responsavel")} 
+            onChange={(e) => handleUpperCase("responsavel", e.target.value)}
+            placeholder="NOME COMPLETO" 
+            className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none shadow-sm" 
+            required 
+          />
         </div>
 
-        {/* CONTATOS */}
-        <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-6 shadow-inner">
-          <div className="flex items-center justify-between">
-            <h3 className="text-[11px] font-black text-slate-500 uppercase flex items-center gap-2 italic"><Phone size={14} className="text-blue-600"/> Contatos de Emergência</h3>
-            {!mostrarSegundoContato && (
-              <button type="button" onClick={() => setMostrarSegundoContato(true)} className="flex items-center gap-1 text-[9px] font-black text-blue-600 bg-white px-3 py-1.5 rounded-lg shadow-sm border border-blue-100 hover:bg-blue-50 transition-all">
-                <UserPlus2 size={12}/> ADICIONAR 2º CONTATO
-              </button>
-            )}
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Contato 01</label>
-              <input {...register("nomeContato1")} placeholder="Ex: Maria (Mãe)" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold outline-none focus:border-blue-600" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone 01 (Celular)</label>
-              <input {...register("contato")} onChange={(e) => handleTelefoneChange(e, "contato")} placeholder="(21) 97596-6340" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold outline-none focus:border-blue-600" />
-            </div>
-          </div>
-          {mostrarSegundoContato && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200 animate-in fade-in slide-in-from-top-2">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome do Contato 02</label>
-                    <button type="button" onClick={() => { setMostrarSegundoContato(false); setValue("contato2", ""); setValue("nomeContato2", ""); }} className="text-[8px] font-bold text-red-400 hover:text-red-600 uppercase">[Remover]</button>
-                </div>
-                <input {...register("nomeContato2")} placeholder="Ex: José (Tio)" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold outline-none focus:border-blue-600" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Telefone 02 (Celular)</label>
-                <input {...register("contato2")} onChange={(e) => handleTelefoneChange(e, "contato2")} placeholder="(21) 97596-6340" className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold outline-none focus:border-blue-600" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* ALERGIAS */}
+        {/* ALERGIAS (CAIXA ALTA) */}
         <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4">
           <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic">
             <AlertCircle size={14}/> Controle de Alergias (Sincronizado)
@@ -368,20 +342,50 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, modoPastaDigital = !!dadosEd
             <option value="Sim">Sim, possui alergias</option>
           </select>
           {watchTemAlergia === 'Sim' && (
-            <textarea {...register("historicoMedico")} placeholder="Descreva as alergias (Ex: DIPIRONA)" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 focus:border-red-600 outline-none" rows="2" />
+            <textarea 
+                {...register("historicoMedico")} 
+                onChange={(e) => handleUpperCase("historicoMedico", e.target.value)}
+                placeholder="DESCREVA AS ALERGIAS (EX: DIPIRONA)" 
+                className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 focus:border-red-600 outline-none" 
+                rows="2" 
+            />
           )}
         </div>
 
-        {/* ENDEREÇO */}
+        {/* ENDEREÇO COM BUSCA DE CEP AUTOMÁTICA */}
         <div className="md:col-span-2">
           <button type="button" onClick={() => setMostrarEndereco(!mostrarEndereco)} className="flex items-center gap-2 text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-3 rounded-2xl shadow-sm hover:bg-blue-100 transition-colors">
             <MapPin size={14} /> {mostrarEndereco ? '[-] Ocultar Endereço' : '[+] Adicionar Endereço Completo'}
           </button>
           {mostrarEndereco && (
             <div className="mt-4 p-6 bg-slate-50 rounded-[30px] border-2 border-blue-100 grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
-                <div className="md:col-span-2 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label><input {...register("endereco_rua")} placeholder="Rua das Flores, 123" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-                <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">CEP</label><input {...register("endereco_cep")} placeholder="24000-000" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
-                <div className="md:col-span-3 space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase">Bairro e Cidade</label><input {...register("endereco_bairro")} placeholder="Ex: Centro, Maricá/RJ" className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" /></div>
+                <div className="space-y-2">
+                    <label className="text-[9px] font-black text-blue-600 uppercase">Digite o CEP (Auto-Busca)</label>
+                    <input 
+                        {...register("endereco_cep")} 
+                        onChange={handleCEPChange}
+                        placeholder="24000-000" 
+                        className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" 
+                    />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Rua e Número</label>
+                    <input 
+                        {...register("endereco_rua")} 
+                        onChange={(e) => handleUpperCase("endereco_rua", e.target.value)}
+                        placeholder="RUA DAS FLORES, 123" 
+                        className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" 
+                    />
+                </div>
+                <div className="md:col-span-3 space-y-2">
+                    <label className="text-[9px] font-black text-slate-400 uppercase">Bairro, Cidade e UF</label>
+                    <input 
+                        {...register("endereco_bairro")} 
+                        onChange={(e) => handleUpperCase("endereco_bairro", e.target.value)}
+                        placeholder="EX: CENTRO, MARICÁ/RJ" 
+                        className="w-full px-4 py-3 rounded-xl border-none font-bold outline-none shadow-sm" 
+                    />
+                </div>
             </div>
           )}
         </div>

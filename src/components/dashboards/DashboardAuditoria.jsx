@@ -12,7 +12,7 @@ import AbaGeral from './AbaGeral';
 import AbaNutricional from './AbaNutricional';
 import AbaRecidiva from './AbaRecidiva';
 
-// --- NOVO SUB-COMPONENTE COM PAGINAÇÃO E BUSCA ---
+// --- SUB-COMPONENTE FICHAS MÉDICAS ---
 const AbaFichasMedicas = ({ grupos, darkMode }) => {
   const [subAba, setSubAba] = useState('alergias');
   const [pagina, setPagina] = useState(1);
@@ -26,20 +26,17 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
     { id: 'restricao', label: 'Restrição Alimentar', dados: grupos.restricaoAlimentar },
   ];
 
-  // Filtragem por busca e categoria
   const dadosOriginais = categorias.find(c => c.id === subAba).dados;
   const dadosFiltrados = dadosOriginais.filter(aluno => 
     aluno.nome?.toLowerCase().includes(busca.toLowerCase())
   );
 
-  // Lógica de Paginação
   const totalPaginas = Math.ceil(dadosFiltrados.length / itensPorPagina);
   const inicio = (pagina - 1) * itensPorPagina;
   const dadosExibidos = dadosFiltrados.slice(inicio, inicio + itensPorPagina);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Barra Superior: Filtros e Busca */}
       <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
         <div className="flex flex-wrap gap-2">
           {categorias.map(cat => (
@@ -71,7 +68,6 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
         </div>
       </div>
 
-      {/* Tabela de Dados */}
       <div className={`rounded-[35px] border overflow-hidden ${darkMode ? 'bg-[#0A1629] border-white/5' : 'bg-white border-slate-200 shadow-sm'}`}>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -106,31 +102,12 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
             </tbody>
           </table>
         </div>
-
-        {/* Rodapé com Paginação */}
         <div className={`p-6 flex items-center justify-between border-t ${darkMode ? 'border-white/5' : 'border-slate-100'}`}>
-          <span className="text-[10px] font-black uppercase opacity-40">
-            Total: {dadosFiltrados.length} registros
-          </span>
-          
+          <span className="text-[10px] font-black uppercase opacity-40">Total: {dadosFiltrados.length} registros</span>
           <div className="flex gap-2">
-            <button 
-              disabled={pagina === 1}
-              onClick={() => setPagina(p => p - 1)}
-              className="p-2 rounded-lg bg-slate-500/10 hover:bg-blue-600 hover:text-white transition-all disabled:opacity-20"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <div className="flex items-center px-4 text-[9px] font-black tracking-widest">
-              {pagina} / {totalPaginas || 1}
-            </div>
-            <button 
-              disabled={pagina >= totalPaginas}
-              onClick={() => setPagina(p => p + 1)}
-              className="p-2 rounded-lg bg-slate-500/10 hover:bg-blue-600 hover:text-white transition-all disabled:opacity-20"
-            >
-              <ChevronRight size={16} />
-            </button>
+            <button disabled={pagina === 1} onClick={() => setPagina(p => p - 1)} className="p-2 rounded-lg bg-slate-500/10 hover:bg-blue-600 hover:text-white transition-all disabled:opacity-20"><ChevronLeft size={16} /></button>
+            <div className="flex items-center px-4 text-[9px] font-black tracking-widest">{pagina} / {totalPaginas || 1}</div>
+            <button disabled={pagina >= totalPaginas} onClick={() => setPagina(p => p + 1)} className="p-2 rounded-lg bg-slate-500/10 hover:bg-blue-600 hover:text-white transition-all disabled:opacity-20"><ChevronRight size={16} /></button>
           </div>
         </div>
       </div>
@@ -138,6 +115,7 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
   );
 };
 
+// --- COMPONENTE PRINCIPAL DASHBOARD ---
 const DashboardAuditoria = ({ onVoltar, darkMode }) => {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('geral');
@@ -149,12 +127,7 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
     tempoMedio: 0,
     reincidentes: [],
     alunosSobrepeso: [],
-    gruposSaude: {
-      acessibilidade: [],
-      alergias: [],
-      cronicos: [],
-      restricaoAlimentar: []
-    }
+    gruposSaude: { acessibilidade: [], alergias: [], cronicos: [], restricaoAlimentar: [] }
   });
 
   const [periodo, setPeriodo] = useState({
@@ -163,13 +136,13 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
   });
 
   const processarMetricas = (atendimentos, pastas) => {
-    let somaMin = 0, febre = 0, alergiaCount = 0;
+    let somaMin = 0, febre = 0;
     const contAlunos = {}, contQueixas = {};
 
     atendimentos.forEach(a => {
       const id = a.pacienteId || a.nomePaciente;
       if (!contAlunos[id]) {
-        contAlunos[id] = { nome: (a.nomePaciente || "N/I").toUpperCase(), qtd: 0, queixas: [], turma: a.turma || "N/I" };
+        contAlunos[id] = { nome: (a.nomePaciente || "N/I").toUpperCase(), qtd: 0, turma: a.turma || "N/I" };
       }
       contAlunos[id].qtd++;
       const queixa = a.queixaPrincipal || "Outros";
@@ -178,12 +151,19 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
       if (parseFloat(a.temperatura) >= 37.5) febre++;
     });
 
-    const sobrepeso = pastas.map(p => {
-      const peso = parseFloat(p.peso) || 0;
-      const h = parseFloat(p.altura) > 3 ? parseFloat(p.altura) / 100 : parseFloat(p.altura);
+    // ATUALIZAÇÃO DA LÓGICA NUTRICIONAL (SEMÁFORO)
+    const alertasNutricionais = pastas.map(p => {
+      const peso = parseFloat(p.peso?.toString().replace(',', '.')) || 0;
+      let h = parseFloat(p.altura?.toString().replace(',', '.')) || 0;
+      if (h > 3) h = h / 100; // Converte 160cm para 1.60m
+
       const imc = (peso > 0 && h > 0) ? (peso / (h * h)).toFixed(1) : 0;
       return { ...p, imcCalculado: imc };
-    }).filter(p => p.imcCalculado >= 25.0);
+    }).filter(p => {
+      const n = parseFloat(p.imcCalculado);
+      // Captura Baixo Peso (<18.5) OU Sobrepeso/Obesidade (>=25)
+      return n > 0 && (n < 18.5 || n >= 25);
+    });
 
     return {
       atendimentos,
@@ -192,7 +172,7 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
       totalAlergicos: pastas.filter(p => p.alergia === "Sim").length,
       tempoMedio: atendimentos.length > 0 ? (somaMin / atendimentos.length).toFixed(1) : 0,
       reincidentes: Object.values(contAlunos).filter(a => a.qtd > 1).sort((a, b) => b.qtd - a.qtd),
-      alunosSobrepeso: sobrepeso,
+      alunosSobrepeso: alertasNutricionais,
       gruposSaude: {
         acessibilidade: pastas.filter(p => p.pcd === "Sim" || p.acessibilidade === "Sim"),
         alergias: pastas.filter(p => p.alergia === "Sim"),
@@ -213,9 +193,9 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
       const listaPastas = snapPastas.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
       setDados(processarMetricas(listaAtend, listaPastas));
-      toast.success("Dados atualizados com sucesso");
+      toast.success("Dados sincronizados");
     } catch (error) {
-      toast.error("Erro na sincronização");
+      toast.error("Erro na busca");
     } finally {
       setLoading(false);
     }
@@ -226,7 +206,6 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
   return (
     <div className={`min-h-screen p-6 transition-colors duration-300 ${darkMode ? 'bg-[#050B18] text-white' : 'bg-slate-50 text-slate-900'}`}>
       <Toaster position="top-right" />
-      
       <div className="mb-8 flex justify-between items-start">
         <div>
           <button onClick={onVoltar} className="flex items-center gap-2 text-blue-500 font-black text-[10px] uppercase mb-2 hover:translate-x-[-4px] transition-transform">
@@ -238,7 +217,6 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className={`p-6 rounded-[30px] border mb-8 ${darkMode ? 'bg-[#0A1629] border-white/5' : 'bg-white border-slate-200'}`}>
         <div className="flex flex-wrap items-end gap-6">
           <div className="flex gap-3 items-center">
@@ -246,12 +224,11 @@ const DashboardAuditoria = ({ onVoltar, darkMode }) => {
             <input type="date" value={periodo.fim} onChange={e => setPeriodo({...periodo, fim: e.target.value})} className={`p-3 rounded-xl font-bold border ${darkMode ? 'bg-black/20 border-white/10' : 'bg-slate-50 border-slate-200'}`} />
           </div>
           <button onClick={carregarDados} className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black text-[11px] uppercase tracking-widest flex items-center gap-3">
-            {loading ? <Loader2 className="animate-spin" size={18}/> : "Sincronizar Dados"}
+            {loading ? <Loader2 className="animate-spin" size={18}/> : "Sincronizar"}
           </button>
         </div>
       </div>
 
-      {/* Menu Abas */}
       <div className="flex gap-2 mb-10 overflow-x-auto pb-2 scrollbar-hide">
         <Tab icon={<LayoutDashboard size={14}/>} label="Indicadores" active={activeTab === 'geral'} onClick={() => setActiveTab('geral')} />
         <Tab icon={<Users size={14}/>} label="Fichas Médicas" active={activeTab === 'fichas'} onClick={() => setActiveTab('fichas')} />

@@ -116,14 +116,15 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
     <div className="min-h-screen bg-[#f4f7f9] font-sans text-slate-800 w-full overflow-x-hidden">
       <Toaster position="top-right" />
       
-      <header className="sticky top-0 z-[100] bg-slate-900 text-white shadow-2xl w-full border-b border-white/5">
+      {/* HEADER ATUALIZADA: SAIU AZUL ESCURO, ENTROU CLARO */}
+      <header className="sticky top-0 z-[100] bg-white text-slate-900 shadow-md w-full border-b border-slate-200">
         <div className="w-full px-8 py-6 flex items-center justify-between gap-8">
           <div className="flex items-center gap-6">
-            <button onClick={onVoltar} className="p-3 hover:bg-white/10 rounded-full transition-all text-slate-400 hover:text-white border border-white/10">
+            <button onClick={onVoltar} className="p-3 hover:bg-slate-100 rounded-full transition-all text-slate-400 hover:text-blue-600 border border-slate-100">
               <ArrowLeft size={24} />
             </button>
             <h1 className="text-2xl font-black tracking-tighter uppercase italic hidden lg:block">
-              DIGITAL<span className="text-blue-500">ARCHIVE</span>
+              DIGITAL<span className="text-blue-600">ARCHIVE</span>
             </h1>
           </div>
 
@@ -131,7 +132,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
             <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={22} />
             <input 
               type="text"
-              className="w-full bg-white/10 border-none rounded-2xl py-5 px-16 text-lg font-black outline-none focus:ring-2 ring-blue-500/50 transition-all uppercase placeholder:text-slate-500 tracking-tight"
+              className="w-full bg-slate-50 border border-slate-100 rounded-2xl py-5 px-16 text-lg font-black outline-none focus:bg-white focus:ring-2 ring-blue-500/20 transition-all uppercase placeholder:text-slate-400 tracking-tight"
               placeholder="BUSCAR NOME DO PACIENTE..."
               value={busca}
               onChange={(e) => {
@@ -157,13 +158,13 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
 
           {resultado && (
             <div className="flex items-center gap-8">
-              <div className="flex items-center gap-5 border-l border-white/10 pl-8">
-                <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-2xl">
-                  {resultado.isFuncionario ? <Briefcase size={32} /> : <GraduationCap size={32} />}
+              <div className="flex items-center gap-5 border-l border-slate-200 pl-8">
+                <div className="w-14 h-14 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center shadow-sm">
+                  {resultado.isFuncionario ? <Briefcase size={28} /> : <GraduationCap size={28} />}
                 </div>
                 <div className="hidden sm:block">
-                  <h2 className="text-xl font-black uppercase italic leading-none">{resultado.perfil?.nome || resultado.nome}</h2>
-                  <p className="text-xs text-slate-400 font-bold uppercase mt-2">
+                  <h2 className="text-xl font-black uppercase italic leading-none text-slate-900">{resultado.perfil?.nome || resultado.nome}</h2>
+                  <p className="text-[10px] text-blue-600 font-black uppercase mt-2 tracking-widest">
                     {resultado.isFuncionario ? resultado.perfil?.cargo : `TURMA ${resultado.perfil?.turma || '---'}`}
                   </p>
                 </div>
@@ -171,7 +172,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
 
               <button 
                 onClick={() => setFormAtivo('atendimento')}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase transition-all flex items-center gap-3 shadow-xl hover:scale-105"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black text-xs uppercase transition-all flex items-center gap-3 shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95"
               >
                 <PlusCircle size={20} /> NOVO ATENDIMENTO
               </button>
@@ -273,17 +274,10 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                     </thead>
                     <tbody className="divide-y divide-slate-50">
                       {resultado.atendimentos?.length > 0 ? resultado.atendimentos.map((atend, i) => {
-                        // LÓGICA DE STATUS: Aberto se o status contiver "Aberto" ou se não houver hora de finalização
                         const statusTexto = (atend.statusAtendimento || "").toLowerCase();
                         const estaAberto = statusTexto.includes("aberto") || statusTexto.includes("aguardando") || !atend.horaFinalizacao;
-                        
-                        // LÓGICA DE CORES DE CONDUTA
                         const foiParaHospital = atend.destinoHospital?.toLowerCase().includes("hospital") || atend.tipoRegistro === "hospital";
-
-                        // CAPTURA DE QUEIXA (Tenta os dois nomes de campo que você tem no Firebase)
                         const queixaDisplay = atend.queixaPrincipal || atend.motivoAtendimento || "NÃO INFORMADA";
-
-                        // CAPTURA DE HORÁRIOS
                         const hInicio = atend.horaInicio || atend.horario || atend.horarioReferencia || "--:--";
                         const hFim = atend.horaFinalizacao || null;
 
@@ -329,11 +323,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                                   }`}>
                                     {estaAberto ? 'STATUS: EM ABERTO' : foiParaHospital ? 'ENCAMINHADO HOSPITAL' : 'ALTA AMBULATORIAL'}
                                   </span>
-                                  {!estaAberto && (
-                                    <span className="text-[9px] font-bold text-slate-400 uppercase italic ml-1">
-                                      Finalizado por: {atend.profissionalNome || 'S/I'}
-                                    </span>
-                                  )}
                                </div>
                             </td>
 
