@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { db, auth } from '../../firebase/firebaseConfig'; // Importado auth
-import { sendPasswordResetEmail } from 'firebase/auth'; // Importado serviço de reset
+import { db, auth } from '../../firebase/firebaseConfig'; 
+import { sendPasswordResetEmail } from 'firebase/auth'; 
 import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, deleteField, serverTimestamp, addDoc } from 'firebase/firestore'; 
 import { 
   Users, Trash2, CheckCircle, XCircle, Search, 
   LayoutDashboard, UserRound, Stethoscope, ClipboardList, Lock, FolderSearch,
-  LogOut, HeartPulse, BarChart3, KeyRound // Adicionado KeyRound para o reset
+  LogOut, HeartPulse, BarChart3, KeyRound, Contact
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -35,7 +35,6 @@ const GestaoUsuarios = () => {
     } catch (e) { console.error("Erro ao salvar log"); }
   };
 
-  // NOVA FUNÇÃO: RESET DE SENHA VIA FIREBASE AUTH
   const resetarSenha = async (email, nome) => {
     if (!email) return toast.error("E-mail não localizado para este usuário.");
     
@@ -78,6 +77,8 @@ const GestaoUsuarios = () => {
         [`modulosSidebar.${modulo}`]: !valorAtual,
         currentSessionId: usuarioAlvo?.currentSessionId || ""
       };
+      
+      // Limpeza de campos legados se necessário
       if (modulo === 'relatorios') { updates['modulosSidebar.triagem'] = deleteField(); }
       
       await updateDoc(doc(db, "usuarios", userId), updates);
@@ -103,7 +104,9 @@ const GestaoUsuarios = () => {
         "modulosSidebar.pasta_digital": liberado,
         "modulosSidebar.pacientes": liberado,
         "modulosSidebar.relatorios": liberado,
-        "modulosSidebar.saude_escolar": liberado, 
+        "modulosSidebar.saude_escolar": liberado,
+        "modulosSidebar.espelho": liberado, // Contato do Aluno
+        "modulosSidebar.auditoria": liberado, // Auditoria de Saúde
         "modulosSidebar.triagem": deleteField() 
       });
       
@@ -184,19 +187,20 @@ const GestaoUsuarios = () => {
                   </td>
 
                   <td className="p-6 text-center">
-                    <div className="flex justify-center gap-2">
-                      <ModuloBtn label="Dash" icon={<LayoutDashboard size={16} />} ativo={u.modulosSidebar?.dashboard} onClick={() => toggleModulo(u.id, 'dashboard', u.modulosSidebar?.dashboard)} />
-                      <ModuloBtn label="Atend" icon={<Stethoscope size={16} />} ativo={u.modulosSidebar?.atendimento} onClick={() => toggleModulo(u.id, 'atendimento', u.modulosSidebar?.atendimento)} />
-                      <ModuloBtn label="Saúde" icon={<HeartPulse size={16} />} ativo={u.modulosSidebar?.saude_escolar} onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} />
-                      <ModuloBtn label="Pasta" icon={<FolderSearch size={16} />} ativo={u.modulosSidebar?.pasta_digital} onClick={() => toggleModulo(u.id, 'pasta_digital', u.modulosSidebar?.pasta_digital)} />
-                      <ModuloBtn label="Cads" icon={<UserRound size={16} />} ativo={u.modulosSidebar?.pacientes} onClick={() => toggleModulo(u.id, 'pacientes', u.modulosSidebar?.pacientes)} />
-                      <ModuloBtn label="BAENF" icon={<ClipboardList size={16} />} ativo={u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem} onClick={() => toggleModulo(u.id, 'relatorios', u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem)} />
+                    <div className="flex justify-center gap-1.5 flex-wrap max-w-[400px] mx-auto">
+                      <ModuloBtn label="Dash" icon={<LayoutDashboard size={14} />} ativo={u.modulosSidebar?.dashboard} onClick={() => toggleModulo(u.id, 'dashboard', u.modulosSidebar?.dashboard)} />
+                      <ModuloBtn label="Atend" icon={<Stethoscope size={14} />} ativo={u.modulosSidebar?.atendimento} onClick={() => toggleModulo(u.id, 'atendimento', u.modulosSidebar?.atendimento)} />
+                      <ModuloBtn label="Contato" icon={<Contact size={14} />} ativo={u.modulosSidebar?.espelho} onClick={() => toggleModulo(u.id, 'espelho', u.modulosSidebar?.espelho)} />
+                      <ModuloBtn label="Saúde" icon={<HeartPulse size={14} />} ativo={u.modulosSidebar?.saude_escolar} onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} />
+                      <ModuloBtn label="Pasta" icon={<FolderSearch size={14} />} ativo={u.modulosSidebar?.pasta_digital} onClick={() => toggleModulo(u.id, 'pasta_digital', u.modulosSidebar?.pasta_digital)} />
+                      <ModuloBtn label="Cads" icon={<UserRound size={14} />} ativo={u.modulosSidebar?.pacientes} onClick={() => toggleModulo(u.id, 'pacientes', u.modulosSidebar?.pacientes)} />
+                      <ModuloBtn label="Auditoria" icon={<BarChart3 size={14} />} ativo={u.modulosSidebar?.auditoria} onClick={() => toggleModulo(u.id, 'auditoria', u.modulosSidebar?.auditoria)} />
+                      <ModuloBtn label="BAENF" icon={<ClipboardList size={14} />} ativo={u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem} onClick={() => toggleModulo(u.id, 'relatorios', u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem)} />
                     </div>
                   </td>
 
                   <td className="p-6">
                     <div className="flex items-center justify-center gap-2">
-                      {/* BOTÃO RESET DE SENHA */}
                       <button 
                         onClick={() => resetarSenha(u.email, u.nome)}
                         className="p-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
@@ -244,7 +248,7 @@ const ModuloBtn = ({ icon, ativo, onClick, label }) => (
     onClick={onClick} title={label}
     className={`p-2 rounded-xl border-2 transition-all duration-300 ${ativo ? 'border-blue-500 bg-blue-50 text-blue-600 shadow-sm' : 'border-slate-100 bg-slate-50 text-slate-300'}`}
   >
-    {ativo ? icon : <Lock size={16} />}
+    {ativo ? icon : <Lock size={14} />}
   </button>
 );
 

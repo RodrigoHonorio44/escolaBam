@@ -4,7 +4,8 @@ import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs
 import { useNavigate } from 'react-router-dom'; 
 import { 
   ClipboardCheck, HeartPulse, ShieldCheck, AlertTriangle, 
-  Phone, Save, FileText, Loader2, ChevronLeft, Heart, Search, CheckCircle2, User
+  Phone, Save, FileText, Loader2, ChevronLeft, Heart, Search, CheckCircle2, User,
+  Stethoscope, Baby, Activity, Printer
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -14,7 +15,6 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
   const [fetching, setFetching] = useState(false);
   const [buscandoNome, setBuscandoNome] = useState(false);
   
-  // Estados para busca dinâmica
   const [sugestoes, setSugestoes] = useState([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const campoBuscaRef = useRef(null);
@@ -27,30 +27,49 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
     alergias: { possui: 'Não', detalhes: '' },
     medicacaoContinua: { possui: 'Não', detalhes: '' },
     cirurgias: { possui: 'Não', detalhes: '' },
-    diabetes: { possui: 'Não', detalhes: '' },
+    diabetes: { possui: 'Não', tipo: '' }, 
     asma: { possui: 'Não', detalhes: '' },
     doencasCardiacas: { possui: 'Não', detalhes: '' },
     epilepsia: { possui: 'Não' },
-    carteiraVacina: 'Não',
-    vacinaAtualizada: 'Não',
-    contatoEmergenciaPrioridade: '',
-    contatoEmergenciaOutro: '',
-    planoSaude: { possui: 'Não', detalhes: '' },
+    desmaioConvulsao: 'Não',
+    problemaColuna: { possui: 'Não', detalhes: '' },
     restricoesAlimentares: { possui: 'Não', detalhes: '' },
     necessidadesEspeciais: { possui: 'Não', detalhes: '' },
-    historicoViolencia: { possui: 'Não', detalhes: '' },
-    atestadoAtividadeFisica: '',
+    diagnosticoNeuro: { possui: 'Não', detalhes: '' }, 
+    atrasoDesenvolvimento: { possui: 'Não', detalhes: '' },
+    atrasoCrescimento: { possui: 'Não', detalhes: '' },
+    tratamentoEspecializado: { 
+      possui: 'Não', 
+      psicologo: false, 
+      fonoaudiologo: false, 
+      terapiaOcupacional: false, 
+      outro: '' 
+    },
+    vacinaStatus: '', 
+    carteiraVacina: 'Não',
+    vacinaAtualizada: 'Não',
+    dentistaUltimaConsulta: '', 
+    tipoParto: '', 
+    viverCom: '', 
+    dificuldades: {
+      enxergar: false,
+      falar: false,
+      ouvir: false,
+      andar: false,
+      movimentarMembros: false
+    },
+    caminharDificuldade: 'Não',
+    contatoEmergenciaPrioridade: '',
     contatos: [
       { nome: '', telefone: '' },
       { nome: '', telefone: '' }
     ],
     autorizacaoEmergencia: false,
-    pacienteId: '' 
+    pacienteId: '',
   }), []);
 
   const [formData, setFormData] = useState(estadoInicial);
 
-  // Fecha sugestões ao clicar fora
   useEffect(() => {
     const clickFora = (e) => {
       if (campoBuscaRef.current && !campoBuscaRef.current.contains(e.target)) setMostrarSugestoes(false);
@@ -59,10 +78,79 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
     return () => document.removeEventListener('mousedown', clickFora);
   }, []);
 
-  const handleActionVoltar = () => {
-    if (modoPastaDigital && onClose) onClose();
-    else if (onVoltar) onVoltar();
-    else navigate('/dashboard');
+  // --- FUNÇÃO DE IMPRESSÃO ---
+  const imprimirDocumento = () => {
+    if (!formData.alunoNome) {
+      toast.error("Selecione um aluno antes de imprimir.");
+      return;
+    }
+
+    const win = window.open('', '_blank');
+    win.document.write(`
+      <html>
+        <head>
+          <title>Ficha Médica - ${formData.alunoNome}</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px; color: #333; line-height: 1.4; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+            .section { margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 10px; }
+            .section-title { font-weight: bold; text-transform: uppercase; font-size: 12px; color: #2563eb; margin-bottom: 10px; border-bottom: 1px solid #eee; }
+            .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+            .label { font-weight: bold; font-size: 11px; text-transform: uppercase; color: #666; }
+            .value { font-size: 12px; margin-bottom: 5px; }
+            .alerta { color: red; font-weight: bold; }
+            .assinatura { margin-top: 50px; display: flex; justify-content: space-between; }
+            .campo-assinatura { border-top: 1px solid #000; width: 45%; text-align: center; padding-top: 5px; font-size: 10px; }
+            @media print { .no-print { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h2 style="margin:0">FICHA MÉDICA ESCOLAR</h2>
+            <p style="margin:5px 0; font-size: 12px;">Documento de Referência em Saúde do Aluno</p>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Identificação</div>
+            <div class="grid">
+              <div><span class="label">Nome:</span> <div class="value">${formData.alunoNome}</div></div>
+              <div><span class="label">Turma:</span> <div class="value">${formData.turma || '---'}</div></div>
+              <div><span class="label">Data de Nascimento:</span> <div class="value">${formData.dataNascimento || '---'}</div></div>
+              <div><span class="label">Vive com:</span> <div class="value">${formData.viverCom || '---'}</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Histórico e Alertas Clínicos</div>
+            <div class="grid">
+              <div><span class="label">Diabetes:</span> <div class="value ${formData.diabetes.possui === 'Sim' ? 'alerta' : ''}">${formData.diabetes.possui} ${formData.diabetes.tipo ? '('+formData.diabetes.tipo+')' : ''}</div></div>
+              <div><span class="label">Alergias:</span> <div class="value ${formData.alergias.possui === 'Sim' ? 'alerta' : ''}">${formData.alergias.possui} ${formData.alergias.detalhes ? '- '+formData.alergias.detalhes : ''}</div></div>
+              <div><span class="label">Medicação Contínua:</span> <div class="value">${formData.medicacaoContinua.possui} ${formData.medicacaoContinua.detalhes ? '- '+formData.medicacaoContinua.detalhes : ''}</div></div>
+              <div><span class="label">Convulsões/Desmaios:</span> <div class="value">${formData.desmaioConvulsao}</div></div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Emergência e Contatos</div>
+            <div class="grid">
+              <div><span class="label">Avisar Prioridade:</span> <div class="value">${formData.contatoEmergenciaPrioridade || '---'}</div></div>
+              <div><span class="label">Autorização Emergência:</span> <div class="value">${formData.autorizacaoEmergencia ? 'SIM (AUTORIZADO)' : 'NÃO'}</div></div>
+              ${formData.contatos.map((c, i) => `
+                <div><span class="label">Contato ${i+1}:</span> <div class="value">${c.nome} - ${c.telefone}</div></div>
+              `).join('')}
+            </div>
+          </div>
+
+          <div class="assinatura">
+            <div class="campo-assinatura">Assinatura do Responsável</div>
+            <div class="campo-assinatura">Coordenação Escolar / Saúde</div>
+          </div>
+
+          <script>window.print(); setTimeout(() => window.close(), 500);</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
   };
 
   const formatarTelefone = (valor) => {
@@ -73,101 +161,38 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
 
   const buscarSugestoes = async (valor) => {
     const termo = valor.toUpperCase();
-    if (termo.length < 3) {
-      setSugestoes([]);
-      setMostrarSugestoes(false);
-      return;
-    }
-
+    if (termo.length < 3) { setSugestoes([]); setMostrarSugestoes(false); return; }
     setBuscandoNome(true);
     try {
-      const q = query(
-        collection(db, "pastas_digitais"),
-        orderBy("nomeBusca"),
-        startAt(termo),
-        endAt(termo + '\uf8ff'),
-        limit(6)
-      );
-      
+      const q = query(collection(db, "pastas_digitais"), orderBy("nomeBusca"), startAt(termo), endAt(termo + '\uf8ff'), limit(6));
       const snap = await getDocs(q);
-      const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setSugestoes(lista);
+      setSugestoes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setMostrarSugestoes(true);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setBuscandoNome(false);
-    }
+    } catch (error) { console.error(error); } finally { setBuscandoNome(false); }
   };
 
   const selecionarPaciente = async (paciente) => {
     setMostrarSugestoes(false);
     setFetching(true);
     try {
-      const id = paciente.id;
-      const questSnap = await getDoc(doc(db, "questionarios_saude", id));
-
+      const questSnap = await getDoc(doc(db, "questionarios_saude", paciente.id));
       if (questSnap.exists()) {
-        setFormData({ ...estadoInicial, ...questSnap.data(), pacienteId: id });
-        toast.success("Prontuário recuperado!");
+        setFormData({ ...estadoInicial, ...questSnap.data(), pacienteId: paciente.id });
       } else {
         setFormData(prev => ({
           ...prev,
-          pacienteId: id,
-          alunoNome: paciente.nome || '',
-          dataNascimento: paciente.dataNascimento || '',
-          turma: paciente.turma || '',
+          pacienteId: paciente.id,
+          alunoNome: paciente.nome,
+          dataNascimento: paciente.dataNascimento,
+          turma: paciente.turma,
           contatos: [
             { nome: paciente.nomeContato1 || paciente.responsavel || '', telefone: formatarTelefone(paciente.contato || '') },
             { nome: paciente.nomeContato2 || '', telefone: formatarTelefone(paciente.contato2 || '') }
           ]
         }));
-        toast.success("Aluno vinculado!");
       }
-    } catch (error) {
-      toast.error("Erro ao carregar.");
-    } finally {
-      setFetching(false);
-    }
+    } catch (error) { toast.error("Erro ao carregar."); } finally { setFetching(false); }
   };
-
-  const idadeCalculada = useMemo(() => {
-    if (!formData.dataNascimento) return "";
-    const hoje = new Date();
-    const nasc = new Date(formData.dataNascimento);
-    let idade = hoje.getFullYear() - nasc.getFullYear();
-    const m = hoje.getMonth() - nasc.getMonth();
-    if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
-    return idade >= 0 ? `${idade} ANOS` : "";
-  }, [formData.dataNascimento]);
-
-  useEffect(() => {
-    const carregarDados = async () => {
-      if (!dadosEdicao?.id) return;
-      setFetching(true);
-      try {
-        const idLimpo = String(dadosEdicao.id);
-        const questSnap = await getDoc(doc(db, "questionarios_saude", idLimpo));
-        if (questSnap.exists()) {
-          setFormData({ ...estadoInicial, ...questSnap.data(), pacienteId: idLimpo });
-        } else {
-          setFormData(prev => ({
-            ...prev,
-            pacienteId: idLimpo,
-            alunoNome: dadosEdicao.nome || '',
-            dataNascimento: dadosEdicao.dataNascimento || '',
-            turma: dadosEdicao.turma || '',
-            contatos: [
-              { nome: dadosEdicao.nomeContato1 || '', telefone: formatarTelefone(dadosEdicao.contato || '') },
-              { nome: dadosEdicao.nomeContato2 || '', telefone: formatarTelefone(dadosEdicao.contato2 || '') }
-            ]
-          }));
-        }
-      } catch (error) { console.error(error); }
-      finally { setFetching(false); }
-    };
-    carregarDados();
-  }, [dadosEdicao, estadoInicial]);
 
   const handleChange = (path, value) => {
     const keys = path.split('.');
@@ -179,172 +204,198 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
   };
 
   const handleContactChange = (index, field, value) => {
-    setFormData(prev => {
-      const novosContatos = [...prev.contatos];
-      novosContatos[index] = { ...novosContatos[index], [field]: field === 'telefone' ? formatarTelefone(value) : value };
-      return { ...prev, contatos: novosContatos };
-    });
+    const novosContatos = [...formData.contatos];
+    novosContatos[index][field] = field === 'telefone' ? formatarTelefone(value) : value;
+    setFormData(prev => ({ ...prev, contatos: novosContatos }));
+  };
+
+  const handleDificuldadeToggle = (campo) => {
+    setFormData(prev => ({
+      ...prev,
+      dificuldades: { ...prev.dificuldades, [campo]: !prev.dificuldades[campo] }
+    }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.pacienteId) return toast.error("Selecione um aluno da lista.");
-    if (!formData.autorizacaoEmergencia) return toast.error("Autorize o encaminhamento de emergência.");
-
+    if (!formData.pacienteId) return toast.error("Selecione um aluno.");
     setLoading(true);
     try {
-      const dadosParaSalvar = { 
-        ...formData, 
-        nomeBusca: formData.alunoNome.trim().toUpperCase(), 
-        updatedAt: serverTimestamp(), 
-        statusFicha: 'Concluída' 
-      };
+      const dadosParaSalvar = { ...formData, updatedAt: serverTimestamp(), statusFicha: 'Concluída' };
       await setDoc(doc(db, "questionarios_saude", formData.pacienteId), dadosParaSalvar, { merge: true });
-      await setDoc(doc(db, "pastas_digitais", formData.pacienteId), { 
-        temQuestionarioSaude: true, 
-        lastUpdate: serverTimestamp() 
-      }, { merge: true });
-
-      toast.success("Ficha Sincronizada!");
+      toast.success("Ficha Salva!");
       if (onSucesso) onSucesso();
-      if (modoPastaDigital && onClose) onClose();
-    } catch (error) { toast.error("Erro ao salvar."); }
-    finally { setLoading(false); }
+    } catch (error) { toast.error("Erro ao salvar."); } finally { setLoading(false); }
   };
 
-  if (fetching) return (
-    <div className="flex h-screen items-center justify-center bg-white">
-      <Loader2 className="animate-spin text-blue-600" size={40}/>
-    </div>
-  );
-
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-10 bg-[#FBFDFF] min-h-screen selection:bg-blue-100">
+    <div className="max-w-7xl mx-auto p-4 md:p-10 bg-[#FBFDFF] min-h-screen">
       <Toaster position="top-right" />
       
-      <div className="flex justify-between items-center mb-8">
-        <button type="button" onClick={handleActionVoltar} className="group flex items-center gap-3 text-slate-400 hover:text-blue-600 transition-all">
-          <div className="p-2 rounded-xl group-hover:bg-blue-50 transition-colors"><ChevronLeft size={20} /></div>
-          <span className="text-[10px] font-black uppercase tracking-widest">Voltar</span>
-        </button>
-        <div className="bg-rose-50 px-4 py-2 rounded-2xl flex items-center gap-3 border border-rose-100">
-          <Heart size={14} className="text-rose-500 fill-rose-500 animate-pulse"/>
-          <span className="text-rose-600 font-black uppercase text-[9px]">Prontuário Digital</span>
-        </div>
-      </div>
-
       <form onSubmit={handleSubmit} className="space-y-8">
-        
-        {/* CABEÇALHO PRINCIPAL */}
+        {/* HEADER */}
         <div className="bg-white p-8 rounded-[40px] shadow-sm border border-slate-100 flex flex-col lg:flex-row justify-between items-center gap-8">
           <div className="flex items-center gap-6">
-            <div className="bg-blue-600 text-white p-5 rounded-3xl shadow-xl shadow-blue-100">
-                {buscandoNome || loading ? <Loader2 className="animate-spin" size={32} /> : <ClipboardCheck size={32} />}
+            <div className="bg-blue-600 text-white p-5 rounded-3xl">
+              <ClipboardCheck size={32} />
             </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight uppercase italic">
-                Ficha Médica <span className="text-blue-600">Escolar</span>
-              </h1>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mt-1">
-                {formData.pacienteId ? <><CheckCircle2 size={14} className="text-green-500"/> {formData.alunoNome}</> : 'Aguardando seleção de aluno'}
-              </p>
-            </div>
+            <h1 className="text-2xl font-black text-slate-800 uppercase italic">Ficha Médica <span className="text-blue-600">Escolar</span></h1>
           </div>
           
-          <button type="submit" disabled={loading} className="w-full lg:w-auto bg-slate-900 hover:bg-blue-600 text-white px-10 py-5 rounded-[24px] font-black uppercase text-[10px] tracking-widest transition-all hover:scale-[1.02] shadow-xl flex items-center justify-center gap-3">
-            {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Finalizar e Salvar
-          </button>
+          <div className="flex gap-4">
+            <button 
+              type="button" 
+              onClick={imprimirDocumento}
+              className="bg-white text-slate-700 border-2 border-slate-100 px-6 py-5 rounded-[24px] font-black uppercase text-[10px] tracking-widest flex items-center gap-3 hover:bg-slate-50 transition-all"
+            >
+              <Printer size={18} /> Imprimir
+            </button>
+            
+            <button type="submit" className="bg-slate-900 text-white px-10 py-5 rounded-[24px] font-black uppercase text-[10px] tracking-widest flex items-center gap-3">
+              {loading ? <Loader2 className="animate-spin" /> : <Save size={18} />} Salvar Prontuário
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          
-          {/* COLUNA ESQUERDA */}
           <div className="lg:col-span-8 space-y-8">
-            <SectionCard icon={<Search size={18}/>} title="Identificação do Aluno">
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                <div className="md:col-span-6 relative" ref={campoBuscaRef}>
-                  <InputBlock label="Nome Completo">
-                    <div className="relative">
-                      <input 
-                        className={`input-premium ${formData.pacienteId ? 'border-green-200 bg-green-50/20' : ''}`}
-                        value={formData.alunoNome} 
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          handleChange('alunoNome', v);
-                          buscarSugestoes(v);
-                          if(formData.pacienteId) handleChange('pacienteId', '');
-                        }}
-                        placeholder="DIGITE PARA BUSCAR NA PASTA..."
-                      />
-                      <Search size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300" />
-                    </div>
+            
+            <SectionCard icon={<Search size={18}/>} title="Identificação e Social">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="relative" ref={campoBuscaRef}>
+                  <InputBlock label="Nome do Aluno">
+                    <input className="input-premium" value={formData.alunoNome} onChange={(e) => { handleChange('alunoNome', e.target.value); buscarSugestoes(e.target.value); }} placeholder="BUSCAR..." />
                   </InputBlock>
-                  
                   {mostrarSugestoes && sugestoes.length > 0 && (
-                    <div className="absolute z-[100] w-full mt-2 bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                    <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
                       {sugestoes.map((p) => (
-                        <div key={p.id} onClick={() => selecionarPaciente(p)} className="p-4 hover:bg-blue-50 cursor-pointer flex items-center justify-between border-b border-slate-50 last:border-0 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <div className="p-2 bg-blue-100 rounded-lg text-blue-600"><User size={14}/></div>
-                            <span className="text-[10px] font-black text-slate-700 uppercase">{p.nome}</span>
-                          </div>
-                          <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">TURMA: {p.turma}</span>
-                        </div>
+                        <div key={p.id} onClick={() => selecionarPaciente(p)} className="p-4 hover:bg-blue-50 cursor-pointer text-[10px] font-black uppercase border-b border-slate-50">{p.nome}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <InputBlock label="O Aluno vive com:">
+                  <select className="input-premium" value={formData.viverCom} onChange={(e) => handleChange('viverCom', e.target.value)}>
+                    <option value="">SELECIONE...</option>
+                    <option value="Pais">PAIS</option>
+                    <option value="Só mãe">SÓ MÃE</option>
+                    <option value="Só pai">SÓ PAI</option>
+                    <option value="Avós">AVÓS</option>
+                    <option value="Avô">AVÔ</option>
+                    <option value="Avó">AVÓ</option>
+                    <option value="Outros">OUTROS</option>
+                  </select>
+                </InputBlock>
+              </div>
+            </SectionCard>
+
+            <SectionCard icon={<HeartPulse size={18}/>} title="Histórico Clínico">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-[10px] font-black text-slate-600 uppercase">Diabetes?</span>
+                    <div className="flex gap-2">
+                      {['Sim', 'Não'].map(opt => (
+                        <button key={opt} type="button" onClick={() => handleChange('diabetes.possui', opt)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black ${formData.diabetes.possui === opt ? 'bg-blue-600 text-white' : 'bg-white text-slate-300'}`}>{opt}</button>
+                      ))}
+                    </div>
+                  </div>
+                  {formData.diabetes.possui === 'Sim' && (
+                    <div className="flex gap-2 mt-3">
+                      {['Tipo 1', 'Tipo 2'].map(tipo => (
+                        <button key={tipo} type="button" onClick={() => handleChange('diabetes.tipo', tipo)} className={`flex-1 py-2 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${formData.diabetes.tipo === tipo ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-400'}`}>{tipo}</button>
                       ))}
                     </div>
                   )}
                 </div>
 
-                <div className="md:col-span-3">
-                  <InputBlock label="Nascimento">
-                    <input type="date" className="input-premium" value={formData.dataNascimento} onChange={(e) => handleChange('dataNascimento', e.target.value)} />
-                  </InputBlock>
-                </div>
-                <div className="md:col-span-3">
-                  <InputBlock label="Idade">
-                    <div className="input-premium bg-slate-50 flex items-center justify-center text-blue-600 font-black">
-                      {idadeCalculada || '--'}
-                    </div>
-                  </InputBlock>
-                </div>
-              </div>
-            </SectionCard>
-
-            <SectionCard icon={<HeartPulse size={18}/>} title="Histórico Clínico Detalhado">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <ToggleInput label="Alergias Graves" value={formData.alergias} onChange={(v) => handleChange('alergias', v)} />
-                <ToggleInput label="Doenças Crônicas" value={formData.historicoDoencas} onChange={(v) => handleChange('historicoDoencas', v)} />
-                <ToggleInput label="Uso de Medicação" value={formData.medicacaoContinua} onChange={(v) => handleChange('medicacaoContinua', v)} />
-                <ToggleInput label="Cirurgias Recentes" value={formData.cirurgias} onChange={(v) => handleChange('cirurgias', v)} />
-                <ToggleInput label="Diabetes" value={formData.diabetes} onChange={(v) => handleChange('diabetes', v)} />
-                <ToggleInput label="Problemas Respiratórios" value={formData.asma} onChange={(v) => handleChange('asma', v)} />
-                <ToggleInput label="Problemas Cardíacos" value={formData.doencasCardiacas} onChange={(v) => handleChange('doencasCardiacas', v)} />
+                <RadioGroup label="Desmaio ou Convulsão?" value={formData.desmaioConvulsao} onChange={(v) => handleChange('desmaioConvulsao', v)} />
+                <ToggleInput label="Alergias" value={formData.alergias} onChange={(v) => handleChange('alergias', v)} />
+                <ToggleInput label="Medicação Contínua" value={formData.medicacaoContinua} onChange={(v) => handleChange('medicacaoContinua', v)} />
                 <ToggleInput label="Epilepsia" value={formData.epilepsia} onChange={(v) => handleChange('epilepsia', v)} />
+                <ToggleInput label="Problemas Respiratórios" value={formData.asma} onChange={(v) => handleChange('asma', v)} />
+                <ToggleInput label="Atraso Desenvolvimento" value={formData.atrasoDesenvolvimento} onChange={(v) => handleChange('atrasoDesenvolvimento', v)} />
+                <ToggleInput label="Atraso Crescimento" value={formData.atrasoCrescimento} onChange={(v) => handleChange('atrasoCrescimento', v)} />
+                <ToggleInput label="Diagnóstico TEA/TDAH" value={formData.diagnosticoNeuro} onChange={(v) => handleChange('diagnosticoNeuro', v)} />
+              </div>
+
+              <div className="mt-6 p-5 bg-blue-50/30 rounded-[30px] border border-blue-100">
+                <div className="flex justify-between items-center mb-4">
+                  <span className="text-[10px] font-black text-blue-800 uppercase italic">Faz tratamento especializado?</span>
+                  <div className="flex gap-2">
+                    {['Sim', 'Não'].map(opt => (
+                      <button key={opt} type="button" onClick={() => handleChange('tratamentoEspecializado.possui', opt)} className={`px-5 py-2 rounded-xl text-[10px] font-black ${formData.tratamentoEspecializado.possui === opt ? 'bg-blue-600 text-white' : 'bg-white text-slate-300'}`}>{opt}</button>
+                    ))}
+                  </div>
+                </div>
+                {formData.tratamentoEspecializado.possui === 'Sim' && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex flex-wrap gap-2">
+                      {['psicologo', 'fonoaudiologo', 'terapiaOcupacional'].map((key) => (
+                        <button key={key} type="button" onClick={() => handleChange(`tratamentoEspecializado.${key}`, !formData.tratamentoEspecializado[key])}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${formData.tratamentoEspecializado[key] ? 'border-blue-500 bg-white text-blue-600' : 'border-transparent bg-slate-100 text-slate-400'}`}>
+                          {key === 'terapiaOcupacional' ? 'T.O' : key}
+                        </button>
+                      ))}
+                    </div>
+                    <input className="input-premium !py-2 !text-[10px]" placeholder="OUTRO QUAL?" value={formData.tratamentoEspecializado.outro} onChange={(e) => handleChange('tratamentoEspecializado.outro', e.target.value)} />
+                  </div>
+                )}
               </div>
             </SectionCard>
 
-            <SectionCard icon={<FileText size={18}/>} title="Restrições e Especialidades">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <ToggleInput label="Restrição Alimentar" value={formData.restricoesAlimentares} onChange={(v) => handleChange('restricoesAlimentares', v)} isTextArea />
-                  <ToggleInput label="Necessidades Especiais" value={formData.necessidadesEspeciais} onChange={(v) => handleChange('necessidadesEspeciais', v)} isTextArea />
-                  <ToggleInput label="Plano de Saúde" value={formData.planoSaude} onChange={(v) => handleChange('planoSaude', v)} />
-                  <ToggleInput label="Histórico de Violência" value={formData.historicoViolencia} onChange={(v) => handleChange('historicoViolencia', v)} />
-               </div>
+            <SectionCard icon={<Activity size={18}/>} title="Dificuldades e Mobilidade">
+              <div className="space-y-6">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Assinale as dificuldades apresentadas:</span>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  {Object.entries({ enxergar: 'Enxergar', falar: 'Falar', ouvir: 'Ouvir', andar: 'Andar', movimentarMembros: 'Membros' }).map(([key, label]) => (
+                    <button key={key} type="button" onClick={() => handleDificuldadeToggle(key)} 
+                      className={`p-3 rounded-2xl border-2 text-[9px] font-black uppercase flex flex-col items-center gap-2 transition-all ${formData.dificuldades[key] ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-50 bg-slate-50 text-slate-400'}`}>
+                      <CheckCircle2 size={16} className={formData.dificuldades[key] ? 'text-blue-500' : 'text-slate-200'} />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                <RadioGroup label="Tem dificuldade para Caminhar?" value={formData.caminharDificuldade} onChange={(v) => handleChange('caminharDificuldade', v)} />
+              </div>
             </SectionCard>
           </div>
 
-          {/* COLUNA DIREITA */}
           <div className="lg:col-span-4 space-y-8">
-            <SectionCard icon={<ShieldCheck size={18}/>} title="Status Vacinal">
-              <div className="space-y-4">
-                <RadioGroup label="Possui Caderneta?" value={formData.carteiraVacina} onChange={(v) => handleChange('carteiraVacina', v)} />
-                <RadioGroup label="Está Atualizada?" value={formData.vacinaAtualizada} onChange={(v) => handleChange('vacinaAtualizada', v)} />
+            <SectionCard icon={<ShieldCheck size={18}/>} title="Prevenção e Vacina">
+              <InputBlock label="Calendário Vacinal">
+                <select className="input-premium" value={formData.vacinaStatus} onChange={(e) => handleChange('vacinaStatus', e.target.value)}>
+                  <option value="">SELECIONE...</option>
+                  <option value="Atualizado">ATUALIZADO</option>
+                  <option value="Atrasado">ATRASADO</option>
+                  <option value="Sem informação">SEM INFORMAÇÃO</option>
+                </select>
+              </InputBlock>
+              <div className="mt-4 grid gap-4">
+                <InputBlock label="Dentista (Última Consulta)">
+                  <select className="input-premium" value={formData.dentistaUltimaConsulta} onChange={(e) => handleChange('dentistaUltimaConsulta', e.target.value)}>
+                    <option value="">SELECIONE...</option>
+                    <option value="1 mês">1 MÊS</option>
+                    <option value="3 meses">3 MESES</option>
+                    <option value="6 meses">6 MESES</option>
+                    <option value="1 ano ou mais">1 ANO OU MAIS</option>
+                  </select>
+                </InputBlock>
+                <InputBlock label="Tipo de Parto">
+                  <select className="input-premium" value={formData.tipoParto} onChange={(e) => handleChange('tipoParto', e.target.value)}>
+                    <option value="">SELECIONE...</option>
+                    <option value="Normal">NORMAL</option>
+                    <option value="Cesária">CESÁRIA</option>
+                    <option value="Fórceps">FÓRCEPS</option>
+                    <option value="Prematuro">PREMATURO</option>
+                  </select>
+                </InputBlock>
               </div>
             </SectionCard>
 
-            <SectionCard icon={<AlertTriangle size={18}/>} title="Emergência e Contatos">
+            <SectionCard icon={<AlertTriangle size={18}/>} title="Emergência">
               <div className="space-y-4">
-                <InputBlock label="Avisar primeiro quem?">
+                <InputBlock label="Avisar em prioridade:">
                   <select className="input-premium" value={formData.contatoEmergenciaPrioridade} onChange={(e) => handleChange('contatoEmergenciaPrioridade', e.target.value)}>
                     <option value="">SELECIONE...</option>
                     <option value="Mãe">MÃE</option>
@@ -354,54 +405,38 @@ const QuestionarioSaude = ({ dadosEdicao, onVoltar, onSucesso, onClose, modoPast
                   </select>
                 </InputBlock>
                 
-                {formData.contatoEmergenciaPrioridade === 'Outro' && (
-                  <input placeholder="ESPECIFIQUE O CONTATO..." className="input-premium !py-2 !text-[10px]" value={formData.contatoEmergenciaOutro} onChange={(e) => handleChange('contatoEmergenciaOutro', e.target.value)} />
-                )}
-
-                <div className="pt-4 border-t border-slate-50 space-y-3">
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Contatos Auxiliares</span>
-                  {formData.contatos.map((contato, idx) => (
-                    <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
-                      <input placeholder="NOME" className="input-premium !py-2 !text-[10px] !bg-white" value={contato.nome} onChange={(e) => handleContactChange(idx, 'nome', e.target.value)} />
-                      <input placeholder="TELEFONE" className="input-premium !py-2 !text-[10px] !bg-white" value={contato.telefone} onChange={(e) => handleContactChange(idx, 'telefone', e.target.value)} />
-                    </div>
-                  ))}
-                </div>
+                {formData.contatos.map((contato, idx) => (
+                  <div key={idx} className="p-3 bg-slate-50 rounded-2xl border border-slate-100 space-y-2">
+                    <input placeholder="NOME" className="input-premium !py-2 !text-[10px]" value={contato.nome} onChange={(e) => handleContactChange(idx, 'nome', e.target.value)} />
+                    <input placeholder="TELEFONE" className="input-premium !py-2 !text-[10px]" value={contato.telefone} onChange={(e) => handleContactChange(idx, 'telefone', e.target.value)} />
+                  </div>
+                ))}
               </div>
             </SectionCard>
 
-            <div className={`p-6 rounded-[32px] border-2 transition-all ${formData.autorizacaoEmergencia ? 'bg-blue-600 border-blue-400 text-white shadow-xl shadow-blue-100' : 'bg-white border-slate-100 text-slate-400'}`}>
-                <label className="flex gap-4 cursor-pointer items-center">
-                    <input 
-                      type="checkbox" 
-                      className="w-6 h-6 rounded-lg border-2 border-slate-200 text-blue-500 focus:ring-0" 
-                      checked={formData.autorizacaoEmergencia} 
-                      onChange={(e) => handleChange('autorizacaoEmergencia', e.target.checked)} 
-                    />
-                    <span className="text-[10px] font-black uppercase tracking-tight leading-tight">
-                        Autorizo o encaminhamento para unidade de saúde em caso de emergência.
-                    </span>
-                </label>
+            <div className={`p-6 rounded-[32px] border-2 transition-all ${formData.autorizacaoEmergencia ? 'bg-blue-600 border-blue-400 text-white' : 'bg-white border-slate-100 text-slate-400'}`}>
+              <label className="flex gap-4 cursor-pointer items-center">
+                <input type="checkbox" className="w-6 h-6 rounded-lg" checked={formData.autorizacaoEmergencia} onChange={(e) => handleChange('autorizacaoEmergencia', e.target.checked)} />
+                <span className="text-[10px] font-black uppercase">Autorizo encaminhamento de emergência.</span>
+              </label>
             </div>
           </div>
         </div>
       </form>
-
+      
       <style>{`
-        .input-premium { width: 100%; padding: 0.9rem 1.2rem; background-color: #fff; border-radius: 16px; font-weight: 700; font-size: 0.75rem; outline: none; border: 2px solid #f1f5f9; transition: all 0.3s ease; color: #1e293b; text-transform: uppercase; }
-        .input-premium:focus { border-color: #3b82f6; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.08); }
-        .input-premium::placeholder { color: #cbd5e1; font-size: 0.65rem; }
+        .input-premium { width: 100%; padding: 0.9rem 1.2rem; background-color: #fff; border-radius: 16px; font-weight: 700; font-size: 0.75rem; border: 2px solid #f1f5f9; outline: none; transition: all 0.3s; text-transform: uppercase; }
+        .input-premium:focus { border-color: #3b82f6; }
       `}</style>
     </div>
   );
 };
 
-// COMPONENTES AUXILIARES
 const SectionCard = ({ icon, title, children }) => (
-  <div className="bg-white p-6 md:p-8 rounded-[35px] border border-slate-100 shadow-sm relative">
+  <div className="bg-white p-6 rounded-[35px] border border-slate-100 shadow-sm relative">
     <div className="flex items-center gap-3 mb-6">
-        <div className="text-blue-600 bg-blue-50 p-2 rounded-xl">{icon}</div>
-        <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">{title}</h2>
+      <div className="text-blue-600 bg-blue-50 p-2 rounded-xl">{icon}</div>
+      <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest italic">{title}</h2>
     </div>
     {children}
   </div>
@@ -409,7 +444,7 @@ const SectionCard = ({ icon, title, children }) => (
 
 const InputBlock = ({ label, children }) => (
   <div className="space-y-2">
-    <label className="text-[9px] font-black text-slate-400 uppercase ml-1 tracking-widest">{label}</label>
+    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
     {children}
   </div>
 );
@@ -419,34 +454,24 @@ const RadioGroup = ({ label, value, onChange }) => (
     <span className="text-[10px] font-bold text-slate-500 uppercase">{label}</span>
     <div className="flex gap-2">
       {['Sim', 'Não'].map(opt => (
-        <button key={opt} type="button" onClick={() => onChange(opt)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${value === opt ? 'bg-slate-800 text-white shadow-md' : 'bg-white text-slate-300 border border-slate-100'}`}>
-          {opt}
-        </button>
+        <button key={opt} type="button" onClick={() => onChange(opt)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black transition-all ${value === opt ? 'bg-slate-800 text-white' : 'bg-white text-slate-300'}`}>{opt}</button>
       ))}
     </div>
   </div>
 );
 
-const ToggleInput = ({ label, value, onChange, isTextArea = false }) => (
-  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100 transition-all hover:bg-white group">
+const ToggleInput = ({ label, value, onChange }) => (
+  <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
     <div className="flex items-center justify-between gap-4">
       <span className="text-[10px] font-black text-slate-600 uppercase italic tracking-tighter">{label}</span>
       <div className="flex gap-1">
         {['Sim', 'Não'].map((opt) => (
-          <button key={opt} type="button" onClick={() => onChange({ ...value, possui: opt })}
-            className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-all ${value.possui === opt ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-300 border border-slate-100'}`}
-          >{opt}</button>
+          <button key={opt} type="button" onClick={() => onChange({ ...value, possui: opt })} className={`px-3 py-1.5 rounded-xl text-[9px] font-black ${value.possui === opt ? 'bg-blue-600 text-white' : 'bg-white text-slate-300'}`}>{opt}</button>
         ))}
       </div>
     </div>
     {value.possui === 'Sim' && (
-      <div className="animate-in slide-in-from-top-1 duration-200">
-        {isTextArea ? (
-           <textarea className="input-premium mt-3 !py-2 !text-[10px] border-blue-100 min-h-[60px]" placeholder="DESCREVA AQUI..." value={value.detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} />
-        ) : (
-          <input className="input-premium mt-3 !py-2 !text-[10px] border-blue-100" placeholder="ESPECIFIQUE..." value={value.detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} />
-        )}
-      </div>
+      <input className="input-premium mt-3 !py-2 !text-[10px]" placeholder="ESPECIFIQUE..." value={value.detalhes} onChange={(e) => onChange({ ...value, detalhes: e.target.value })} />
     )}
   </div>
 );

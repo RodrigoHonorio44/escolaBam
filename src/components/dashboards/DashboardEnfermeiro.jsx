@@ -6,7 +6,7 @@ import {
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
   ChevronDown, LogOut, FolderSearch, Lock,
   Settings, Bell, FileBarChart, Menu, ChevronLeft, 
-  Sun, Moon, LifeBuoy, ShieldAlert, BarChart3
+  Sun, Moon, LifeBuoy, ShieldAlert, BarChart3, Contact
 } from "lucide-react";
 
 // Importações de páginas
@@ -18,11 +18,12 @@ import FormCadastroFuncionario from "../../pages/cadastros/FormCadastroFuncionar
 import PastaDigital from "../PastaDigital";
 import QuestionarioSaude from "../../pages/cadastros/QuestionarioSaude"; 
 import RelatorioMedicoPro from "../../components/RelatorioMedicoPro"; 
+import ContatoAluno from "../../components/ContatoAluno"; // <--- Importado aqui
 
 // --- COMPONENTES AUXILIARES ---
 const TelaBloqueioLicenca = ({ darkMode, onLogout }) => (
-  <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-6 backdrop-blur-md ${darkMode ? "bg-black/90" : "bg-slate-900/80"}`}>
-    <div className={`max-w-md w-full p-10 rounded-[40px] text-center shadow-2xl animate-in zoom-in duration-300 ${darkMode ? "bg-[#0F1C2E] border border-white/10" : "bg-white"}`}>
+  <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-6 backdrop-blur-md ${darkMode ? "bg-black/95" : "bg-slate-900/80"}`}>
+    <div className={`max-w-md w-full p-10 rounded-[40px] text-center shadow-2xl animate-in zoom-in duration-300 ${darkMode ? "bg-[#020617] border border-slate-800" : "bg-white"}`}>
       <div className="w-20 h-20 bg-rose-500/20 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
         <ShieldAlert size={40} />
       </div>
@@ -42,11 +43,11 @@ const TelaBloqueioLicenca = ({ darkMode, onLogout }) => (
 
 const TelaSuporte = ({ darkMode }) => (
   <div className="flex flex-col items-center justify-center min-h-[70vh] p-4 animate-in fade-in zoom-in duration-500 text-center">
-      <div className={`max-w-md w-full p-12 rounded-[50px] border ${darkMode ? "bg-[#0F1C2E] border-white/5" : "bg-white border-slate-200"}`}>
+      <div className={`max-w-md w-full p-12 rounded-[50px] border shadow-2xl ${darkMode ? "bg-[#020617] border-slate-800" : "bg-white border-slate-200"}`}>
         <LifeBuoy size={40} className="mx-auto mb-6 text-blue-600" />
         <h2 className={`text-2xl font-black uppercase italic mb-6 ${darkMode ? "text-white" : "text-slate-900"}`}>Suporte Técnico</h2>
-        <a href="https://wa.me/5521975966330" className="block w-full bg-[#25D366] text-white font-black py-4 rounded-2xl mb-4">WhatsApp</a>
-        <p className="text-[10px] text-slate-500 font-bold uppercase">rodrigohono21@gmail.com</p>
+        <a href="https://wa.me/5521975966330" className="block w-full bg-[#25D366] text-white font-black py-4 rounded-2xl mb-4 hover:scale-105 transition-transform shadow-lg shadow-green-500/20">WhatsApp</a>
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">rodrigohono21@gmail.com</p>
       </div>
   </div>
 );
@@ -57,9 +58,10 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const [cadastroMode, setCadastroMode] = useState("aluno");
   const [menuAberto, setMenuAberto] = useState(null); 
   const [isExpanded, setIsExpanded] = useState(true);
-  const [darkMode, setDarkMode] = useState(true); 
-  const [dadosParaEdicao, setDadosParaEdicao] = useState(null);
   
+  const [darkMode, setDarkMode] = useState(false); 
+  
+  const [dadosParaEdicao, setDadosParaEdicao] = useState(null);
   const unsubscribeRef = useRef(null);
 
   useEffect(() => {
@@ -102,10 +104,10 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     setActiveTab("pasta_digital");
   };
 
-  // --- MENU ATUALIZADO ---
   const menuItems = [
     { id: "home", label: "Dashboard", icon: <LayoutDashboard size={20} />, key: "dashboard" },
     { id: "atendimento", label: "Atendimento", icon: <Stethoscope size={20} />, key: "atendimento" },
+    { id: "contato", label: "Contato do Aluno", icon: <Contact size={20} />, key: "espelho" },
     { id: "pasta_digital", label: "Pasta Digital", icon: <FolderSearch size={20} />, key: "pasta_digital" },
     { 
       id: "pacientes", 
@@ -119,23 +121,29 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       ]
     }, 
     { id: "historico", label: "BAENF Antigos", icon: <ClipboardList size={20} />, key: "relatorios" },
-    
-    // NOVO NOME E ÍCONE PARA A AUDITORIA
     { id: "auditoria", label: "Auditoria de Saúde", icon: <BarChart3 size={20} />, key: "dashboard" },
   ];
 
   const theme = {
-    sidebarBg: darkMode ? "bg-[#0A1629]" : "bg-white",
+    sidebarBg: darkMode ? "bg-[#020617]" : "bg-white",
     sidebarText: darkMode ? "text-slate-400" : "text-slate-600",
-    sidebarActive: darkMode ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "bg-blue-50 text-blue-600",
-    contentBg: darkMode ? "bg-[#050B18]" : "bg-slate-50",
-    border: darkMode ? "border-white/5" : "border-slate-200"
+    sidebarActive: darkMode 
+      ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]" 
+      : "bg-blue-50 text-blue-600",
+    contentBg: darkMode ? "bg-[#070e1e]" : "bg-slate-50",
+    border: darkMode ? "border-slate-800" : "border-slate-200",
+    headerBg: darkMode ? "bg-[#020617]" : "bg-white"
   };
 
   const renderContent = () => {
     switch (activeTab) {
       case "home": return <HomeEnfermeiro user={user} setActiveTab={setActiveTab} isLiberado={isLiberado} darkMode={darkMode} />;
       case "atendimento": return <AtendimentoEnfermagem user={user} onVoltar={() => setActiveTab("home")} />;
+      
+      // ABA DE CONTATO ATUALIZADA
+      case "contato": 
+        return <ContatoAluno user={user} onVoltar={() => setActiveTab("home")} darkMode={darkMode} />;
+      
       case "pasta_digital": 
         return (
           <PastaDigital 
@@ -146,22 +154,12 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           />
         );
       case "pacientes":
-        if (cadastroMode === "aluno") {
-          return <FormCadastroAluno dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
-        }
-        if (cadastroMode === "funcionario") {
-          return <FormCadastroFuncionario dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
-        }
-        if (cadastroMode === "saude_escolar") {
-          return <QuestionarioSaude dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab("pasta_digital")} onSucesso={handleSucessoQuestionario} />;
-        }
+        if (cadastroMode === "aluno") return <FormCadastroAluno dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
+        if (cadastroMode === "funcionario") return <FormCadastroFuncionario dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
+        if (cadastroMode === "saude_escolar") return <QuestionarioSaude dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab("pasta_digital")} onSucesso={handleSucessoQuestionario} />;
         return <FormCadastroAluno onVoltar={() => setActiveTab("home")} />;
       case "historico": return <HistoricoAtendimentos user={user} onVoltar={() => setActiveTab("home")} />;
-      
-      // LOGICA DE REDERIZAÇÃO DA AUDITORIA
-      case "auditoria": 
-        return <RelatorioMedicoPro darkMode={darkMode} onVoltar={() => setActiveTab("home")} />;
-      
+      case "auditoria": return <RelatorioMedicoPro darkMode={darkMode} onVoltar={() => setActiveTab("home")} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
       default: return <HomeEnfermeiro user={user} darkMode={darkMode} />;
     }
@@ -171,18 +169,20 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     <div className={`fixed inset-0 z-[999] flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${theme.contentBg}`}>
       { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />}
 
-      <div className={`w-16 flex flex-col items-center py-8 gap-8 border-r shrink-0 z-50 ${darkMode ? "bg-[#050B18] border-white/5" : "bg-slate-100 border-slate-200"}`}>
+      {/* MINI BAR ESQUERDA */}
+      <div className={`w-16 flex flex-col items-center py-8 gap-8 border-r shrink-0 z-50 ${darkMode ? "bg-[#020617] border-slate-800" : "bg-slate-100 border-slate-200"}`}>
           <div className="text-blue-500"><Stethoscope size={24} /></div>
-          <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-xl transition-all ${darkMode ? "text-yellow-400 hover:bg-white/5" : "text-slate-600 hover:bg-slate-200"}`}>
+          <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-xl transition-all ${darkMode ? "text-yellow-400 bg-white/5 hover:bg-white/10" : "text-slate-600 hover:bg-slate-200"}`}>
             {darkMode ? <Sun size={20} /> : <Moon size={20} />}
           </button>
-          <button onClick={() => setActiveTab("suporte")} className={`mt-auto mb-4 p-2 rounded-xl transition-all ${activeTab === "suporte" ? "bg-blue-600 text-white" : "text-emerald-500/50 hover:bg-white/5"}`}>
+          <button onClick={() => setActiveTab("suporte")} className={`mt-auto mb-4 p-2 rounded-xl transition-all ${activeTab === "suporte" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-blue-500"}`}>
               <LifeBuoy size={20} />
           </button>
       </div>
 
+      {/* SIDEBAR PRINCIPAL */}
       <aside className={`${isExpanded ? "w-64" : "w-0 overflow-hidden"} ${theme.sidebarBg} flex flex-col shrink-0 transition-all duration-300 relative border-r ${theme.border} shadow-2xl`}>
-        <button onClick={() => setIsExpanded(!isExpanded)} className={`absolute -right-3 top-24 rounded-full p-1 border z-50 ${darkMode ? "bg-[#0A1629] border-white/10 text-slate-400" : "bg-white border-slate-200 text-slate-600"}`}>
+        <button onClick={() => setIsExpanded(!isExpanded)} className={`absolute -right-3 top-24 rounded-full p-1 border z-50 ${darkMode ? "bg-[#020617] border-slate-700 text-slate-400" : "bg-white border-slate-200 text-slate-600"}`}>
           <ChevronLeft size={16} className={`${!isExpanded && "rotate-180"}`} />
         </button>
 
@@ -202,15 +202,11 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                     disabled={!liberado}
                     onClick={() => {
                       if (item.subItems) setMenuAberto(menuAberto === item.id ? null : item.id);
-                      else { 
-                        setActiveTab(item.id); 
-                        setMenuAberto(null); 
-                        setDadosParaEdicao(null); 
-                      }
+                      else { setActiveTab(item.id); setMenuAberto(null); setDadosParaEdicao(null); }
                     }}
                     className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl transition-all ${
-                      !liberado ? "opacity-30 cursor-not-allowed grayscale" : 
-                      isActive ? theme.sidebarActive : `${theme.sidebarText} hover:bg-blue-500/5 hover:text-blue-500`
+                      !liberado ? "opacity-20 cursor-not-allowed grayscale" : 
+                      isActive ? theme.sidebarActive : `${theme.sidebarText} hover:bg-blue-500/10 hover:text-blue-500`
                     }`}
                   >
                     <div className="flex items-center gap-3">
@@ -222,7 +218,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                     {item.subItems && liberado && <ChevronDown size={14} className={`${menuAberto === item.id ? "rotate-180" : ""}`} />}
                   </button>
                   {item.subItems && liberado && menuAberto === item.id && (
-                    <div className={`ml-9 mt-2 space-y-2 border-l pl-4 ${darkMode ? "border-white/10" : "border-slate-200"}`}>
+                    <div className={`ml-9 mt-2 space-y-2 border-l pl-4 ${theme.border}`}>
                       {item.subItems.map(sub => (
                         <button key={sub.id} onClick={() => { setActiveTab(item.id); setCadastroMode(sub.id); setDadosParaEdicao(null); }} className={`w-full text-left text-[9px] font-black uppercase tracking-widest ${cadastroMode === sub.id && isActive ? "text-blue-500" : "text-slate-500 hover:text-blue-500"}`}>
                           {sub.label}
@@ -236,9 +232,9 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           </nav>
         </div>
 
-        <div className={`p-6 border-t ${theme.border} ${darkMode ? "bg-black/20" : "bg-slate-50"}`}>
+        <div className={`p-6 border-t ${theme.border} ${darkMode ? "bg-black/40" : "bg-slate-50"}`}>
           <div className="flex items-center gap-3 mb-6 px-2">
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-black text-white text-xs uppercase">
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center font-black text-white text-xs uppercase shadow-lg shadow-blue-500/30">
               {user?.nome?.substring(0, 2) || "EN"}
             </div>
             <div className="flex flex-col overflow-hidden uppercase font-black italic">
@@ -246,14 +242,15 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
               <span className="text-blue-500 text-[7px] tracking-widest">Enfermagem</span>
             </div>
           </div>
-          <button onClick={handleLogoutClick} className="flex items-center gap-3 text-red-500/80 hover:text-red-500 px-2 transition-all">
-            <LogOut size={16} /> <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
+          <button onClick={handleLogoutClick} className="flex items-center gap-3 text-red-500/80 hover:text-red-500 px-2 transition-all group">
+            <LogOut size={16} className="group-hover:translate-x-1 transition-transform" /> 
+            <span className="text-[10px] font-black uppercase tracking-widest">Sair</span>
           </button>
         </div>
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className={`h-20 border-b flex items-center justify-between px-8 shrink-0 ${darkMode ? "bg-[#0A1629] border-white/5" : "bg-white border-slate-200"}`}>
+        <header className={`h-20 border-b flex items-center justify-between px-8 shrink-0 ${theme.headerBg} ${theme.border}`}>
           <div className="flex items-center gap-4">
               {!isExpanded && (
                 <button onClick={() => setIsExpanded(true)} className={`p-2 rounded-lg ${darkMode ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600"}`}>
