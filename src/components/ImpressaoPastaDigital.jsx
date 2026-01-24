@@ -8,11 +8,17 @@ import React, { useEffect } from 'react';
 const gerarHTMLImpressao = (atend) => {
   const dataEmissao = new Date().toLocaleString('pt-BR');
   
-  // Normalização de dados para evitar "undefined"
-  const nomePaciente = atend.nomePaciente || "Não identificado";
-  const dataAtend = atend.dataAtendimento || atend.data || "---";
-  const status = atend.statusAtendimento || "Aberto";
-  const foiHospital = atend.encaminhadoHospital?.toString().toLowerCase().trim() === 'sim' || status.includes("Remoção");
+  // Função para deixar o texto bonito no papel (Capitalize)
+  const formatarParaPrint = (texto) => {
+    if (!texto) return "---";
+    return texto.toString().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+  };
+
+  // Normalização de dados e fallbacks
+  const nomePaciente = formatarParaPrint(atend.nomePaciente || atend.nomeAluno);
+  const escolaNome = atend.escola?.toUpperCase() || 'UNIDADE DE ATENDIMENTO ESCOLAR';
+  const status = (atend.statusAtendimento || "aberto").toLowerCase();
+  const foiHospital = atend.tipoRegistro?.toLowerCase() === 'remoção' || status.includes("remoção");
 
   return `
     <html>
@@ -71,7 +77,7 @@ const gerarHTMLImpressao = (atend) => {
             margin-bottom: 15px; padding: 12px; border: 1px solid #f1f5f9; border-radius: 8px; background: #fff;
           }
           .content-title { font-size: 10px; font-weight: 900; text-transform: uppercase; color: #334155; margin-bottom: 6px; border-bottom: 2px solid #f1f5f9; padding-bottom: 4px; }
-          .content-text { font-size: 12px; line-height: 1.6; color: #0f172a; white-space: pre-wrap; font-weight: 500; }
+          .content-text { font-size: 12px; line-height: 1.6; color: #0f172a; white-space: pre-wrap; font-weight: 500; text-transform: uppercase; }
 
           .hospital-box {
             border: 2px solid #2563eb; background: #f0f7ff; padding: 20px; border-radius: 15px; margin-top: 15px;
@@ -101,17 +107,17 @@ const gerarHTMLImpressao = (atend) => {
           <header class="header">
             <div class="brand">
               <h1>RODHON <span style="color:#2563eb">CLINIC</span></h1>
-              <p>${atend.escola || 'Unidade de Atendimento Escolar'}</p>
+              <p>${escolaNome}</p>
             </div>
             <div class="doc-type">
               <div>Boletim de Atendimento de Enfermagem</div>
-              <h2>${atend.id.substring(0, 8).toUpperCase()}</h2>
+              <h2>${atend.id?.substring(0, 8).toUpperCase() || 'DRAFT'}</h2>
             </div>
           </header>
 
-          ${atend.alunoPossuiAlergia === 'Sim' || atend.qualAlergia ? `
+          ${(atend.qualAlergia && atend.qualAlergia.length > 2) ? `
             <div class="alerta-alergia">
-              ⚠️ ATENÇÃO: PACIENTE POSSUI ALERGIAS: ${atend.qualAlergia || 'NÃO ESPECIFICADA'}
+              ⚠️ ATENÇÃO: PACIENTE POSSUI ALERGIAS: ${atend.qualAlergia.toUpperCase()}
             </div>
           ` : ''}
 
@@ -127,23 +133,23 @@ const gerarHTMLImpressao = (atend) => {
             </div>
             <div class="info-item">
               <div class="label">Turma/Vínculo</div>
-              <div class="value">${atend.turma || atend.cargo || '---'}</div>
+              <div class="value">${atend.turma || '---'}</div>
             </div>
             <div class="info-item">
               <div class="label">Data do Atendimento</div>
-              <div class="value">${dataAtend}</div>
+              <div class="value">${atend.data || '---'}</div>
             </div>
             <div class="info-item">
               <div class="label">Hora Entrada</div>
               <div class="value">${atend.horario || '---'}</div>
             </div>
             <div class="info-item">
-              <div class="label">Idade</div>
+              <div class="label">Idade Estimada</div>
               <div class="value">${atend.idade ? atend.idade + ' anos' : '---'}</div>
             </div>
             <div class="info-item">
-              <div class="label">Sexo</div>
-              <div class="value">${atend.sexo || '---'}</div>
+              <div class="label">Tipo de Registro</div>
+              <div class="value">${atend.tipoRegistro || 'Local'}</div>
             </div>
           </div>
 
@@ -155,15 +161,15 @@ const gerarHTMLImpressao = (atend) => {
             </div>
             <div class="info-item">
               <div class="label">P. Arterial</div>
-              <div class="value">${atend.pressaoArterial || '---'}</div>
+              <div class="value">${atend.pressaoArterial || atend.pa || '---'}</div>
             </div>
             <div class="info-item">
               <div class="label">F. Cardíaca</div>
-              <div class="value">${atend.frequenciaCardiaca ? atend.frequenciaCardiaca + ' BPM' : '---'}</div>
+              <div class="value">${atend.frequenciaCardiaca || atend.fc ? (atend.frequenciaCardiaca || atend.fc) + ' BPM' : '---'}</div>
             </div>
             <div class="info-item">
               <div class="label">Sat. O2</div>
-              <div class="value">${atend.saturacao ? atend.saturacao + ' %' : '---'}</div>
+              <div class="value">${atend.saturacao || atend.spo2 ? (atend.saturacao || atend.spo2) + ' %' : '---'}</div>
             </div>
             <div class="info-item">
               <div class="label">Glicemia (HGT)</div>
@@ -175,20 +181,13 @@ const gerarHTMLImpressao = (atend) => {
           
           <div class="content-block">
             <div class="content-title">Relato da Queixa / Motivo do Atendimento</div>
-            <div class="content-text">${atend.motivoAtendimento || atend.motivoEncaminhamento || atend.relatoCurto || 'Não informado'}</div>
+            <div class="content-text">${atend.relatoOcorrencia || atend.motivoAtendimento || 'Não informado'}</div>
           </div>
 
           <div class="content-block">
             <div class="content-title">Exame Físico e Procedimentos Realizados</div>
-            <div class="content-text">${atend.procedimentos || atend.detalheQueixa || 'Paciente avaliado pela equipe de enfermagem escolar.'}</div>
+            <div class="content-text">${atend.procedimentos || 'Paciente avaliado pela equipe de enfermagem escolar conforme protocolos vigentes.'}</div>
           </div>
-
-          ${atend.medicacao ? `
-          <div class="content-block">
-            <div class="content-title">Medicações Administradas</div>
-            <div class="content-text">${atend.medicacao}</div>
-          </div>
-          ` : ''}
 
           <div class="section-label">4. Desfecho da Unidade</div>
           <div class="info-grid">
@@ -200,11 +199,11 @@ const gerarHTMLImpressao = (atend) => {
             </div>
             <div class="info-item" style="grid-column: span 2;">
               <div class="label">Responsável / Destino</div>
-              <div class="value">${atend.destinoHospital || atend.responsavelCiente || 'Retornou à atividade'}</div>
+              <div class="value">${atend.responsavelCiente || 'Retornou à atividade escolar'}</div>
             </div>
           </div>
 
-          ${status === 'Finalizado' ? `
+          ${status === 'finalizado' ? `
             <div class="section-label" style="background: #2563eb">5. Contra-Referência (Retorno do Hospital)</div>
             <div class="hospital-box">
               <div class="content-block" style="border:none; background:transparent; padding:0; margin-bottom:15px;">
@@ -226,15 +225,15 @@ const gerarHTMLImpressao = (atend) => {
 
           <footer class="footer">
             <div class="meta-info">
-              Documento assinado digitalmente.<br>
-              Data de Emissão: ${dataEmissao}<br>
-              Código de Autenticidade: ${atend.id}
+              Documento gerado pelo sistema RODHON.<br>
+              Emissão: ${dataEmissao}<br>
+              ID: ${atend.id}
             </div>
             <div class="signature-box">
               <div class="sig-line"></div>
-              <div class="sig-name">${atend.finalizadoPor || atend.profissionalNome || 'Profissional de Enfermagem'}</div>
+              <div class="sig-name">${formatarParaPrint(atend.finalizadoPor || atend.profissionalNome)}</div>
               <div class="sig-role">Enfermagem Escolar</div>
-              <div class="sig-coren">${atend.registroFinalizador || atend.profissionalRegistro || 'COREN ATIVO'}</div>
+              <div class="sig-coren">${(atend.registroFinalizador || atend.profissionalRegistro || 'COREN ATIVO').toUpperCase()}</div>
             </div>
           </footer>
         </div>
@@ -259,10 +258,8 @@ const ImpressaoPastaDigital = ({ atendimento, onFinished }) => {
 
       iframe.contentWindow.focus();
       
-      // Pequeno delay para carregar CSS antes de abrir o print do sistema
       setTimeout(() => {
         iframe.contentWindow.print();
-        // Remove o iframe após a janela de impressão fechar
         setTimeout(() => {
           document.body.removeChild(iframe);
           onFinished();

@@ -118,7 +118,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                 type="text" 
                 required 
                 placeholder="ex: maia giromba" 
-                // A classe 'capitalize' faz a primeira letra parecer maiúscula no input
                 className={`w-full border-2 rounded-2xl px-5 py-4 text-sm font-bold outline-none capitalize transition-all
                   ${erroNome ? 'bg-red-50 border-red-500 focus:ring-red-200' : 'bg-slate-50 border-transparent focus:ring-blue-500'}`} 
                 value={formData.nomePaciente} 
@@ -184,6 +183,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                 <option value="indígena">indígena</option>
               </select>
             </div>
+            
+            {/* PESO ATUALIZADO COM TRATAMENTO PARA AUTO-PREENCHER */}
             <div className="space-y-2">
               <div className="flex justify-between items-center px-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase italic tracking-widest">peso (kg)</label>
@@ -191,8 +192,19 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                   {configUI.naoSabePeso ? 'soube' : 'não sei'}
                 </button>
               </div>
-              <input type="text" disabled={configUI.naoSabePeso} placeholder={configUI.naoSabePeso ? "n/i" : "00.0"} className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase ${configUI.naoSabePeso ? 'bg-slate-200 text-slate-400' : 'bg-slate-50'}`} value={formData.peso} onChange={(e) => updateField('peso', e.target.value)} />
+              <input 
+                type="number" 
+                step="0.1"
+                disabled={configUI.naoSabePeso} 
+                placeholder={configUI.naoSabePeso ? "n/i" : "00.0"} 
+                className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold ${configUI.naoSabePeso ? 'bg-slate-200 text-slate-400' : 'bg-slate-50 text-slate-800'}`} 
+                // Limpeza: Converte vírgula em ponto e remove caracteres não numéricos
+                value={formData.peso ? String(formData.peso).replace(',', '.').replace(/[^0-9.]/g, '') : ''} 
+                onChange={(e) => updateField('peso', e.target.value)} 
+              />
             </div>
+
+            {/* ALTURA ATUALIZADA COM TRATAMENTO PARA AUTO-PREENCHER */}
             <div className="space-y-2">
               <div className="flex justify-between items-center px-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase italic tracking-widest">altura (m)</label>
@@ -200,8 +212,18 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                   {configUI.naoSabeAltura ? 'soube' : 'não sei'}
                 </button>
               </div>
-              <input type="text" disabled={configUI.naoSabeAltura} placeholder={configUI.naoSabeAltura ? "n/i" : "0.00"} className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase ${configUI.naoSabeAltura ? 'bg-slate-200 text-slate-400' : 'bg-slate-50'}`} value={formData.altura} onChange={(e) => updateField('altura', e.target.value)} />
+              <input 
+                type="number" 
+                step="0.01"
+                disabled={configUI.naoSabeAltura} 
+                placeholder={configUI.naoSabeAltura ? "n/i" : "0.00"} 
+                className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold ${configUI.naoSabeAltura ? 'bg-slate-200 text-slate-400' : 'bg-slate-50 text-slate-800'}`} 
+                // Limpeza: Garante que o input receba apenas o valor numérico esperado
+                value={formData.altura ? String(formData.altura).replace(',', '.').replace(/[^0-9.]/g, '') : ''} 
+                onChange={(e) => updateField('altura', e.target.value)} 
+              />
             </div>
+
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest block">data atend.</label>
               <input type="date" required className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold tabular-nums" value={formData.data} onChange={(e) => updateField('data', e.target.value)} />
@@ -219,7 +241,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-red-500 uppercase ml-2 italic tracking-widest block">temperatura *</label>
-              <input type="text" required placeholder="00.0" className="w-full bg-red-50 border-none rounded-2xl px-5 py-4 text-sm font-bold tabular-nums" value={formData.temperatura} onChange={(e) => updateField('temperatura', e.target.value)} />
+              <input type="number" step="0.1" required placeholder="00.0" className="w-full bg-red-50 border-none rounded-2xl px-5 py-4 text-sm font-bold tabular-nums" value={formData.temperatura} onChange={(e) => updateField('temperatura', e.target.value)} />
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-orange-500 uppercase ml-2 tracking-widest block">alergia?</label>

@@ -17,6 +17,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
 
   const dadosIniciais = alunoParaEditar || dadosEdicao;
 
+  // Normalização para minúsculas
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
   const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting, errors } } = useForm({
@@ -47,53 +48,78 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     }
   });
 
-  // --- CORREÇÃO E ATUALIZAÇÃO: CARREGAMENTO FORÇADO VIA SETVALUE ---
+  // Carregamento inicial de dados para edição
   useEffect(() => {
     if (dadosIniciais) {
-      // 1. Tratamento do Nome (Pode vir como 'nome' ou 'nomePaciente')
-      const nomeFinal = dadosIniciais.nome || dadosIniciais.nomePaciente || "";
-      setValue("nome", paraBanco(nomeFinal));
+      const mapeado = {
+        ...dadosIniciais,
+        nome: paraBanco(dadosIniciais.nome || dadosIniciais.nomePaciente || ""),
+        turma: paraBanco(dadosIniciais.turma),
+        sexo: paraBanco(dadosIniciais.sexo),
+        peso: dadosIniciais.peso ? String(dadosIniciais.peso) : "",
+        altura: dadosIniciais.altura ? String(dadosIniciais.altura) : "",
+        temAlergia: dadosIniciais.alunoPossuiAlergia || dadosIniciais.temAlergia || 'não',
+        historicoMedico: dadosIniciais.qualAlergia || dadosIniciais.historicoMedico || '',
+        endereco_rua: paraBanco(dadosIniciais.endereco_rua),
+        endereco_bairro: paraBanco(dadosIniciais.endereco_bairro)
+      };
 
-      // 2. Biometria (Garante conversão de Number para String para o Input)
-      if (dadosIniciais.etnia) {
-        setValue("etnia", String(dadosIniciais.etnia).toLowerCase());
-        setValue("naoSabeEtnia", false);
-      } else {
-        setValue("naoSabeEtnia", true);
-      }
-
-      if (dadosIniciais.peso) {
-        setValue("peso", String(dadosIniciais.peso));
-        setValue("naoSabePeso", false);
-      } else {
-        setValue("naoSabePeso", true);
-      }
-
-      if (dadosIniciais.altura) {
-        setValue("altura", String(dadosIniciais.altura));
-        setValue("naoSabeAltura", false);
-      } else {
-        setValue("naoSabeAltura", true);
-      }
-
-      // 3. Sincronismo de Alergias e Dados Pessoais
-      setValue("temAlergia", dadosIniciais.alunoPossuiAlergia || dadosIniciais.temAlergia || 'não');
-      setValue("historicoMedico", dadosIniciais.qualAlergia || dadosIniciais.historicoMedico || '');
-      setValue("dataNascimento", dadosIniciais.dataNascimento || "");
-      setValue("turma", paraBanco(dadosIniciais.turma));
-      setValue("sexo", paraBanco(dadosIniciais.sexo));
-      setValue("matriculaInteligente", dadosIniciais.matriculaInteligente || "");
-      
-      // 4. Endereço
-      setValue("endereco_cep", dadosIniciais.endereco_cep || "");
-      setValue("endereco_rua", paraBanco(dadosIniciais.endereco_rua));
-      setValue("endereco_bairro", paraBanco(dadosIniciais.endereco_bairro));
+      reset(mapeado);
+      setValue("naoSabeEtnia", !dadosIniciais.etnia);
+      setValue("naoSabePeso", !dadosIniciais.peso);
+      setValue("naoSabeAltura", !dadosIniciais.altura);
       setValue("naoSabeEndereco", !!dadosIniciais.naoSabeEndereco);
-
-      // Reset complementar para outros campos que não mapeamos manualmente
-      reset({ ...dadosIniciais, nome: nomeFinal }, { keepDefaultValues: true });
+      setValue("naoSabeMatricula", !dadosIniciais.matriculaInteligente);
     }
-  }, [dadosIniciais, setValue, reset]);
+  }, [dadosIniciais, reset, setValue]);
+
+  // --- BUSCA GLOBAL EM TODAS AS COLEÇÕES ---
+  const buscarAluno = async () => {
+    const nomeBusca = paraBanco(watch("nome"));
+    if (nomeBusca.length < 3) {
+      toast.error("digite ao menos 3 letras para buscar");
+      return;
+    }
+
+    setBuscando(true);
+    try {
+      const colecoes = ["alunos", "pastas_digitais", "atendimentos_enfermagem", "triagens"];
+      let dadosEncontrados = null;
+
+      for (const col of colecoes) {
+        // Atendimento de enfermagem usa 'nomePaciente', as outras usam 'nome'
+        const campoFiltro = col === "atendimentos_enfermagem" ? "nomePaciente" : "nome";
+        const q = query(collection(db, col), where(campoFiltro, "==", nomeBusca));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+          dadosEncontrados = querySnapshot.docs[0].data();
+          break; 
+        }
+      }
+
+      if (dadosEncontrados) {
+        const payloadNormalizado = {
+          ...dadosEncontrados,
+          nome: paraBanco(dadosEncontrados.nome || dadosEncontrados.nomePaciente),
+          temAlergia: dadosEncontrados.alunoPossuiAlergia || dadosEncontrados.temAlergia || 'não',
+          historicoMedico: dadosEncontrados.qualAlergia || dadosEncontrados.historicoMedico || '',
+          peso: dadosEncontrados.peso ? String(dadosEncontrados.peso) : "",
+          altura: dadosEncontrados.altura ? String(dadosEncontrados.altura) : "",
+          turma: paraBanco(dadosEncontrados.turma),
+          sexo: paraBanco(dadosEncontrados.sexo)
+        };
+        reset(payloadNormalizado);
+        toast.success("registro localizado e importado!");
+      } else {
+        toast.error("não encontrado em nenhuma base.");
+      }
+    } catch (error) {
+      toast.error("erro na busca global.");
+    } finally {
+      setBuscando(false);
+    }
+  };
 
   const watchDataNasc = watch("dataNascimento");
   const naoSabeMatricula = watch("naoSabeMatricula");
@@ -117,25 +143,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         }
       } catch (error) { toast.error("erro ao buscar cep"); }
     }
-  };
-
-  const buscarAluno = async () => {
-    const nomeBusca = paraBanco(watch("nome"));
-    if (nomeBusca.length < 3) {
-      toast.error("digite ao menos 3 letras para buscar");
-      return;
-    }
-    setBuscando(true);
-    try {
-      const q = query(collection(db, "alunos"), where("nome", "==", nomeBusca));
-      const querySnapshot = await getDocs(q);
-      if (!querySnapshot.empty) {
-        reset(querySnapshot.docs[0].data());
-        toast.success("aluno localizado!");
-      } else {
-        toast.error("não encontrado na base.");
-      }
-    } catch (error) { toast.error("erro na busca."); } finally { setBuscando(false); }
   };
 
   useEffect(() => {
@@ -279,7 +286,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* BIOMETRIA (Etnia, Peso, Altura) */}
+        {/* BIOMETRIA */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100">
           <div className="space-y-2">
             <div className="flex justify-between items-center px-1">

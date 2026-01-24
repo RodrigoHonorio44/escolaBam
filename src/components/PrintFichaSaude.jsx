@@ -6,7 +6,12 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
     window.print();
   };
 
-  // Função auxiliar para marcar sim/não no papel
+  // Formata nomes para exibição visual (Capitalize)
+  const formatarDisplay = (texto) => {
+    if (!texto) return "";
+    return texto.split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+  };
+
   const CheckBox = ({ label, value }) => (
     <div className="flex items-center gap-2 mb-1">
       {value ? <CheckSquare size={14} /> : <Square size={14} />}
@@ -17,144 +22,161 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
   return (
     <div className="min-h-screen bg-slate-100 p-4 md:p-10 print:bg-white print:p-0">
       
-      {/* BARRA DE FERRAMENTAS - DESAPARECE NA IMPRESSÃO */}
+      {/* BARRA DE FERRAMENTAS */}
       <div className="max-w-[210mm] mx-auto mb-6 flex justify-between items-center print:hidden">
         <button 
           onClick={onVoltar}
           className="flex items-center gap-2 text-slate-600 hover:text-slate-900 font-black uppercase text-xs transition-all"
         >
-          <ArrowLeft size={18} /> Voltar ao Formulário
+          <ArrowLeft size={18} /> Voltar ao Histórico
         </button>
         <button 
           onClick={handlePrint}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black uppercase italic text-sm flex items-center gap-3 shadow-xl shadow-blue-200"
+          className="bg-slate-900 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black uppercase italic text-sm flex items-center gap-3 shadow-xl"
         >
-          <Printer size={20} /> Imprimir Agora
+          <Printer size={20} /> Imprimir Prontuário
         </button>
       </div>
 
-      {/* FOLHA A4 (LAYOUT OFICIAL) */}
+      {/* FOLHA A4 */}
       <div className="max-w-[210mm] mx-auto bg-white p-[15mm] shadow-2xl print:shadow-none print:p-0 border border-slate-200 print:border-none">
         
-        {/* CABEÇALHO */}
+        {/* CABEÇALHO OFICIAL */}
         <div className="flex flex-col items-center text-center border-b-2 border-black pb-4 mb-6">
           <div className="flex justify-between w-full items-center mb-2">
-            <img src="/brasao_marica.png" alt="Prefeitura de Maricá" className="h-24 w-auto object-contain" />
+            <img src="/brasao_marica.png" alt="Prefeitura de Maricá" className="h-20 w-auto object-contain" />
             
             <div className="flex-1 px-4">
-              <h1 className="text-[17px] font-bold text-slate-900 leading-tight">PREFEITURA MUNICIPAL DE MARICÁ</h1>
-              <h2 className="text-[15px] font-bold text-slate-900 leading-tight">SECRETARIA MUNICIPAL DE EDUCAÇÃO</h2>
-              <h3 className="text-[16px] font-black text-slate-900 leading-tight uppercase italic tracking-tighter">E.M. ANÍSIO SPÍNOLA TEIXEIRA</h3>
+              <h1 className="text-[16px] font-bold text-slate-900 leading-tight">PREFEITURA MUNICIPAL DE MARICÁ</h1>
+              <h2 className="text-[14px] font-bold text-slate-900 leading-tight">SECRETARIA MUNICIPAL DE EDUCAÇÃO</h2>
+              <h3 className="text-[15px] font-black text-slate-900 leading-tight uppercase italic tracking-tighter">
+                {data.escola?.toUpperCase() || 'E.M. ANÍSIO SPÍNOLA TEIXEIRA'}
+              </h3>
             </div>
 
-            <img src="/logo_cept.png" alt="Logo CEPT" className="h-24 w-auto object-contain" />
+            <img src="/logo_cept.png" alt="Logo CEPT" className="h-20 w-auto object-contain" />
           </div>
-
-          <div className="text-[9px] text-slate-900 font-medium leading-none space-y-1 mt-1">
-            <p>E.mail: emanisioteixeira.r2@gmail.com | Código do INEP: 33183996</p>
-            <p>Avenida Jardel Filho s/nº - Jardim Atlântico Central – Itaipuaçu – Maricá – RJ CEP: 24934-180</p>
-            <p className="font-bold">Ato de Criação Decreto PMM nº02 de 02/01/2019 Decreto nº 298 de 14/03/2019 – JOM 939 de 18/03/2019</p>
-          </div>
+          <p className="text-[8px] uppercase font-bold text-slate-500">Documento Interno de Acompanhamento em Enfermagem Escolar</p>
         </div>
 
-        {/* TÍTULO DO DOCUMENTO */}
+        {/* TÍTULO */}
         <div className="text-center mb-6">
-          <h2 className="text-[18px] font-black uppercase underline decoration-2 underline-offset-8">Questionário de Saúde Escolar - 2026</h2>
+          <h2 className="text-[18px] font-black uppercase underline decoration-2 underline-offset-8">
+            Boletim de Atendimento Móvel (BAM) - 2026
+          </h2>
         </div>
 
-        {/* CORPO DO DOCUMENTO */}
+        {/* IDENTIFICAÇÃO DO PACIENTE */}
         <div className="space-y-6 text-[12px]">
-          
-          <section className="grid grid-cols-2 gap-4 border-b pb-4">
+          <section className="grid grid-cols-3 gap-4 border-b-2 border-slate-100 pb-4">
             <div className="col-span-2">
-              <p><strong>NOME COMPLETO:</strong> <span className="uppercase border-b border-dotted border-black block mt-1">{data.nomeAluno || '_____________________________________________________________________'}</span></p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">Paciente</p>
+              <p className="text-sm font-black uppercase border-b border-slate-200 pb-1">
+                {formatarDisplay(data.nomePaciente || data.nomeAluno)}
+              </p>
             </div>
             <div>
-              <p><strong>DATA DE NASCIMENTO:</strong> {data.dataNascimento || '____/____/________'}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">Perfil</p>
+              <p className="text-sm font-black uppercase">{data.perfilPaciente || 'aluno'}</p>
             </div>
             <div>
-              <p><strong>TURMA:</strong> {data.turma || '____________________'}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">Data/Hora Entrada</p>
+              <p className="font-bold tabular-nums">{data.data} às {data.horario}</p>
             </div>
             <div>
-              <p><strong>NOME DO RESPONSÁVEL:</strong> {data.responsavel || '____________________________________'}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">Turma/Setor</p>
+              <p className="font-bold uppercase">{data.turma || 'N/A'}</p>
             </div>
             <div>
-              <p><strong>TELEFONE DE EMERGÊNCIA:</strong> {data.telefone || '(21) 9 ____-____'}</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">Tipo Registro</p>
+              <p className="font-bold uppercase text-blue-600">{data.tipoRegistro || 'local'}</p>
             </div>
           </section>
 
+          {/* RELATO DA OCORRÊNCIA */}
           <section>
-            <h4 className="font-bold bg-black text-white px-2 py-1 mb-3 uppercase italic">Condições de Saúde</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <CheckBox label="Possui alguma alergia?" value={data.temAlergia} />
-                <p className="pl-6 text-[10px] italic">Qual? {data.alergias || '____________________'}</p>
-                
-                <CheckBox label="Toma medicação contínua?" value={data.temMedicacao} />
-                <p className="pl-6 text-[10px] italic">Qual? {data.medicamentos || '____________________'}</p>
-              </div>
+            <h4 className="font-black bg-slate-900 text-white px-3 py-1 mb-3 uppercase italic text-[11px] skew-x-[-10deg] inline-block">
+              Relato da Ocorrência / Queixa Principal
+            </h4>
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 italic min-h-[60px]">
+              {data.relatoOcorrencia || data.motivoAtendimento || 'Não informado.'}
+            </div>
+          </section>
 
-              <div className="space-y-2">
-                <CheckBox label="Possui restrição física?" value={data.temRestricao} />
-                <CheckBox label="Possui problemas cardíacos?" value={data.temCardiaco} />
-                <CheckBox label="Já desmaiou em atividade física?" value={data.temDesmaio} />
-                <p className="mt-2"><strong>Tipo Sanguíneo:</strong> {data.tipoSanguineo || '________'}</p>
+          {/* SINAIS VITAIS E AVALIAÇÃO */}
+          <section className="grid grid-cols-2 gap-8">
+            <div>
+              <h4 className="font-bold border-b border-black mb-2 uppercase text-[11px]">Sinais Vitais</h4>
+              <div className="grid grid-cols-2 gap-y-2 text-[11px]">
+                <p><strong>PA:</strong> {data.pa || '___ x ___'} mmHg</p>
+                <p><strong>SPO2:</strong> {data.spo2 || '___'} %</p>
+                <p><strong>TEMP:</strong> {data.temperatura || '___'} °C</p>
+                <p><strong>FREQ. CARD:</strong> {data.fc || '___'} bpm</p>
+              </div>
+            </div>
+            <div>
+              <h4 className="font-bold border-b border-black mb-2 uppercase text-[11px]">Alergias Detectadas</h4>
+              <div className="p-2 border border-rose-100 bg-rose-50/30 rounded text-rose-700 font-bold uppercase text-[10px]">
+                {data.qualAlergia || data.alergias || 'Nenhuma informada'}
               </div>
             </div>
           </section>
 
-          <section>
-            <h4 className="font-bold border-b border-black mb-1 uppercase">Observações Adicionais do Enfermeiro:</h4>
-            <div className="min-h-[80px] border border-slate-200 p-2 italic text-slate-600">
-              {data.observacoes || 'Nenhuma observação registrada.'}
-            </div>
-          </section>
-
-          {/* TERMO DE RESPONSABILIDADE */}
-          <section className="mt-6 p-4 border border-black rounded-sm">
-            <p className="text-[10px] leading-relaxed text-justify">
-              Declaro que as informações acima são verdadeiras e que estou ciente da importância de comunicar qualquer alteração no quadro de saúde do aluno à secretaria da E.M. Anísio Spínola Teixeira. Em caso de emergência, autorizo o encaminhamento para a unidade de saúde mais próxima.
-            </p>
-
-            <div className="flex justify-between items-end mt-12">
-              <div className="text-center w-[250px]">
-                <div className="border-t border-black w-full mb-1"></div>
-                <p className="text-[10px] font-bold uppercase">Assinatura do Responsável</p>
-              </div>
-              
-              <div className="text-right">
-                <p className="text-[12px] font-bold">Maricá, ____ de ________________ de 2026.</p>
+          {/* CONDUTA E EVOLUÇÃO (ALTA) */}
+          <section className="mt-4">
+            <h4 className="font-black bg-blue-600 text-white px-3 py-1 mb-3 uppercase italic text-[11px] skew-x-[-10deg] inline-block">
+              Evolução Clínica e Alta
+            </h4>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 border-2 border-slate-100 rounded-xl">
+                  <p className="text-[9px] font-bold uppercase text-slate-400">Procedimentos Realizados</p>
+                  <p className="text-[11px] uppercase">{data.condutaHospitalar || 'Em aberto'}</p>
+                </div>
+                <div className="p-3 border-2 border-slate-100 rounded-xl">
+                  <p className="text-[9px] font-bold uppercase text-slate-400">Observações de Repouso</p>
+                  <p className="text-[11px] uppercase">{data.observacoesFinais || 'Nenhuma'}</p>
+                </div>
               </div>
             </div>
           </section>
 
-          {/* ✅ ASSINATURA TÉCNICA SINCRONIZADA COM O BANCO (Jairo) */}
-          <section className="mt-10 flex justify-center">
-             <div className="text-center w-[300px] border-t border-slate-400 pt-2">
-                <p className="text-[11px] font-black uppercase text-slate-900">
-                   {/* Busca o campo 'nome' do objeto de usuário logado */}
-                   {data.nome || data.profissionalNome || '________________________________'}
+          {/* ASSINATURAS */}
+          <section className="mt-16 flex justify-between items-start gap-10">
+            <div className="text-center flex-1">
+              <div className="border-t border-black pt-2">
+                <p className="text-[10px] font-black uppercase">{formatarDisplay(data.responsavel || 'Responsável')}</p>
+                <p className="text-[8px] text-slate-500 uppercase">Ciente da Ocorrência</p>
+              </div>
+            </div>
+
+            <div className="text-center flex-1">
+              <div className="border-t-2 border-blue-600 pt-2">
+                <p className="text-[11px] font-black uppercase text-blue-900">
+                  {formatarDisplay(data.finalizadoPor || data.profissionalNome)}
                 </p>
                 <p className="text-[9px] font-bold text-blue-600 uppercase">
-                   {/* Busca o campo 'registroProfissional' do objeto de usuário logado */}
-                   Enfermeiro(a) • COREN: {data.registroProfissional || data.profissionalRegistro || '________________'}
+                  Enfermeiro(a) • Registro: {data.registroFinalizador || data.profissionalRegistro}
                 </p>
-             </div>
+              </div>
+            </div>
           </section>
         </div>
 
-        {/* RODAPÉ TÉCNICO */}
-        <footer className="mt-8 pt-2 border-t border-slate-100 text-[8px] flex justify-between text-slate-400 font-bold uppercase tracking-tighter">
-          <span>Baenf • Gestão Inteligente de Saúde Escolar</span>
-          <span>ID do Documento: {data.id?.substring(0,8) || 'DRAFT'}</span>
+        {/* RODAPÉ */}
+        <footer className="mt-12 pt-4 border-t border-slate-200 text-[8px] flex justify-between text-slate-400 font-bold uppercase tracking-widest">
+          <span>RODHON INTELLIGENCE — SISTEMA DE GESTÃO CLÍNICA</span>
+          <span>AUTENTICAÇÃO: {data.id?.toUpperCase()}</span>
+          <span>DATA IMPRESSÃO: {new Date().toLocaleDateString()}</span>
         </footer>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          @page { margin: 10mm; size: auto; }
-          body { background: white !important; margin: 0; }
+          @page { margin: 10mm; size: portrait; }
+          body { background: white !important; margin: 0; padding: 0; }
           .print\\:hidden { display: none !important; }
+          .shadow-2xl { shadow: none !important; }
         }
       `}} />
     </div>
