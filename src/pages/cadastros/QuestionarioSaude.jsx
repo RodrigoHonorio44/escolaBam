@@ -22,7 +22,6 @@ const QuestionarioSaude = ({ onSucesso }) => {
     handleSubmit
   } = useQuestionarioSaude(onSucesso);
 
-  // Validação de nome completo antes de salvar
   const validarESalvar = (e) => {
     e.preventDefault();
     const nome = formData.alunoNome.trim();
@@ -43,20 +42,20 @@ const QuestionarioSaude = ({ onSucesso }) => {
         <head>
           <title>ficha médica - ${formData.alunoNome}</title>
           <style>
-            body { font-family: sans-serif; padding: 40px; color: #333; line-height: 1.4; text-transform: lowercase; }
+            body { font-family: sans-serif; padding: 40px; color: #333; line-height: 1.4; }
             .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
             .section { margin-bottom: 20px; border: 1px solid #eee; padding: 15px; border-radius: 10px; }
             .section-title { font-weight: bold; font-size: 12px; color: #2563eb; margin-bottom: 10px; border-bottom: 1px solid #eee; text-transform: uppercase; }
             .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
             .label { font-weight: bold; font-size: 11px; color: #666; }
-            .value { font-size: 12px; margin-bottom: 5px; }
+            .value { font-size: 12px; margin-bottom: 5px; text-transform: capitalize; }
             .alerta { color: red; font-weight: bold; }
             .assinatura { margin-top: 50px; display: flex; justify-content: space-between; }
             .campo-assinatura { border-top: 1px solid #000; width: 45%; text-align: center; padding-top: 5px; font-size: 10px; }
           </style>
         </head>
         <body>
-          <div class="header"><h2>ficha médica escolar</h2></div>
+          <div class="header"><h2>FICHA MÉDICA ESCOLAR</h2></div>
           <div class="section">
             <div class="section-title">identificação</div>
             <div class="grid">
@@ -110,11 +109,11 @@ const QuestionarioSaude = ({ onSucesso }) => {
                   <InputBlock label="Nome do Aluno (Busca)">
                     <input 
                       className="input-premium" 
+                      style={{ textTransform: 'capitalize' }}
                       value={formData.alunoNome} 
                       onChange={(e) => { 
-                        const val = e.target.value.toLowerCase();
-                        handleChange('alunoNome', val); 
-                        buscarSugestoes(val); 
+                        handleChange('alunoNome', e.target.value); 
+                        buscarSugestoes(e.target.value); 
                       }} 
                       placeholder="ex: caio giromba..." 
                     />
@@ -123,7 +122,8 @@ const QuestionarioSaude = ({ onSucesso }) => {
                     <div className="absolute z-50 w-full mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden">
                       {sugestoes.map((p) => (
                         <div key={p.id} onClick={() => selecionarPaciente(p)} className="p-4 hover:bg-blue-50 cursor-pointer text-[10px] font-black uppercase border-b border-slate-50 flex justify-between items-center">
-                          <span className="lowercase">{p.nome}</span>
+                          {/* Exibe formatado com Iniciais Maiúsculas */}
+                          <span style={{ textTransform: 'capitalize' }}>{p.nomeBusca || p.nome}</span>
                           <span className="text-blue-500 bg-blue-50 px-2 py-1 rounded-md text-[8px]">{p.turma}</span>
                         </div>
                       ))}
@@ -206,8 +206,9 @@ const QuestionarioSaude = ({ onSucesso }) => {
                     <input 
                       placeholder="nome do contato" 
                       className="input-premium !py-2" 
+                      style={{ textTransform: 'capitalize' }}
                       value={contato.nome} 
-                      onChange={(e) => handleContactChange(idx, 'nome', e.target.value.toLowerCase())} 
+                      onChange={(e) => handleContactChange(idx, 'nome', e.target.value)} 
                     />
                     <input 
                       placeholder="telefone" 
@@ -224,8 +225,23 @@ const QuestionarioSaude = ({ onSucesso }) => {
       </form>
 
       <style>{`
-        .input-premium { width: 100%; padding: 0.9rem 1.2rem; background-color: #fff; border-radius: 16px; font-weight: 700; font-size: 0.75rem; border: 2px solid #f1f5f9; outline: none; transition: all 0.3s; text-transform: lowercase; }
-        .input-premium:focus { border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+        .input-premium { 
+          width: 100%; 
+          padding: 0.9rem 1.2rem; 
+          background-color: #fff; 
+          border-radius: 16px; 
+          font-weight: 700; 
+          font-size: 0.75rem; 
+          border: 2px solid #f1f5f9; 
+          outline: none; 
+          transition: all 0.3s; 
+        }
+        .input-premium:focus { 
+          border-color: #3b82f6; 
+          box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); 
+        }
+        /* Força o visual das iniciais maiúsculas mas o valor real segue lowercase */
+        .input-premium::placeholder { text-transform: none; }
       `}</style>
     </div>
   );
@@ -275,7 +291,7 @@ const ToggleInput = ({ label, value, onChange }) => (
         className="input-premium mt-3 !py-2 !text-[10px]" 
         placeholder="especifique detalhes..." 
         value={value.detalhes} 
-        onChange={(e) => onChange({ ...value, detalhes: e.target.value.toLowerCase() })} 
+        onChange={(e) => onChange({ ...value, detalhes: e.target.value })} 
       />
     )}
   </div>

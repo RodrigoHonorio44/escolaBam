@@ -27,12 +27,7 @@ const ContatoAluno = ({ onVoltar, darkMode }) => {
   const formatarNomeRS = (str) => {
     if (!str || str === '---') return '---';
     const partes = str.toLowerCase().split(' ');
-    return partes.map((p, index) => {
-      if (index <= 1 && (p.startsWith('r') || p.startsWith('s'))) {
-        return p.charAt(0).toUpperCase() + p.slice(1);
-      }
-      return p.charAt(0).toUpperCase() + p.slice(1);
-    }).join(' ');
+    return partes.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
   };
 
   const calcularIdade = (dataNasc) => {
@@ -53,53 +48,93 @@ const ContatoAluno = ({ onVoltar, darkMode }) => {
     return () => document.removeEventListener("mousedown", handleClickFora);
   }, []);
 
+  // BUSCA GLOBAL - AGORA OLHA TODAS AS ENTRADAS
   const lidarBusca = async (valor) => {
     setBusca(valor);
     const termo = paraBanco(valor);
     if (termo.length < 3) { setSugestoes([]); return; }
+    
     setBuscando(true);
     try {
-      const q = query(
-        collection(db, "alunos"),
-        where("nome", ">=", termo),
-        where("nome", "<=", termo + '\uf8ff'),
-        orderBy("nome"),
-        limit(6)
+      const colecoes = ["alunos", "pastas_digitais", "questionarios_saude", "atendimentos_enfermagem"];
+      let resultadosBrutos = [];
+
+      const promessas = colecoes.map(async (colNome) => {
+        const campoBusca = colNome === "pastas_digitais" ? "nomeBusca" : 
+                           colNome === "questionarios_saude" ? "alunoNome" : "nome";
+        
+        const q = query(
+          collection(db, colNome),
+          where(campoBusca, ">=", termo),
+          where(campoBusca, "<=", termo + '\uf8ff'),
+          limit(5)
+        );
+        
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({
+          id: d.id,
+          nomeExibicao: d.data()[campoBusca] || d.data().nome || d.data().nomePaciente,
+          ...d.data()
+        }));
+      });
+
+      const retornos = await Promise.all(promessas);
+      resultadosBrutos = retornos.flat();
+
+      // Remove duplicados pelo ID
+      const unificados = resultadosBrutos.filter((v, i, a) => 
+        a.findIndex(t => t.id === v.id) === i
       );
-      const snap = await getDocs(q);
-      setSugestoes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    } catch (e) { console.error(e); } finally { setBuscando(false); }
+
+      setSugestoes(unificados);
+    } catch (e) { 
+      console.error(e); 
+    } finally { 
+      setBuscando(false); 
+    }
   };
 
   const selecionarAluno = async (dados) => {
     if (!dados?.id) return;
     setBuscando(true);
+    const toastId = toast.loading("Sincronizando todas as fontes...");
+    
     try {
       const idMestre = dados.id;
-      const [snapPasta, snapQuest] = await Promise.all([
+      
+      // BUSCA EM CASCATA PARA PEGAR O CONTATO
+      const [snapAlu, snapPas, snapQue] = await Promise.all([
+        getDoc(doc(db, "alunos", idMestre)),
         getDoc(doc(db, "pastas_digitais", idMestre)),
         getDoc(doc(db, "questionarios_saude", idMestre))
       ]);
 
-      const dPas = snapPasta.exists() ? snapPasta.data() : {};
-      const dQue = snapQuest.exists() ? snapQuest.data() : {};
+      const dAlu = snapAlu.exists() ? snapAlu.data() : {};
+      const dPas = snapPas.exists() ? snapPas.data() : {};
+      const dQue = snapQue.exists() ? snapQue.data() : {};
 
       const unificado = {
         ...dados,
         id: idMestre,
-        responsavel: dPas.responsavel || dQue.alunoMae || dados.responsavel || '---',
-        contato: dPas.contato || dQue.contatos?.[0]?.telefone || dados.contato || '',
-        dataNascimento: dPas.dataNascimento || dQue.dataNascimento || dados.dataNascimento || '---',
-        cartaoSus: dPas.cartaoSus || dQue.cartaoSus || dados.cartaoSus || '',
-        escola: dPas.escola || dados.escola || '',
-        alunoPossuiAlergia: dPas.alunoPossuiAlergia || dQue.alergias?.possui || dados.alunoPossuiAlergia || 'não',
-        qualAlergia: dPas.qualAlergia || dQue.alergias?.detalhes || dados.qualAlergia || ''
+        // PRIORIDADE DE CONTATO (Onde o Rodrigo Giromba costuma ter o número)
+        responsavel: dPas.responsavel || dQue.alunoMae || dAlu.responsavel || dados.responsavel || '---',
+        contato: dPas.contato || dQue.contatos?.[0]?.telefone || dAlu.contato || dQue.telefoneCelular || '',
+        dataNascimento: dPas.dataNascimento || dQue.dataNascimento || dAlu.dataNascimento || dados.dataNascimento || '---',
+        cartaoSus: dPas.cartaoSus || dQue.cartaoSus || dAlu.cartaoSus || '',
+        escola: dPas.escola || dAlu.escola || '',
+        alunoPossuiAlergia: dPas.alunoPossuiAlergia || dQue.alergias?.possui || dAlu.alunoPossuiAlergia || 'não',
+        qualAlergia: dPas.qualAlergia || dQue.alergias?.detalhes || dAlu.qualAlergia || ''
       };
 
       setAluno(unificado);
       setSugestoes([]);
       setBusca('');
-    } catch (error) { toast.error("Erro ao carregar dados"); } finally { setBuscando(false); }
+      toast.success("Prontuário unificado!", { id: toastId });
+    } catch (error) { 
+      toast.error("Erro ao cruzar dados"); 
+    } finally { 
+      setBuscando(false); 
+    }
   };
 
   const abrirWhatsApp = (numero) => {
@@ -116,7 +151,7 @@ const ContatoAluno = ({ onVoltar, darkMode }) => {
         darkMode={darkMode}
         onSucesso={() => {
           setModoEdicao(false);
-          selecionarAluno(aluno); // Recarrega os dados atualizados
+          selecionarAluno(aluno);
         }}
       />
     );
@@ -141,6 +176,7 @@ const ContatoAluno = ({ onVoltar, darkMode }) => {
               value={busca}
               onChange={(e) => lidarBusca(e.target.value)}
               placeholder="PESQUISAR ALUNO..."
+              style={{ textTransform: 'capitalize' }} // RESOLVE O VISUAL MAIÚSCULO NO INPUT
               className={`w-full py-4 pl-12 pr-4 rounded-2xl text-base font-bold transition-all outline-none border-2 
                 ${darkMode ? 'bg-slate-900 border-slate-800 focus:border-blue-600' : 'bg-slate-100 border-transparent focus:bg-white focus:border-blue-500 shadow-inner'}`}
             />
@@ -149,10 +185,10 @@ const ContatoAluno = ({ onVoltar, darkMode }) => {
                 {sugestoes.map(s => (
                   <button key={s.id} onClick={() => selecionarAluno(s)} className={`w-full p-4 text-left border-b last:border-0 flex justify-between items-center ${darkMode ? 'hover:bg-white/5 border-slate-800' : 'hover:bg-blue-50 border-slate-50'}`}>
                     <div>
-                      <p className="text-sm font-black text-blue-500">{formatarNomeRS(s.nome)}</p>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase">mãe: {formatarNomeRS(s.responsavel || s.nomeMae)}</p>
+                      <p className="text-sm font-black text-blue-500">{formatarNomeRS(s.nomeExibicao)}</p>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase">Resp: {formatarNomeRS(s.responsavel || s.alunoMae || s.nomeMae)}</p>
                     </div>
-                    <span className="text-[10px] font-black opacity-50">{s.turma}</span>
+                    <span className="text-[10px] font-black opacity-50">{s.turma || '---'}</span>
                   </button>
                 ))}
               </div>
@@ -171,12 +207,12 @@ const ContatoAluno = ({ onVoltar, darkMode }) => {
                 </div>
                 <div className="text-center md:text-left flex-1">
                   <h2 className="text-3xl md:text-4xl font-black italic tracking-tighter mt-2 leading-none">
-                    {formatarNomeRS(aluno.nome)}
+                    {formatarNomeRS(aluno.nome || aluno.nomeExibicao)}
                   </h2>
                   <div className="flex flex-wrap justify-center md:justify-start gap-4 mt-4 text-[11px] font-bold text-slate-500 uppercase">
-                    <span className="flex items-center gap-1"><User size={14}/> {aluno.sexo}</span>
+                    <span className="flex items-center gap-1"><User size={14}/> {aluno.sexo || '---'}</span>
                     <span className="flex items-center gap-1"><ClipboardList size={14}/> {calcularIdade(aluno.dataNascimento)} anos</span>
-                    <span className="flex items-center gap-1"><GraduationCap size={14}/> {aluno.turma}</span>
+                    <span className="flex items-center gap-1"><GraduationCap size={14}/> {aluno.turma || '---'}</span>
                     <span className={`flex items-center gap-1 ${paraBanco(aluno.alunoPossuiAlergia) === 'sim' ? 'text-rose-600' : ''}`}>
                       <Heart size={14} fill={paraBanco(aluno.alunoPossuiAlergia) === 'sim' ? "currentColor" : "none"}/> 
                       alergia: {paraBanco(aluno.alunoPossuiAlergia) === 'sim' ? formatarNomeRS(aluno.qualAlergia) : "nenhuma"}

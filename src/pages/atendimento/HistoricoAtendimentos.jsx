@@ -25,20 +25,33 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     observacoesFinais: ''
   });
 
+  // Função Auxiliar para transformar "artur giromba" em "Artur Giromba" visualmente
+  const formatarNomeDisplay = (nome) => {
+    if (!nome) return "---";
+    return nome.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  };
+
   useEffect(() => {
-    // Sincronizado com o padrão do cadastro
-    const escolaUsuario = (user?.escolaId || "E. M. ANÍSIO TEIXEIRA").toUpperCase();
+    const escolaUsuario = (user?.escolaId || "E. M. ANÍSIO TEIXEIRA");
     
+    // Buscamos de forma mais ampla para capturar registros antigos (UPPER) e novos (lower)
     const q = query(
       collection(db, "atendimentos_enfermagem"),
-      where("escola", "==", escolaUsuario),
+      where("escola", "in", [escolaUsuario.toUpperCase(), escolaUsuario.toLowerCase()]),
       orderBy("createdAt", "desc")
     );
 
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       const docs = [];
       querySnapshot.forEach((doc) => {
-        docs.push({ id: doc.id, ...doc.data() });
+        const data = doc.data();
+        docs.push({ 
+          id: doc.id, 
+          ...data,
+          // Normalizamos o status internamente para a lógica de filtro funcionar
+          statusAtendimento: (data.statusAtendimento || 'aberto').toLowerCase(),
+          tipoRegistro: (data.tipoRegistro || 'local').toLowerCase()
+        });
       });
       setAtendimentos(docs);
       setLoading(false);
@@ -63,23 +76,23 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
       const atendRef = doc(db, "atendimentos_enfermagem", selectedAtend.id);
       
       const updateData = {
-        condutaHospitalar: hospitalInfo.condutaHospitalar.toUpperCase(),
+        condutaHospitalar: hospitalInfo.condutaHospitalar.toLowerCase().trim(),
         dataAlta: hospitalInfo.dataAlta,
-        observacoesFinais: hospitalInfo.observacoesFinais.toUpperCase(),
-        statusAtendimento: 'FINALIZADO',
+        observacoesFinais: hospitalInfo.observacoesFinais.toLowerCase().trim(),
+        statusAtendimento: 'finalizado', // Padronizado em lowercase
         finalizadoEm: new Date().toISOString(),
-        finalizadoPor: (user?.nome || 'PROFISSIONAL').toUpperCase(),
-        registroFinalizador: (user?.registroProfissional || user?.coren || 'SEM REGISTRO').toUpperCase()
+        finalizadoPor: (user?.nome || 'profissional').toLowerCase().trim(),
+        registroFinalizador: (user?.registroProfissional || user?.coren || 'sem registro').toLowerCase().trim()
       };
 
       await updateDoc(atendRef, updateData);
 
       if (selectedAtend.pacienteId) {
-        const pastaRef = doc(db, "pastas_digitais", selectedAtend.pacienteId);
+        const pastaRef = doc(db, "pastas_digitais", selectedAtend.pacienteId.toLowerCase());
         await updateDoc(pastaRef, {
-          ultimoStatusClinico: 'ESTÁVEL / ALTA HOSPITALAR',
+          ultimoStatusClinico: 'estável / alta hospitalar',
           dataUltimaAlta: hospitalInfo.dataAlta,
-          ultimaConduta: hospitalInfo.condutaHospitalar.toUpperCase(),
+          ultimaConduta: hospitalInfo.condutaHospitalar.toLowerCase().trim(),
           ultimaAtualizacao: new Date()
         });
       }
@@ -96,14 +109,15 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   };
 
   const atendimentosFiltrados = atendimentos.filter(atend => {
-    const statusDoc = (atend.statusAtendimento || 'ABERTO').toUpperCase();
-    
-    // Lógica de filtro refinada
+    const statusDoc = atend.statusAtendimento; // já está em lowercase vindo do onSnapshot
+    const tipoDoc = atend.tipoRegistro;
+
+    // Lógica de Pendência: É pendente se for Remoção não finalizada OU se estiver como aberto
+    const ehPendente = statusDoc !== 'finalizado' && (statusDoc === 'pendente' || statusDoc === 'aberto' || tipoDoc === 'remoção');
+
     const matchesStatus = filtroStatus === 'Todos' 
       ? true 
-      : (filtroStatus === 'Aberto' 
-          ? (statusDoc.includes('ABERTO') || statusDoc.includes('REMOÇÃO')) 
-          : statusDoc === 'FINALIZADO');
+      : (filtroStatus === 'Aberto' ? ehPendente : statusDoc === 'finalizado');
 
     const dataDoc = atend.dataAtendimento || atend.data || "";
     const matchesData = filtroData ? dataDoc === filtroData : true;
@@ -165,30 +179,29 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
           </div>
         ) : (
           atendimentosFiltrados.map((atend) => {
-            const statusAtual = (atend.statusAtendimento || 'ABERTO').toUpperCase();
-            // Identifica se é um caso que precisa de retorno (Remoção ou explicitamente Aberto com hospital)
-            const precisaResolver = statusAtual.includes('REMOÇÃO') || statusAtual === 'ABERTO';
+            const statusAtual = atend.statusAtendimento;
+            const tipoAtend = atend.tipoRegistro;
+            const precisaResolver = statusAtual !== 'finalizado' && (tipoAtend === 'remoção' || statusAtual === 'pendente');
             
-            // Tratamento de Alergias sincronizado com o componente de cadastro
-            const detalheAlergia = atend.alergias || atend.qualAlergia || "";
+            const detalheAlergia = (atend.alergias || atend.qualAlergia || "").toLowerCase();
             const temAlergiaReal = detalheAlergia.length > 0 && 
-                                  !["NÃO", "NÃO POSSUI", "NENHUMA", "N/A"].includes(detalheAlergia.toUpperCase().trim());
+                                  !["não", "não possui", "nenhuma", "n/a"].includes(detalheAlergia.trim());
 
             return (
               <div 
                 key={atend.id}
-                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${statusAtual === 'FINALIZADO' ? 'bg-slate-50/30' : ''}`}
+                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${statusAtual === 'finalizado' ? 'bg-slate-50/30' : 'bg-white'}`}
               >
                 <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${precisaResolver ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                 
                 <div className="flex items-center gap-5 w-full md:w-auto">
                   <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center transition-transform group-hover:scale-110 ${precisaResolver ? 'bg-orange-50 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    {precisaResolver ? <Hospital size={28} /> : <CheckCircle2 size={28} />}
+                    {tipoAtend === 'remoção' ? <Hospital size={28} /> : <Stethoscope size={28} />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <h3 className="font-black text-slate-800 uppercase italic tracking-tighter text-xl">
-                        {atend.nomePaciente}
+                        {formatarNomeDisplay(atend.nomePaciente)}
                       </h3>
                       
                       {temAlergiaReal && (
@@ -207,7 +220,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
                       <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">
-                        {atend.perfilPaciente === 'ALUNO' ? `TURMA ${atend.turma}` : atend.cargo}
+                        {atend.perfilPaciente?.toUpperCase() === 'ALUNO' ? `TURMA ${atend.turma}` : atend.cargo}
                       </span>
                       <span className="tabular-nums">{atend.dataAtendimento || atend.data} • {atend.horarioReferencia || atend.horario}</span>
                     </p>
@@ -216,12 +229,12 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
 
                 <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
                   <div className="flex flex-col md:items-end gap-1.5">
-                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.15em] ${precisaResolver ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-emerald-500 text-white'}`}>
-                      {precisaResolver ? 'Aguardando Retorno' : 'Atendimento Concluído'}
+                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-[0.15em] ${precisaResolver ? 'bg-orange-500 text-white shadow-lg shadow-orange-100' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {precisaResolver ? 'Aguardando Retorno Hospitalar' : 'Atendimento Concluído'}
                     </span>
                     <span className="text-[10px] font-black text-slate-400 flex items-center gap-1.5 uppercase italic tracking-tight">
-                      {atend.encaminhamento === 'SIM' || statusAtual.includes('REMOÇÃO') ? 
-                        <><Hospital size={12}/> {atend.destinoHospital || "HOSPITAL"}</> : 
+                      {tipoAtend === 'remoção' ? 
+                        <><Hospital size={12}/> {atend.destinoHospital || "encaminhado"}</> : 
                         "Liberado na Unidade"}
                     </span>
                   </div>
@@ -262,7 +275,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                 </div>
                 <div>
                   <h3 className="text-xl font-black uppercase italic leading-none tracking-tighter">Retorno do <span className="text-orange-500">Encaminhamento</span></h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1 italic">Paciente: {selectedAtend.nomePaciente}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1 italic">Paciente: {formatarNomeDisplay(selectedAtend.nomePaciente)}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedAtend(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24} /></button>
@@ -272,7 +285,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
               <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50">
                 <p className="text-[9px] font-black text-blue-500 uppercase mb-2 tracking-widest italic">Queixa Inicial na Escola:</p>
                 <p className="text-sm font-bold text-slate-700 leading-relaxed italic">
-                  "{selectedAtend.queixaPrincipal || selectedAtend.motivoAtendimento || "Não especificado"}"
+                  "{selectedAtend.queixaPrincipal || selectedAtend.motivoAtendimento || "não especificado"}"
                 </p>
               </div>
 
@@ -283,7 +296,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                   </label>
                   <textarea 
                     required
-                    placeholder="Descreva a conduta médica realizada no hospital..."
+                    placeholder="descreva a conduta médica realizada no hospital..."
                     className="w-full bg-slate-50 border-2 border-transparent rounded-[25px] px-6 py-5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:bg-white outline-none resize-none transition-all shadow-inner uppercase"
                     rows="4"
                     value={hospitalInfo.condutaHospitalar}
@@ -306,7 +319,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                     <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest">Observações de Repouso</label>
                     <input 
                       type="text"
-                      placeholder="Ex: 3 dias de repouso"
+                      placeholder="ex: 3 dias de repouso"
                       className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-inner uppercase"
                       value={hospitalInfo.observacoesFinais}
                       onChange={(e) => setHospitalInfo({...hospitalInfo, observacoesFinais: e.target.value})}

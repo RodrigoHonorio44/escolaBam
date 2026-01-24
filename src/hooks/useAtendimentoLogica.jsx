@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '../firebase/firebaseConfig';
 import { 
-  collection, serverTimestamp, doc, 
+  collection, serverTimestamp, doc, getDoc,
   writeBatch 
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
@@ -14,7 +14,7 @@ export const useAtendimentoLogica = (user) => {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
   const [configUI, setConfigUI] = useState({
-    tipoAtendimento: 'local',
+    tipoAtendimento: 'local', // 'local' ou 'remocao'
     perfilPaciente: 'aluno',
     naoSabeDataNasc: false,
     naoSabePeso: false,
@@ -56,7 +56,6 @@ export const useAtendimentoLogica = (user) => {
 
   const [formData, setFormData] = useState(getInitialFormState());
 
-  // useEffect para disparar a busca de sugestões conforme digita
   useEffect(() => {
     if (formData.nomePaciente.length > 2) {
       buscarSugestoes(formData.nomePaciente.toLowerCase());
@@ -65,7 +64,6 @@ export const useAtendimentoLogica = (user) => {
 
   const updateField = useCallback((campo, valor) => {
     setFormData(prev => {
-      // Normalização automática para campos de texto
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       const novoEstado = { ...prev, [campo]: valorFormatado };
       
@@ -95,71 +93,98 @@ export const useAtendimentoLogica = (user) => {
 
   const selecionarPaciente = async (p) => {
     setMostrarSugestoes(false);
-    const toastId = toast.loading("sincronizando histórico total...");
+    const toastId = toast.loading("sincronizando dados...");
     
-    // Tenta buscar pelo nome ou nomeBusca (o que vier da sugestão)
-    const nomeBusca = p.nome || p.nomeBusca || p.nomePaciente;
-    const dados = await puxarDadosCompletos(nomeBusca.toLowerCase(), p.dataNascimento);
+    const nomeLimpo = (p.nome || p.nomeBusca || p.nomePaciente || "").toLowerCase();
+    const dataNasc = p.dataNascimento || "";
+
+    const nomeParaId = nomeLimpo.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                                .replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, '-');
+    const dataParaId = dataNasc ? dataNasc.replace(/-/g, '') : 'nd';
+    const idSugerido = p.id || p.pacienteId || `${nomeParaId}-${dataParaId}`;
+
+    let dados = await puxarDadosCompletos(nomeLimpo, dataNasc);
+
+    if (!dados) {
+      try {
+        const docRef = doc(db, "pastas_digitais", idSugerido);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          dados = { id: docSnap.id, ...docSnap.data() };
+        }
+      } catch (err) {
+        console.error("Erro na busca direta:", err);
+      }
+    }
 
     if (dados) {
+      const pesoStr = dados.peso ? String(dados.peso).replace('.', ',') : "";
+      const alturaStr = dados.altura ? String(dados.altura).replace('.', ',') : "";
+      const imcStr = dados.imc ? String(dados.imc).replace('.', ',') : "";
+      const tempStr = dados.temperatura ? String(dados.temperatura).replace('.', ',') : "";
+
       setFormData(prev => ({
         ...prev,
-        pacienteId: dados.id || p.id,
-        nomePaciente: (dados.nome || dados.nomeBusca || dados.nomePaciente).toLowerCase(), 
-        dataNascimento: dados.dataNascimento,
-        sexo: dados.sexo || prev.sexo,
-        turma: dados.turma || prev.turma,
-        cargo: dados.cargo || prev.cargo,
-        etnia: dados.etnia || prev.etnia,
-        peso: dados.peso || '',
-        altura: dados.altura || '',
-        imc: dados.imc || '',
-        alunoPossuiAlergia: dados.alunoPossuiAlergia || 'não',
-        qualAlergia: dados.qualAlergia || '',
-        observacoes: dados.contatos?.[0]?.nome 
-          ? `responsável: ${dados.contatos[0].nome} | tel: ${dados.contatos[0].telefone}` 
-          : prev.observacoes
+        pacienteId: dados.id || idSugerido,
+        nomePaciente: (dados.nomeBusca || dados.nome || nomeLimpo).toLowerCase(), 
+        dataNascimento: dados.dataNascimento || dataNasc,
+        sexo: (dados.sexo || prev.sexo || "").toLowerCase(),
+        turma: (dados.turma || prev.turma || "").toLowerCase(),
+        cargo: (dados.cargo || prev.cargo || "").toLowerCase(),
+        etnia: (dados.etnia || prev.etnia || "").toLowerCase(),
+        peso: pesoStr,
+        altura: alturaStr,
+        imc: imcStr,
+        temperatura: tempStr,
+        alunoPossuiAlergia: (dados.alunoPossuiAlergia || 'não').toLowerCase(),
+        qualAlergia: (dados.qualAlergia || '').toLowerCase(),
+        observacoes: (dados.observacoes || "").toLowerCase()
       }));
+
+      setConfigUI(prev => ({ ...prev, naoSabePeso: !pesoStr, naoSabeAltura: !alturaStr }));
       setTemCadastro(true);
-      toast.success("perfil integrado!", { id: toastId });
+      toast.success("perfil sincronizado!", { id: toastId });
     } else {
-      toast.error("erro ao cruzar dados.", { id: toastId });
+      setFormData(prev => ({ ...prev, nomePaciente: nomeLimpo, dataNascimento: dataNasc, pacienteId: idSugerido }));
+      toast.error("histórico não encontrado.", { id: toastId });
     }
   };
 
   const salvarAtendimento = async (e) => {
     if (e) e.preventDefault();
     if (!validarNomeCompleto(formData.nomePaciente)) {
-      toast.error("digite o nome e o sobrenome!");
+      toast.error("nome e sobrenome!");
       return;
     }
 
     setLoading(true);
-    const toastId = toast.loading("finalizando...");
+    const toastId = toast.loading("processando registro...");
 
     try {
       const batch = writeBatch(db);
       const horaSaida = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-      // Normalização Final
+      // Determina status com base no tipo de atendimento da UI
+      const statusAtendimento = configUI.tipoAtendimento === 'local' ? 'finalizado' : 'pendente';
+      const tipoRegistro = configUI.tipoAtendimento === 'remocao' ? 'remoção' : 'local';
+
+      // Normalização recursiva para lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
 
-      // Conversão de tipos para o Firebase (Números como Numbers)
       const numericData = {
         ...payload,
         idade: parseInt(payload.idade) || 0,
-        peso: parseFloat(payload.peso) || 0,
-        altura: parseFloat(payload.altura) || 0,
-        imc: parseFloat(payload.imc) || 0,
-        temperatura: parseFloat(payload.temperatura) || 0
+        peso: parseFloat(String(payload.peso).replace(',', '.')) || 0,
+        altura: parseFloat(String(payload.altura).replace(',', '.')) || 0,
+        imc: parseFloat(String(payload.imc).replace(',', '.')) || 0,
+        temperatura: parseFloat(String(payload.temperatura).replace(',', '.')) || 0
       };
 
       const nomeParaId = payload.nomePaciente
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, '-');
-      
       const dataParaId = payload.dataNascimento ? payload.dataNascimento.replace(/-/g, '') : 'nd';
       const idPasta = payload.pacienteId || `${nomeParaId}-${dataParaId}`;
 
@@ -167,41 +192,41 @@ export const useAtendimentoLogica = (user) => {
         ...numericData,
         pacienteId: idPasta,
         horarioSaida: horaSaida,
-        escola: (user?.escolaId || "unidade escolar").toLowerCase(),
-        profissional: (user?.nome || "profissional").toLowerCase(),
+        statusAtendimento, // automático: finalizado ou pendente
+        tipoRegistro,      // automático: local ou remoção
+        perfilPaciente: configUI.perfilPaciente.toLowerCase(),
+        escola: (user?.escolaId || "unidade").toLowerCase(),
+        profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
+        registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase(),
         createdAt: serverTimestamp()
       };
 
-      // 1. Histórico
-      const atendimentoRef = doc(collection(db, "atendimentos_enfermagem"));
-      batch.set(atendimentoRef, finalData);
+      // Salva o atendimento
+      batch.set(doc(collection(db, "atendimentos_enfermagem")), finalData);
 
-      // 2. Pasta Digital (Cérebro)
+      // Atualiza a Pasta Digital com o último estado
       batch.set(doc(db, "pastas_digitais", idPasta), {
         nomeBusca: finalData.nomePaciente,
         dataNascimento: finalData.dataNascimento,
         peso: finalData.peso,
         altura: finalData.altura,
         imc: finalData.imc,
-        alunoPossuiAlergia: finalData.alunoPossuiAlergia,
-        qualAlergia: finalData.qualAlergia,
+        etnia: finalData.etnia,
         sexo: finalData.sexo,
         turma: finalData.turma,
+        alunoPossuiAlergia: finalData.alunoPossuiAlergia,
+        qualAlergia: finalData.qualAlergia,
+        ultimoStatusClinico: statusAtendimento === 'pendente' ? 'em remoção' : 'estável',
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
-      // 3. Alunos
-      batch.set(doc(db, "alunos", idPasta), {
-        nome: finalData.nomePaciente,
-        dataNascimento: finalData.dataNascimento,
-        turma: finalData.turma,
-        sexo: finalData.sexo,
-        ultimaPresenca: serverTimestamp()
-      }, { merge: true });
-
       await batch.commit();
-      toast.success("atendimento salvo!", { id: toastId });
       
+      const msgSucesso = statusAtendimento === 'finalizado' 
+        ? "atendimento local finalizado!" 
+        : "remoção registrada como pendente!";
+        
+      toast.success(msgSucesso, { id: toastId });
       setFormData(getInitialFormState());
       setTemCadastro(false);
     } catch (error) {

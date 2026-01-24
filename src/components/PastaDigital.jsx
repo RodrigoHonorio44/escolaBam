@@ -3,7 +3,7 @@ import {
   Search, Briefcase, GraduationCap, PlusCircle, ShieldAlert,
   FileSearch, CheckCircle2, ClipboardList, ArrowLeft, 
   X, HeartPulse, FileText, Settings, AlertTriangle,
-  Loader2 // Importação adicionada para corrigir a tela branca
+  Loader2 
 } from 'lucide-react';
 import { db } from '../firebase/firebaseConfig';
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -27,10 +27,16 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
 
   const { buscarDadosCompletos, loading } = useBuscaPaciente();
 
-  // --- FUNÇÕES DE NORMALIZAÇÃO (Padrão Caio Giromba) ---
+  // --- FUNÇÕES DE NORMALIZAÇÃO ---
   const paraBanco = (str) => {
     if (!str) return '';
     return str.toString().toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
+
+  // FORMATAÇÃO VISUAL "Rodrigo Giromba"
+  const formatarNomeRS = (str) => {
+    if (!str || str === '---') return '---';
+    return str.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
   };
 
   // Carrega cache para sugestão rápida
@@ -42,9 +48,9 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
         const nomes = snap.docs.map(d => {
           const data = d.data();
           return {
-            nome: paraBanco(data.nome || data.nomeBusca || ''),
-            turma: paraBanco(data.tipoPerfil === 'funcionario' ? (data.cargo || 'staff') : (data.turma || data.serie || '---')),
-            tipo: paraBanco(data.tipoPerfil || 'aluno')
+            nome: data.nome || data.nomeBusca || '',
+            turma: data.tipoPerfil === 'funcionario' ? (data.cargo || 'staff') : (data.turma || data.serie || '---'),
+            tipo: data.tipoPerfil || 'aluno'
           };
         }).filter(item => item.nome !== '');
         setCacheNomes(nomes);
@@ -58,9 +64,9 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
   // Reabertura automática
   useEffect(() => {
     if (alunoParaReabrir?.nomePaciente || alunoParaReabrir?.nome) {
-      const nome = paraBanco(alunoParaReabrir.nomePaciente || alunoParaReabrir.nome);
-      setBusca(nome);
-      pesquisarPaciente(nome);
+      const nomeOriginal = alunoParaReabrir.nomePaciente || alunoParaReabrir.nome;
+      setBusca(nomeOriginal); // Mantém o original para o input
+      pesquisarPaciente(nomeOriginal);
     }
   }, [alunoParaReabrir]);
 
@@ -146,13 +152,15 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text"
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-12 pr-10 text-sm font-bold outline-none focus:ring-2 ring-blue-500/10 focus:bg-white transition-all lowercase"
+              style={{ textTransform: 'capitalize' }} // RESOLVE: Exibe Rodrigo Giromba no Input
+              className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-12 pr-10 text-sm font-bold outline-none focus:ring-2 ring-blue-500/10 focus:bg-white transition-all"
               placeholder="pesquisar paciente..."
               value={busca}
               onChange={(e) => {
-                const v = paraBanco(e.target.value);
+                const v = e.target.value;
                 setBusca(v);
-                if(v.length > 2) setSugestoes(cacheNomes.filter(p => p.nome.includes(v)));
+                const termo = paraBanco(v);
+                if(termo.length > 2) setSugestoes(cacheNomes.filter(p => paraBanco(p.nome).includes(termo)));
                 else setSugestoes([]);
               }}
               onKeyDown={(e) => e.key === 'Enter' && pesquisarPaciente()}
@@ -161,7 +169,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-[110]">
                 {sugestoes.slice(0, 5).map((s, i) => (
                   <button key={i} onClick={() => { setBusca(s.nome); pesquisarPaciente(s.nome); }} className="w-full p-4 text-left hover:bg-blue-50 border-b border-slate-50 flex justify-between items-center transition-colors">
-                    <span className="font-bold text-xs lowercase">{s.nome}</span>
+                    <span className="font-bold text-xs">{formatarNomeRS(s.nome)}</span>
                     <span className="text-[10px] text-slate-400 font-black lowercase">{s.turma}</span>
                   </button>
                 ))}
@@ -194,9 +202,9 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                 <div className="w-24 h-24 bg-slate-100 rounded-[35px] flex items-center justify-center mx-auto mb-4 text-slate-400">
                   {resultado.isFuncionario ? <Briefcase size={40} /> : <GraduationCap size={40} />}
                 </div>
-                <h2 className="text-xl font-black italic leading-tight text-slate-900 lowercase">{resultado.perfil?.nome}</h2>
+                <h2 className="text-xl font-black italic leading-tight text-slate-900">{formatarNomeRS(resultado.perfil?.nome)}</h2>
                 <p className="text-[10px] font-black text-blue-600 uppercase mt-2 tracking-widest bg-blue-50 inline-block px-3 py-1 rounded-full">
-                  {paraBanco(resultado.isFuncionario ? resultado.perfil?.cargo : `turma ${resultado.perfil?.turma || '---'}`)}
+                  {resultado.isFuncionario ? formatarNomeRS(resultado.perfil?.cargo) : `turma ${resultado.perfil?.turma || '---'}`}
                 </p>
                 
                 <div className="mt-8 space-y-3">
@@ -243,7 +251,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                         )}
 
                         <div className="space-y-4">
-                           <DataBox label="responsável" value={resultado.perfil?.nomeMae || resultado.perfil?.responsavel} />
+                           <DataBox label="responsável" value={formatarNomeRS(resultado.perfil?.nomeMae || resultado.perfil?.responsavel)} />
                            <DataBox label="contato" value={resultado.perfil?.telefone || resultado.perfil?.contato} />
                         </div>
                       </div>
@@ -321,7 +329,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                 )}
                 {formAtivo === 'atendimento' && (
                   <div className="text-center py-20 bg-blue-50 rounded-[40px] border-2 border-dashed border-blue-200">
-                    <p className="font-black text-blue-900 text-lg mb-8 uppercase italic px-10">iniciar triagem para {resultado.perfil?.nome}?</p>
+                    <p className="font-black text-blue-900 text-lg mb-8 uppercase italic px-10">iniciar triagem para {formatarNomeRS(resultado.perfil?.nome)}?</p>
                     <button 
                         onClick={() => { 
                           onNovoAtendimento({ 
@@ -348,7 +356,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
   );
 };
 
-// SUB-COMPONENTES
+// SUB-COMPONENTES (Sem alterações de lógica, apenas mantendo a estrutura)
 const TabButton = ({ active, label, onClick, icon }) => (
   <button onClick={onClick} className={`px-8 py-6 text-[10px] font-black uppercase tracking-widest flex items-center gap-3 border-b-2 transition-all ${active ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
     {icon} {label}
@@ -358,7 +366,7 @@ const TabButton = ({ active, label, onClick, icon }) => (
 const DataBox = ({ label, value, small }) => (
   <div className={`bg-slate-50 border border-slate-100 rounded-2xl text-left ${small ? 'p-3' : 'p-5'}`}>
     <p className="text-[8px] font-black text-slate-400 uppercase mb-1 tracking-tighter">{label}</p>
-    <p className={`${small ? 'text-[11px]' : 'text-xs'} font-bold text-slate-800 lowercase`}>{value || '---'}</p>
+    <p className={`${small ? 'text-[11px]' : 'text-xs'} font-bold text-slate-800`}>{value || '---'}</p>
   </div>
 );
 
@@ -390,11 +398,11 @@ const HistoricoTable = ({ atendimentos, onSelect }) => (
         {atendimentos?.length > 0 ? atendimentos.map((atend, i) => (
           <tr key={i} className="hover:bg-slate-50 transition-colors">
             <td className="p-5 font-bold text-slate-600">{atend.dataAtendimento || atend.data}</td>
-            <td className="p-5 font-black uppercase italic text-slate-800 lowercase">{atend.queixaPrincipal || atend.motivoAtendimento}</td>
+            <td className="p-5 font-black uppercase italic text-slate-800">{atend.queixaPrincipal || atend.motivoAtendimento}</td>
             <td className="p-5">
-               <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${atend.horaFinalizacao || atend.horario ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
-                 {(atend.horaFinalizacao || atend.horario) ? 'concluído' : 'em aberto'}
-               </span>
+                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${atend.horaFinalizacao || atend.horario ? 'bg-emerald-50 text-emerald-600' : 'bg-orange-50 text-orange-600'}`}>
+                  {(atend.horaFinalizacao || atend.horario) ? 'concluído' : 'em aberto'}
+                </span>
             </td>
             <td className="p-5 text-right">
               <button onClick={() => onSelect(atend)} className="text-blue-600 font-black uppercase hover:underline">ver ficha</button>

@@ -14,15 +14,24 @@ export const useQuestionarioSaude = (onSucesso) => {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const campoBuscaRef = useRef(null);
 
-  // Normalização padrão solicitada: lowercase sempre
-  const normalizeInput = (val) => (typeof val === 'string' ? val.toLowerCase() : val);
+  // --- LÓGICA DE FORMATAÇÃO VISUAL "R S" ---
+  const formatarNomeRS = (str) => {
+    if (!str) return '';
+    return str.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+  };
+
+  // Normalização padrão para o banco (sempre minúsculo)
+  const normalizeParaBanco = (val) => {
+    if (typeof val !== 'string') return val;
+    return val.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  };
 
   const estadoInicial = useMemo(() => ({
     alunoNome: '',
     dataNascimento: '',
     turma: '',
-    peso: '',   // Sincronizado com Pasta Digital
-    altura: '', // Sincronizado com Pasta Digital
+    peso: '',
+    altura: '',
     historicoDoencas: { possui: 'não', detalhes: '' },
     alergias: { possui: 'não', detalhes: '' },
     medicacaoContinua: { possui: 'não', detalhes: '' },
@@ -62,7 +71,6 @@ export const useQuestionarioSaude = (onSucesso) => {
 
   const [formData, setFormData] = useState(estadoInicial);
 
-  // Fecha sugestões ao clicar fora
   useEffect(() => {
     const clickFora = (e) => {
       if (campoBuscaRef.current && !campoBuscaRef.current.contains(e.target)) setMostrarSugestoes(false);
@@ -77,9 +85,8 @@ export const useQuestionarioSaude = (onSucesso) => {
     return valor;
   };
 
-  // --- BUSCA RÁPIDA (Sincronizada com Pasta Digital) ---
   const buscarSugestoes = async (valor) => {
-    const termo = valor.toLowerCase();
+    const termo = normalizeParaBanco(valor);
     if (termo.length < 3) { setSugestoes([]); setMostrarSugestoes(false); return; }
     setBuscandoNome(true);
     try {
@@ -91,7 +98,14 @@ export const useQuestionarioSaude = (onSucesso) => {
         limit(6)
       );
       const snap = await getDocs(q);
-      setSugestoes(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setSugestoes(snap.docs.map(d => {
+        const data = d.data();
+        return { 
+          id: d.id, 
+          ...data,
+          nomeExibicao: formatarNomeRS(data.nome || data.nomeBusca)
+        };
+      }));
       setMostrarSugestoes(true);
     } catch (error) { 
       console.error("Erro na busca:", error); 
@@ -100,14 +114,12 @@ export const useQuestionarioSaude = (onSucesso) => {
     }
   };
 
-  // --- SELECIONAR E PUXAR TUDO (Sincronismo Circular) ---
   const selecionarPaciente = async (paciente) => {
     setMostrarSugestoes(false);
     setFetching(true);
-    const toastId = toast.loading("sincronizando dados de todas as bases...");
+    const toastId = toast.loading("sincronizando dados...");
     
     try {
-      // Busca cruzada: Questionário + Pasta Digital + Aluno
       const [questSnap, pastaSnap, alunoSnap] = await Promise.all([
         getDoc(doc(db, "questionarios_saude", paciente.id)),
         getDoc(doc(db, "pastas_digitais", paciente.id)),
@@ -118,34 +130,31 @@ export const useQuestionarioSaude = (onSucesso) => {
       const dPasta = pastaSnap.exists() ? pastaSnap.data() : {};
       const dAlu = alunoSnap.exists() ? alunoSnap.data() : {};
 
-      // Mescla os dados priorizando o Questionário, mas preenchendo lacunas com a Pasta/Aluno
       setFormData(prev => ({
         ...estadoInicial,
-        ...dQuest, // Mantém o que já foi preenchido no questionário
+        ...dQuest,
         pacienteId: paciente.id,
-        alunoNome: normalizeInput(dQuest.alunoNome || dPasta.nomeBusca || dAlu.nome || paciente.nome || ''),
+        alunoNome: formatarNomeRS(dQuest.alunoNome || dPasta.nomeBusca || dAlu.nome || paciente.nome || ''),
         dataNascimento: dQuest.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || '',
-        turma: normalizeInput(dQuest.turma || dPasta.turma || dAlu.turma || ''),
+        turma: dQuest.turma || dPasta.turma || dAlu.turma || '',
         peso: dQuest.peso || dPasta.peso || '',
         altura: dQuest.altura || dPasta.altura || '',
         
-        // Sincroniza Alergias se o questionário estiver vazio
         alergias: {
           possui: dQuest.alergias?.possui || dPasta.alunoPossuiAlergia || 'não',
           detalhes: dQuest.alergias?.detalhes || dPasta.qualAlergia || ''
         },
         
-        // Sincroniza Contatos
         contatos: dQuest.contatos || [
           { 
-            nome: normalizeInput(dPasta.responsavel || dAlu.responsavel || ''), 
+            nome: formatarNomeRS(dPasta.responsavel || dAlu.responsavel || ''), 
             telefone: formatarTelefone(dPasta.contato || dAlu.contato || '') 
           },
           { nome: '', telefone: '' }
         ]
       }));
       
-      toast.success("perfil completo recuperado!", { id: toastId });
+      toast.success("perfil recuperado!", { id: toastId });
     } catch (error) { 
       console.error(error);
       toast.error("erro ao cruzar dados.", { id: toastId }); 
@@ -156,19 +165,19 @@ export const useQuestionarioSaude = (onSucesso) => {
 
   const handleChange = (path, value) => {
     const keys = path.split('.');
-    const normalizedValue = (typeof value === 'string') ? normalizeInput(value) : value;
+    const finalValue = path === 'alunoNome' ? formatarNomeRS(value) : value;
     
     setFormData(prev => {
       if (keys.length > 1) {
-        return { ...prev, [keys[0]]: { ...prev[keys[0]], [keys[1]]: normalizedValue ?? '' } };
+        return { ...prev, [keys[0]]: { ...prev[keys[0]], [keys[1]]: finalValue ?? '' } };
       }
-      return { ...prev, [path]: normalizedValue ?? '' };
+      return { ...prev, [path]: finalValue ?? '' };
     });
   };
 
   const handleContactChange = (index, field, value) => {
     const novosContatos = [...formData.contatos];
-    novosContatos[index][field] = field === 'telefone' ? formatarTelefone(value) : normalizeInput(value);
+    novosContatos[index][field] = field === 'nome' ? formatarNomeRS(value) : (field === 'telefone' ? formatarTelefone(value) : value);
     setFormData(prev => ({ ...prev, contatos: novosContatos }));
   };
 
@@ -179,7 +188,6 @@ export const useQuestionarioSaude = (onSucesso) => {
     }));
   };
 
-  // --- SALVAMENTO COM ATUALIZAÇÃO TRIPLA ---
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
     if (!formData.pacienteId) return toast.error("selecione um aluno primeiro.");
@@ -190,9 +198,9 @@ export const useQuestionarioSaude = (onSucesso) => {
     try {
       const batch = writeBatch(db);
 
-      // Normalização final (Caio Giromba) e limpeza de espaços
+      // --- TUDO VIRA LOWERCASE PARA O BANCO ---
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
-        typeof value === 'string' ? value.toLowerCase().trim() : value
+        typeof value === 'string' ? normalizeParaBanco(value) : value
       );
 
       payload.updatedAt = serverTimestamp();
@@ -211,19 +219,26 @@ export const useQuestionarioSaude = (onSucesso) => {
       // 1. Salva na coleção Questionários
       batch.set(doc(db, "questionarios_saude", formData.pacienteId), payload, { merge: true });
 
-      // 2. Atualiza Pasta Digital (Crucial para a Enfermagem ver os alertas)
+      // 2. Atualiza Pasta Digital (Adicionadas flags de status para visualização)
       batch.set(doc(db, "pastas_digitais", formData.pacienteId), {
-        nomeBusca: payload.alunoNome,
+        nomeBusca: payload.alunoNome, 
         alertaSaude: resumoSaude,
         alunoPossuiAlergia: payload.alergias.possui,
         qualAlergia: payload.alergias.detalhes || 'nenhuma informada',
         peso: payload.peso,
         altura: payload.altura,
+        
+        // --- BLOCO DE STATUS PARA A PASTA DIGITAL ---
         temQuestionarioSaude: true,
+        questionarioSaude: true,
+        statusSaude: 'preenchido',
+        questionarioSaudeStatus: 'concluido',
+        dataQuestionarioSaude: serverTimestamp(),
+        
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
-      // 3. Atualiza Base de Alunos (Mantém nome e turma sempre idênticos)
+      // 3. Atualiza Base de Alunos
       batch.set(doc(db, "alunos", formData.pacienteId), {
         nome: payload.alunoNome,
         dataNascimento: payload.dataNascimento,
@@ -234,7 +249,7 @@ export const useQuestionarioSaude = (onSucesso) => {
       }, { merge: true });
 
       await batch.commit();
-      toast.success("prontuário sincronizado com todas as bases!", { id: toastId });
+      toast.success("sincronizado com sucesso!", { id: toastId });
       if (onSucesso) onSucesso();
     } catch (error) { 
       console.error(error);

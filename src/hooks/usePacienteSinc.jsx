@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { db } from '../firebase/firebaseConfig';
 import { 
-  doc, getDoc, query, collection, where, getDocs, limit 
+  doc, getDoc, query, collection, where, getDocs, limit, orderBy, startAt, endAt
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
@@ -19,6 +19,7 @@ export const usePacienteSinc = () => {
     return `${nomeSlug}-${dataRef}`;
   };
 
+  // BUSCA GLOBAL DE SUGESTÕES (OLHA PARA TODAS AS ENTRADAS)
   const buscarSugestoes = async (termo) => {
     const busca = termo.trim().toLowerCase();
     if (busca.length < 3) {
@@ -27,17 +28,48 @@ export const usePacienteSinc = () => {
     }
 
     try {
-      const q = query(
-        collection(db, "alunos"),
-        where("nome", ">=", busca),
-        where("nome", "<=", busca + "\uf8ff"),
-        limit(5)
+      // Lista de coleções onde o paciente pode estar
+      const colecoes = ["alunos", "pastas_digitais", "questionarios_saude", "atendimentos_enfermagem"];
+      let resultadosBrutos = [];
+
+      // Criamos promessas de busca para todas as coleções simultaneamente
+      const buscas = colecoes.map(async (colNome) => {
+        // Nota: 'nome' para alunos/atendimentos, 'nomeBusca' para pastas, 'alunoNome' para questionarios
+        const campoBusca = colNome === "pastas_digitais" ? "nomeBusca" : 
+                           colNome === "questionarios_saude" ? "alunoNome" : "nome";
+        
+        const q = query(
+          collection(db, colNome),
+          orderBy(campoBusca),
+          startAt(busca),
+          endAt(busca + "\uf8ff"),
+          limit(5)
+        );
+        
+        const snap = await getDocs(q);
+        return snap.docs.map(d => ({
+          id: d.id,
+          // Normalizamos o nome para o componente de UI
+          nome: d.data()[campoBusca] || d.data().nome || d.data().nomePaciente,
+          dataNascimento: d.data().dataNascimento || "",
+          origem: colNome,
+          ...d.data()
+        }));
+      });
+
+      const retornoBuscas = await Promise.all(buscas);
+      resultadosBrutos = retornoBuscas.flat();
+
+      // REMOVE DUPLICADOS (pelo nome e data de nascimento ou ID)
+      const unificados = resultadosBrutos.filter((valor, index, self) =>
+        index === self.findIndex((t) => (
+          t.nome === valor.nome && t.dataNascimento === valor.dataNascimento
+        ))
       );
-      const snap = await getDocs(q);
-      const lista = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setSugestoes(lista);
+
+      setSugestoes(unificados.slice(0, 8)); // Retorna as 8 melhores sugestões
     } catch (error) {
-      console.error("Erro na busca:", error);
+      console.error("Erro na busca global:", error);
     }
   };
 
@@ -59,10 +91,9 @@ export const usePacienteSinc = () => {
 
       const norm = (val) => (val ? String(val).toLowerCase().trim() : '');
 
-      // 1. Busca etnia nos cadastros principais
       let etniaFinal = norm(dPas.etnia || dAlu.etnia || dQue.etnia || dQue.raca || '');
       
-      // 2. BUSCA NO HISTÓRICO (Fallback isolado para não travar o código)
+      // Busca no histórico de atendimentos se a etnia ainda estiver vazia
       if (!etniaFinal) {
         try {
           const qAtend = query(
@@ -75,7 +106,7 @@ export const usePacienteSinc = () => {
             etniaFinal = norm(snapAtend.docs[0].data().etnia);
           }
         } catch (err) {
-          console.warn("Histórico inacessível momentaneamente:", err.message);
+          console.warn("Histórico inacessível:", err.message);
         }
       }
 
@@ -87,6 +118,7 @@ export const usePacienteSinc = () => {
         sexo: norm(dAlu.sexo || dQue.sexo || dPas.sexo),
         turma: norm(dAlu.turma || dQue.turma || dPas.turma),
         etnia: etniaFinal,
+        // Mantém os tipos originais do Firebase (Numbers)
         peso: dPas.peso || dQue.peso || '',
         altura: dPas.altura || dQue.altura || '',
         imc: dPas.imc || dQue.imc || '',

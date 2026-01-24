@@ -28,7 +28,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       naoSabeEtnia: false,
       naoSabePeso: false,
       naoSabeAltura: false,
-      naoSabeEndereco: false, // Novo estado
+      naoSabeEndereco: false,
       cartaoSus: '',
       sexo: '',
       dataNascimento: '',
@@ -47,26 +47,60 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     }
   });
 
+  // --- CORREÇÃO E ATUALIZAÇÃO: CARREGAMENTO FORÇADO VIA SETVALUE ---
   useEffect(() => {
     if (dadosIniciais) {
-      reset({
-        ...dadosIniciais,
-        nome: dadosIniciais.nome || "",
-        etnia: dadosIniciais.etnia || "",
-        peso: dadosIniciais.peso || "",
-        altura: dadosIniciais.altura || "",
-        temAlergia: dadosIniciais.alunoPossuiAlergia || dadosIniciais.temAlergia || 'não',
-        historicoMedico: dadosIniciais.qualAlergia || dadosIniciais.historicoMedico || '',
-      });
+      // 1. Tratamento do Nome (Pode vir como 'nome' ou 'nomePaciente')
+      const nomeFinal = dadosIniciais.nome || dadosIniciais.nomePaciente || "";
+      setValue("nome", paraBanco(nomeFinal));
+
+      // 2. Biometria (Garante conversão de Number para String para o Input)
+      if (dadosIniciais.etnia) {
+        setValue("etnia", String(dadosIniciais.etnia).toLowerCase());
+        setValue("naoSabeEtnia", false);
+      } else {
+        setValue("naoSabeEtnia", true);
+      }
+
+      if (dadosIniciais.peso) {
+        setValue("peso", String(dadosIniciais.peso));
+        setValue("naoSabePeso", false);
+      } else {
+        setValue("naoSabePeso", true);
+      }
+
+      if (dadosIniciais.altura) {
+        setValue("altura", String(dadosIniciais.altura));
+        setValue("naoSabeAltura", false);
+      } else {
+        setValue("naoSabeAltura", true);
+      }
+
+      // 3. Sincronismo de Alergias e Dados Pessoais
+      setValue("temAlergia", dadosIniciais.alunoPossuiAlergia || dadosIniciais.temAlergia || 'não');
+      setValue("historicoMedico", dadosIniciais.qualAlergia || dadosIniciais.historicoMedico || '');
+      setValue("dataNascimento", dadosIniciais.dataNascimento || "");
+      setValue("turma", paraBanco(dadosIniciais.turma));
+      setValue("sexo", paraBanco(dadosIniciais.sexo));
+      setValue("matriculaInteligente", dadosIniciais.matriculaInteligente || "");
+      
+      // 4. Endereço
+      setValue("endereco_cep", dadosIniciais.endereco_cep || "");
+      setValue("endereco_rua", paraBanco(dadosIniciais.endereco_rua));
+      setValue("endereco_bairro", paraBanco(dadosIniciais.endereco_bairro));
+      setValue("naoSabeEndereco", !!dadosIniciais.naoSabeEndereco);
+
+      // Reset complementar para outros campos que não mapeamos manualmente
+      reset({ ...dadosIniciais, nome: nomeFinal }, { keepDefaultValues: true });
     }
-  }, [dadosIniciais, reset]);
+  }, [dadosIniciais, setValue, reset]);
 
   const watchDataNasc = watch("dataNascimento");
   const naoSabeMatricula = watch("naoSabeMatricula");
   const naoSabeEtnia = watch("naoSabeEtnia");
   const naoSabePeso = watch("naoSabePeso");
   const naoSabeAltura = watch("naoSabeAltura");
-  const naoSabeEndereco = watch("naoSabeEndereco"); // Watch para o novo botão
+  const naoSabeEndereco = watch("naoSabeEndereco");
   const watchTemAlergia = watch("temAlergia");
 
   const handleCEPChange = async (e) => {
@@ -219,7 +253,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 rounded-2xl font-bold text-blue-700 outline-none" />
         </div>
 
-        {/* ENDEREÇO COM CEP + BOTÃO "NÃO SEI" */}
+        {/* ENDEREÇO */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex justify-between items-center">
             <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2 italic"><MapPin size={14}/> Localização e Endereço</label>
@@ -245,7 +279,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* BIOMETRIA */}
+        {/* BIOMETRIA (Etnia, Peso, Altura) */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100">
           <div className="space-y-2">
             <div className="flex justify-between items-center px-1">
