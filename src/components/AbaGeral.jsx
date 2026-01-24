@@ -2,15 +2,17 @@ import React from 'react';
 import { Activity, Thermometer, AlertTriangle, Clock, HeartPulse, TrendingUp } from 'lucide-react';
 
 const AbaGeral = ({ dados, darkMode }) => {
-  // Garante que dados.rankingQueixas exista e seja um array para evitar erros de renderização
+  // Padronização para minúsculas
+  const normalizar = (str) => str?.toString().toLowerCase().trim() || "";
+
   const rankingSeguro = Array.isArray(dados?.rankingQueixas) ? dados.rankingQueixas : [];
   const totalAtendimentos = dados?.atendimentos?.length || 0;
 
   const stats = [
-    { label: "Total Atendimentos", value: totalAtendimentos, icon: <Activity />, color: "blue" },
-    { label: "Casos de Febre", value: dados?.totalFebre || 0, icon: <Thermometer />, color: "orange" },
-    { label: "Alunos Alérgicos", value: dados?.totalAlergicos || 0, icon: <AlertTriangle />, color: "rose" },
-    { label: "Tempo Médio", value: `${dados?.tempoMedio || 0}m`, icon: <Clock />, color: "emerald" },
+    { label: "total atendimentos", value: totalAtendimentos, icon: <Activity />, color: "blue" },
+    { label: "casos de febre", value: dados?.totalFebre || 0, icon: <Thermometer />, color: "orange" },
+    { label: "alunos alérgicos", value: dados?.totalAlergicos || 0, icon: <AlertTriangle />, color: "rose" },
+    { label: "tempo médio", value: `${dados?.tempoMedio || 0}m`, icon: <Clock />, color: "emerald" },
   ];
 
   const estilos = {
@@ -39,14 +41,13 @@ const AbaGeral = ({ dados, darkMode }) => {
             <h2 className="text-5xl font-black italic leading-none mb-3 tracking-tighter transition-all group-hover:text-blue-600">
               {item.value}
             </h2>
-            <p className="text-[10px] font-black uppercase tracking-[2px] opacity-40">{item.label}</p>
+            <p className="text-[10px] font-black lowercase tracking-[2px] opacity-40">{item.label}</p>
           </div>
         ))}
       </div>
 
-      {/* Mapa de Sintomas (Progress Bars) */}
+      {/* Mapa de Sintomas */}
       <div className={`p-10 rounded-[50px] border relative overflow-hidden ${estilos.card}`}>
-        {/* Decorativo de fundo */}
         <div className="absolute top-0 right-0 p-8 opacity-5">
           <TrendingUp size={120} />
         </div>
@@ -55,10 +56,10 @@ const AbaGeral = ({ dados, darkMode }) => {
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-4">
             <h3 className="text-sm font-black uppercase tracking-[3px] flex items-center gap-4 italic">
               <span className="p-2 bg-blue-600 rounded-lg text-white"><HeartPulse size={20} /></span>
-              Distribuição Epidemiológica
+              distribuição epidemiológica
             </h3>
             <div className="px-4 py-2 bg-blue-500/5 rounded-full border border-blue-500/10 text-[10px] font-black text-blue-500 uppercase italic">
-              Amostra: {totalAtendimentos} Atendimentos
+              amostra: {totalAtendimentos} atendimentos
             </div>
           </div>
 
@@ -71,8 +72,8 @@ const AbaGeral = ({ dados, darkMode }) => {
                   <div key={idx} className="group space-y-4">
                     <div className="flex justify-between items-end">
                       <div className="space-y-1">
-                        <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest block opacity-60">Sintoma / Queixa</span>
-                        <span className="text-sm font-black uppercase italic leading-none">{nome}</span>
+                        <span className="text-[9px] font-black text-blue-500 lowercase tracking-widest block opacity-60">sintoma / queixa</span>
+                        <span className="text-sm font-black lowercase italic leading-none">{normalizar(nome)}</span>
                       </div>
                       <div className="text-right">
                         <span className="text-lg font-black italic text-blue-600 leading-none">{qtd}</span>
@@ -92,7 +93,7 @@ const AbaGeral = ({ dados, darkMode }) => {
             ) : (
               <div className="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed border-slate-500/10 rounded-[30px]">
                 <Activity className="text-slate-200 mb-4" size={40} />
-                <p className="text-[10px] font-black uppercase opacity-20 tracking-widest">Aguardando dados de atendimentos...</p>
+                <p className="text-[10px] font-black lowercase opacity-20 tracking-widest">aguardando dados de atendimentos...</p>
               </div>
             )}
           </div>

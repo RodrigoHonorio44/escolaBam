@@ -8,7 +8,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import AbaGeral from './AbaGeral';
 import AbaNutricional from './AbaNutricional';
 import AbaRecidiva from './AbaRecidiva';
-import AbaFichasMedicas from './AbaFichasMedicas'; // Certifique-se de que o arquivo existe
+import AbaFichasMedicas from './AbaFichasMedicas';
 
 const RelatorioMedicoPro = ({ onVoltar, darkMode }) => {
   const [loading, setLoading] = useState(false);
@@ -29,19 +29,35 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode }) => {
 
   const [pastasGeral, setPastasGeral] = useState([]);
 
-  // Lógica para agrupar fichas médicas (PCD, Alergias, etc)
+  // --- Lógica de Normalização de Comparação ---
+  const checkStatus = (val) => {
+    if (!val) return false;
+    const clean = val.toString().toLowerCase().trim();
+    return clean === 'sim' || clean === 's';
+  };
+
+  // --- Agrupamento de Fichas Médicas (Sincronismo Circular) ---
   const gruposFichas = useMemo(() => {
     return {
-      alergias: pastasGeral.filter(p => p.alergia === "Sim" || p.detalhesAlergia),
-      acessibilidade: pastasGeral.filter(p => p.pcd === "Sim" || p.tipoDeficiencia),
-      cronicos: pastasGeral.filter(p => p.doencaCronica === "Sim" || p.detalhesDoenca),
-      restricaoAlimentar: pastasGeral.filter(p => p.restricaoAlimentar === "Sim" || p.detalhesRestricao),
+      alergias: pastasGeral.filter(p => 
+        checkStatus(p.alergia) || checkStatus(p.alunoPossuiAlergia) || (p.qualAlergia && p.qualAlergia !== 'nenhuma')
+      ),
+      acessibilidade: pastasGeral.filter(p => 
+        checkStatus(p.pcd) || p.tipoDeficiencia || p.necessidadesEspeciais?.possui === 'sim'
+      ),
+      cronicos: pastasGeral.filter(p => 
+        checkStatus(p.doencaCronica) || p.diabetes?.possui === 'sim' || p.epilepsia?.possui === 'sim'
+      ),
+      restricaoAlimentar: pastasGeral.filter(p => 
+        checkStatus(p.restricaoAlimentar) || p.restricoesAlimentares?.possui === 'sim'
+      ),
     };
   }, [pastasGeral]);
 
   const carregarDados = async () => {
     setLoading(true);
     try {
+      // Query de atendimentos no período
       const qAtend = query(
         collection(db, "atendimentos_enfermagem"),
         where("dataAtendimento", ">=", periodo.inicio),
@@ -61,20 +77,23 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode }) => {
       let somaTempo = 0;
 
       listaAtendimentos.forEach(atend => {
-        const q = atend.queixaPrincipal || "Não Informada";
-        contagemQueixas[q] = (contagemQueixas[q] || 0) + 1;
+        // Normalização das queixas para o ranking (Padrão Caio Giromba)
+        const queixaNorm = (atend.queixaPrincipal || "não informada").toLowerCase().trim();
+        contagemQueixas[queixaNorm] = (contagemQueixas[queixaNorm] || 0) + 1;
         
-        const id = atend.pacienteId || atend.nomePaciente;
-        if (!contagemReincidentes[id]) {
-          contagemReincidentes[id] = { 
-            nome: atend.nomePaciente, 
-            turma: atend.turma, 
+        // Chave única por paciente para evitar conflito de nomes
+        const pId = atend.pacienteId || atend.nomePaciente.toLowerCase().trim();
+        
+        if (!contagemReincidentes[pId]) {
+          contagemReincidentes[pId] = { 
+            nome: atend.nomePaciente.toLowerCase(), 
+            turma: (atend.turma || "n/a").toLowerCase(), 
             qtd: 0, 
             queixas: [] 
           };
         }
-        contagemReincidentes[id].qtd++;
-        contagemReincidentes[id].queixas.push(atend.queixaPrincipal);
+        contagemReincidentes[pId].qtd++;
+        contagemReincidentes[pId].queixas.push(atend.queixaPrincipal);
 
         if (parseFloat(atend.temperatura) >= 37.5) febre++;
         somaTempo += parseInt(atend.tempoDuracao) || 0;
@@ -84,16 +103,16 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode }) => {
       setDados({
         atendimentos: listaAtendimentos,
         rankingQueixas: Object.entries(contagemQueixas).sort((a, b) => b[1] - a[1]),
-        reincidentes: Object.values(contagemReincidentes).filter(a => a.qtd > 1),
+        reincidentes: Object.values(contagemReincidentes).filter(a => a.qtd > 1).sort((a,b) => b.qtd - a.qtd),
         totalFebre: febre,
-        totalAlergicos: listaPastas.filter(p => p.alergia === "Sim").length,
+        totalAlergicos: listaPastas.filter(p => checkStatus(p.alunoPossuiAlergia) || checkStatus(p.alergia)).length,
         tempoMedio: listaAtendimentos.length > 0 ? (somaTempo / listaAtendimentos.length).toFixed(0) : 0
       });
 
-      toast.success("Dados Sincronizados");
+      toast.success("DADOS SINCRONIZADOS");
     } catch (error) {
       console.error(error);
-      toast.error("Falha na sincronização");
+      toast.error("FALHA NA SINCRONIZAÇÃO");
     } finally {
       setLoading(false);
     }
@@ -136,12 +155,12 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode }) => {
               className={`p-3 rounded-xl text-[10px] font-black border ${darkMode ? 'bg-white/5 border-white/10 text-white' : 'bg-white border-slate-200'}`}
             />
             <button onClick={carregarDados} className="p-4 bg-blue-600 text-white rounded-xl hover:scale-105 active:scale-95 transition-all shadow-lg shadow-blue-500/20">
-               {loading ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
+                {loading ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
             </button>
         </div>
       </div>
 
-      {/* Navegação por Abas */}
+      {/* Abas */}
       <div className="max-w-7xl mx-auto mb-10">
         <div className={`flex flex-wrap gap-2 p-2 rounded-[30px] border ${theme.card}`}>
           <TabButton active={activeTab === 'geral'} onClick={() => setActiveTab('geral')} icon={<LayoutDashboard size={16}/>} label="Dashboard" />
@@ -151,7 +170,7 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode }) => {
         </div>
       </div>
 
-      {/* Área de Conteúdo */}
+      {/* Conteúdo dinâmico */}
       <div className="max-w-7xl mx-auto">
         {loading ? (
           <div className="py-32 text-center">

@@ -26,7 +26,8 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   });
 
   useEffect(() => {
-    const escolaUsuario = user?.escolaId || "E. M. Anísio Teixeira";
+    // Sincronizado com o padrão do cadastro
+    const escolaUsuario = (user?.escolaId || "E. M. ANÍSIO TEIXEIRA").toUpperCase();
     
     const q = query(
       collection(db, "atendimentos_enfermagem"),
@@ -61,20 +62,25 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     try {
       const atendRef = doc(db, "atendimentos_enfermagem", selectedAtend.id);
       
-      await updateDoc(atendRef, {
-        ...hospitalInfo,
-        statusAtendimento: 'Finalizado',
+      const updateData = {
+        condutaHospitalar: hospitalInfo.condutaHospitalar.toUpperCase(),
+        dataAlta: hospitalInfo.dataAlta,
+        observacoesFinais: hospitalInfo.observacoesFinais.toUpperCase(),
+        statusAtendimento: 'FINALIZADO',
         finalizadoEm: new Date().toISOString(),
-        finalizadoPor: user?.nome || 'Profissional',
-        registroFinalizador: user?.registroProfissional || 'Sem Registro'
-      });
+        finalizadoPor: (user?.nome || 'PROFISSIONAL').toUpperCase(),
+        registroFinalizador: (user?.registroProfissional || user?.coren || 'SEM REGISTRO').toUpperCase()
+      };
+
+      await updateDoc(atendRef, updateData);
 
       if (selectedAtend.pacienteId) {
         const pastaRef = doc(db, "pastas_digitais", selectedAtend.pacienteId);
         await updateDoc(pastaRef, {
-          ultimoStatusClinico: 'Estável / Alta Hospitalar',
+          ultimoStatusClinico: 'ESTÁVEL / ALTA HOSPITALAR',
           dataUltimaAlta: hospitalInfo.dataAlta,
-          ultimaConduta: hospitalInfo.condutaHospitalar
+          ultimaConduta: hospitalInfo.condutaHospitalar.toUpperCase(),
+          ultimaAtualizacao: new Date()
         });
       }
 
@@ -90,12 +96,14 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   };
 
   const atendimentosFiltrados = atendimentos.filter(atend => {
-    const statusDoc = atend.statusAtendimento || 'Aberto';
+    const statusDoc = (atend.statusAtendimento || 'ABERTO').toUpperCase();
+    
+    // Lógica de filtro refinada
     const matchesStatus = filtroStatus === 'Todos' 
       ? true 
       : (filtroStatus === 'Aberto' 
-          ? statusDoc.includes('Aberto') 
-          : statusDoc === filtroStatus);
+          ? (statusDoc.includes('ABERTO') || statusDoc.includes('REMOÇÃO')) 
+          : statusDoc === 'FINALIZADO');
 
     const dataDoc = atend.dataAtendimento || atend.data || "";
     const matchesData = filtroData ? dataDoc === filtroData : true;
@@ -157,26 +165,19 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
           </div>
         ) : (
           atendimentosFiltrados.map((atend) => {
-            // LÓGICA DE INTELIGÊNCIA CLÍNICA ATUALIZADA
-            const statusAtual = atend.statusAtendimento || 'Aberto';
-            const foiHospital = atend.encaminhadoHospital?.toString().toLowerCase().trim() === 'sim';
-            const isRemocao = statusAtual.includes('Remoção');
-            const isAberto = statusAtual.includes('Aberto');
-            const precisaResolver = isAberto && (foiHospital || isRemocao);
+            const statusAtual = (atend.statusAtendimento || 'ABERTO').toUpperCase();
+            // Identifica se é um caso que precisa de retorno (Remoção ou explicitamente Aberto com hospital)
+            const precisaResolver = statusAtual.includes('REMOÇÃO') || statusAtual === 'ABERTO';
             
-            // --- TRATAMENTO ROBUSTO DE ALERGIAS ---
-            // Verifica campos novos e antigos (qualAlergia, alergias, alunoPossuiAlergia)
-            const detalheAlergia = atend.qualAlergia || atend.alergias || "";
-            const confirmacaoAlergia = atend.alunoPossuiAlergia === "Sim" || detalheAlergia.length > 2;
-            
-            // Filtra para não mostrar "Não" ou "Nenhuma" como se fosse uma alergia real
-            const temAlergiaReal = confirmacaoAlergia && 
-              !["não", "nao", "nenhuma", "n/a"].includes(detalheAlergia.toLowerCase().trim());
+            // Tratamento de Alergias sincronizado com o componente de cadastro
+            const detalheAlergia = atend.alergias || atend.qualAlergia || "";
+            const temAlergiaReal = detalheAlergia.length > 0 && 
+                                  !["NÃO", "NÃO POSSUI", "NENHUMA", "N/A"].includes(detalheAlergia.toUpperCase().trim());
 
             return (
               <div 
                 key={atend.id}
-                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${statusAtual === 'Finalizado' ? 'bg-slate-50/30' : ''}`}
+                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl hover:shadow-slate-100 transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${statusAtual === 'FINALIZADO' ? 'bg-slate-50/30' : ''}`}
               >
                 <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${precisaResolver ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                 
@@ -190,10 +191,9 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                         {atend.nomePaciente}
                       </h3>
                       
-                      {/* TAG DE ALERGIA ATUALIZADA */}
                       {temAlergiaReal && (
                         <span className="bg-rose-600 text-white text-[8px] font-black px-2 py-1 rounded-full flex items-center gap-1 animate-pulse shadow-sm">
-                          <AlertCircle size={10} /> ALERGIA: {detalheAlergia.toUpperCase() || "SIM"}
+                          <AlertCircle size={10} /> ALERGIA: {detalheAlergia.toUpperCase()}
                         </span>
                       )}
 
@@ -207,9 +207,9 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                     </div>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
                       <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">
-                        {atend.perfilPaciente === 'aluno' ? `TURMA ${atend.turma}` : atend.cargo}
+                        {atend.perfilPaciente === 'ALUNO' ? `TURMA ${atend.turma}` : atend.cargo}
                       </span>
-                      <span className="tabular-nums">{atend.dataAtendimento || atend.data} • {atend.horario || atend.horarioReferencia}</span>
+                      <span className="tabular-nums">{atend.dataAtendimento || atend.data} • {atend.horarioReferencia || atend.horario}</span>
                     </p>
                   </div>
                 </div>
@@ -220,7 +220,9 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                       {precisaResolver ? 'Aguardando Retorno' : 'Atendimento Concluído'}
                     </span>
                     <span className="text-[10px] font-black text-slate-400 flex items-center gap-1.5 uppercase italic tracking-tight">
-                      {foiHospital ? <><Hospital size={12}/> {atend.destinoHospital}</> : "Liberado na Unidade"}
+                      {atend.encaminhamento === 'SIM' || statusAtual.includes('REMOÇÃO') ? 
+                        <><Hospital size={12}/> {atend.destinoHospital || "HOSPITAL"}</> : 
+                        "Liberado na Unidade"}
                     </span>
                   </div>
 
@@ -270,7 +272,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
               <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50">
                 <p className="text-[9px] font-black text-blue-500 uppercase mb-2 tracking-widest italic">Queixa Inicial na Escola:</p>
                 <p className="text-sm font-bold text-slate-700 leading-relaxed italic">
-                  "{selectedAtend.motivoAtendimento || selectedAtend.motivoEncaminhamento || selectedAtend.relatoCurto || "Não especificado"}"
+                  "{selectedAtend.queixaPrincipal || selectedAtend.motivoAtendimento || "Não especificado"}"
                 </p>
               </div>
 
@@ -282,7 +284,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                   <textarea 
                     required
                     placeholder="Descreva a conduta médica realizada no hospital..."
-                    className="w-full bg-slate-50 border-2 border-transparent rounded-[25px] px-6 py-5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:bg-white outline-none resize-none transition-all shadow-inner"
+                    className="w-full bg-slate-50 border-2 border-transparent rounded-[25px] px-6 py-5 text-sm font-medium text-slate-700 focus:border-blue-500 focus:bg-white outline-none resize-none transition-all shadow-inner uppercase"
                     rows="4"
                     value={hospitalInfo.condutaHospitalar}
                     onChange={(e) => setHospitalInfo({...hospitalInfo, condutaHospitalar: e.target.value})}
@@ -305,7 +307,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                     <input 
                       type="text"
                       placeholder="Ex: 3 dias de repouso"
-                      className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-inner"
+                      className="w-full bg-slate-50 border-2 border-transparent rounded-2xl px-6 py-4 text-sm font-bold text-slate-700 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-inner uppercase"
                       value={hospitalInfo.observacoesFinais}
                       onChange={(e) => setHospitalInfo({...hospitalInfo, observacoesFinais: e.target.value})}
                     />

@@ -5,6 +5,9 @@ const AbaRecidiva = ({ dados, darkMode }) => {
   // Ordenar reincidentes pelo maior número de atendimentos
   const reincidentesOrdenados = [...(dados?.reincidentes || [])].sort((a, b) => b.qtd - a.qtd);
 
+  // Função de normalização para exibição consistente
+  const formatText = (val) => val?.toString().toLowerCase().trim() || "";
+
   const estilos = {
     container: darkMode ? 'bg-[#0A1629] border-white/5' : 'bg-white border-slate-100',
     card: darkMode ? 'bg-white/5 border-white/5 hover:bg-white/[0.08]' : 'bg-slate-50 border-slate-200 hover:bg-white hover:shadow-xl hover:shadow-slate-200/50',
@@ -44,8 +47,11 @@ const AbaRecidiva = ({ dados, darkMode }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {reincidentesOrdenados.length > 0 ? (
             reincidentesOrdenados.map((aluno, idx) => {
-              // Garante que queixas seja um array único e limpo
-              const queixasUnicas = Array.from(new Set(aluno.queixas || [])).filter(q => q);
+              // Limpeza e normalização das queixas
+              const queixasUnicas = Array.from(new Set(aluno.queixas || []))
+                .map(q => formatText(q))
+                .filter(q => q && q !== "null");
+                
               const nivelCritico = aluno.qtd > 3 ? 'text-rose-600' : 'text-orange-500';
 
               return (
@@ -61,15 +67,17 @@ const AbaRecidiva = ({ dados, darkMode }) => {
                     
                     <div className="text-right">
                       <span className={estilos.label}>Turma</span>
-                      <p className="text-sm font-black uppercase italic bg-black/5 px-3 py-1 rounded-lg">{aluno.turma || "N/I"}</p>
+                      <p className="text-sm font-black uppercase italic bg-black/5 px-3 py-1 rounded-lg lowercase tracking-tight">
+                        {formatText(aluno.turma) || "n/i"}
+                      </p>
                     </div>
                   </div>
 
-                  {/* Nome do Aluno */}
+                  {/* Nome do Aluno - Lowercase conforme solicitado */}
                   <div className="mb-6">
                     <span className={estilos.label}>Identificação</span>
-                    <h4 className="text-[13px] font-black uppercase italic leading-tight group-hover:text-rose-600 transition-colors">
-                      {aluno.nome}
+                    <h4 className="text-[14px] font-black lowercase italic leading-tight group-hover:text-rose-600 transition-colors">
+                      {formatText(aluno.nome)}
                     </h4>
                   </div>
 
@@ -83,17 +91,17 @@ const AbaRecidiva = ({ dados, darkMode }) => {
                     <div className="flex flex-wrap gap-2">
                       {queixasUnicas.length > 0 ? (
                         queixasUnicas.map((queixa, i) => (
-                          <span key={i} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase italic border shadow-sm ${estilos.tag}`}>
+                          <span key={i} className={`px-3 py-1.5 rounded-xl text-[9px] font-black lowercase italic border shadow-sm ${estilos.tag}`}>
                             {queixa}
                           </span>
                         ))
                       ) : (
-                        <span className="text-[10px] italic opacity-30">Nenhuma queixa detalhada</span>
+                        <span className="text-[10px] italic opacity-30">nenhuma queixa detalhada</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Efeito Decorativo Group Hover */}
+                  {/* Efeito Decorativo */}
                   <div className="absolute -bottom-4 -right-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity">
                     <Repeat size={120} />
                   </div>
@@ -113,7 +121,7 @@ const AbaRecidiva = ({ dados, darkMode }) => {
         </div>
       </div>
       
-      {/* Nota de Rodapé da Auditoria */}
+      {/* Nota de Rodapé */}
       <div className="mt-6 ml-10 flex items-center gap-3 opacity-30">
         <AlertCircle size={14} />
         <p className="text-[8px] font-black uppercase tracking-widest">

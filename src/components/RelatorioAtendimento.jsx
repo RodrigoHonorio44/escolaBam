@@ -5,15 +5,20 @@ import {
 } from 'lucide-react';
 
 const RelatorioAtendimento = ({ atendimento, onVoltar }) => {
-  // Função para imprimir a página
   const handlePrint = () => {
     window.print();
   };
 
   if (!atendimento) return null;
 
+  // Função interna para garantir o padrão lowercase solicitado
+  const formatarParaExibicao = (str) => {
+    if (!str) return "";
+    return str.toString().toLowerCase().trim();
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 print:p-0">
+    <div className="space-y-6 animate-in fade-in duration-500 print:p-0 print:m-0">
       {/* BARRA DE AÇÕES - ESCONDE NA IMPRESSÃO */}
       <div className="flex items-center justify-between bg-white p-6 rounded-[24px] shadow-sm border border-slate-100 print:hidden">
         <button 
@@ -31,12 +36,12 @@ const RelatorioAtendimento = ({ atendimento, onVoltar }) => {
       </div>
 
       {/* FICHA DO RELATÓRIO */}
-      <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden print:border-none print:shadow-none">
+      <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden print:border-none print:shadow-none print:w-full">
         
         {/* CABEÇALHO DO RELATÓRIO */}
-        <div className="bg-slate-900 p-8 text-white flex justify-between items-center">
+        <div className="bg-slate-900 p-8 text-white flex justify-between items-center print:bg-slate-900 print:text-white">
           <div className="flex items-center gap-4">
-            <div className="bg-blue-600 p-3 rounded-2xl">
+            <div className="bg-blue-600 p-3 rounded-2xl print:bg-blue-600">
               <Stethoscope size={24} />
             </div>
             <div>
@@ -60,20 +65,24 @@ const RelatorioAtendimento = ({ atendimento, onVoltar }) => {
               <User size={18} className="text-blue-600" />
               <h3 className="font-black text-xs uppercase tracking-widest text-slate-800">Identificação do Paciente</h3>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 print:grid-cols-3">
               <div>
                 <label className="text-[9px] font-black text-slate-400 uppercase">Nome Completo</label>
-                <p className="font-bold text-slate-700 uppercase italic">{atendimento.pacienteNome}</p>
+                <p className="font-bold text-slate-700 uppercase italic">
+                  {formatarParaExibicao(atendimento.nomePaciente || atendimento.pacienteNome)}
+                </p>
               </div>
               <div>
-                <label className="text-[9px] font-black text-slate-400 uppercase">Unidade Escolar</label>
-                <p className="font-bold text-slate-700 uppercase">{atendimento.escolaId}</p>
+                <label className="text-[9px] font-black text-slate-400 uppercase">Turma / Unidade</label>
+                <p className="font-bold text-slate-700 uppercase">
+                  {formatarParaExibicao(atendimento.turma || atendimento.escolaId)}
+                </p>
               </div>
               <div>
                 <label className="text-[9px] font-black text-slate-400 uppercase">Data e Hora</label>
                 <div className="flex items-center gap-2 text-slate-700 font-bold">
                   <Clock size={14} className="text-slate-300" />
-                  {atendimento.dataHora}
+                  {atendimento.dataAtendimento || atendimento.dataHora}
                 </div>
               </div>
             </div>
@@ -85,27 +94,29 @@ const RelatorioAtendimento = ({ atendimento, onVoltar }) => {
               <AlertCircle size={18} className="text-blue-600" />
               <h3 className="font-black text-xs uppercase tracking-widest text-slate-800">Avaliação e Sintomas</h3>
             </div>
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 italic text-slate-600 text-sm leading-relaxed">
-              "{atendimento.queixaPrincipal || "Nenhuma queixa registada."}"
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 italic text-slate-600 text-sm leading-relaxed print:bg-white">
+              "{formatarParaExibicao(atendimento.queixaPrincipal) || "nenhuma queixa registrada."}"
             </div>
           </section>
 
           {/* SEÇÃO 3: CONDUTA E ENCAMINHAMENTO */}
-          <section className="grid grid-cols-1 md:grid-cols-2 gap-10">
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-10 print:grid-cols-2">
             <div>
               <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-2">
                 <FileText size={18} className="text-blue-600" />
                 <h3 className="font-black text-xs uppercase tracking-widest text-slate-800">Procedimentos</h3>
               </div>
-              <p className="text-sm text-slate-600 font-medium">{atendimento.procedimentos || "Cuidados básicos de enfermagem."}</p>
+              <p className="text-sm text-slate-600 font-medium">
+                {formatarParaExibicao(atendimento.procedimentos) || "cuidados básicos de enfermagem."}
+              </p>
             </div>
             <div>
               <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-2">
                 <MapPin size={18} className="text-blue-600" />
                 <h3 className="font-black text-xs uppercase tracking-widest text-slate-800">Encaminhamento</h3>
               </div>
-              <div className="inline-block px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-black text-[10px] uppercase">
-                {atendimento.destino || "Alta na Unidade"}
+              <div className="inline-block px-4 py-2 bg-blue-50 text-blue-700 rounded-lg font-black text-[10px] uppercase print:bg-white print:border print:border-blue-100">
+                {formatarParaExibicao(atendimento.destino) || "alta na unidade"}
               </div>
             </div>
           </section>
@@ -115,7 +126,7 @@ const RelatorioAtendimento = ({ atendimento, onVoltar }) => {
             <div className="flex flex-col items-center justify-center space-y-2">
               <div className="w-64 border-b border-slate-300 h-10"></div>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                {atendimento.enfermeiroNome}
+                {formatarParaExibicao(atendimento.enfermeiroNome)}
               </p>
               <p className="text-[9px] text-blue-500 font-bold italic uppercase">Enfermeiro(a) Responsável</p>
             </div>
@@ -123,7 +134,7 @@ const RelatorioAtendimento = ({ atendimento, onVoltar }) => {
         </div>
 
         {/* FOOTER DO RELATÓRIO */}
-        <div className="bg-slate-50 p-6 text-center border-t border-slate-100">
+        <div className="bg-slate-50 p-6 text-center border-t border-slate-100 print:bg-white">
           <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">
             Documento gerado eletronicamente pelo Rodhon MedSys em {new Date().toLocaleString()}
           </p>

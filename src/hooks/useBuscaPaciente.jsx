@@ -1,53 +1,86 @@
 import { useState } from 'react';
 import { db } from '../firebase/firebaseConfig';
-import { collection, query, where, getDocs, limit, orderBy } from 'firebase/firestore';
+import { 
+  collection, query, where, getDocs, limit, orderBy, doc, getDoc 
+} from 'firebase/firestore';
 
 export const useBuscaPaciente = () => {
   const [loading, setLoading] = useState(false);
 
-  const buscarAlunos = async (nomeUpper) => {
+  // --- FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (PADRÃO CAIO GIROMBA) ---
+  const paraBanco = (str) => {
+    if (!str) return '';
+    return str.toString()
+      .toLowerCase()
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  };
+
+  const gerarIdMestre = (nome, dataNasc) => {
+    if (!nome || !dataNasc) return null;
+    const nomeSlug = paraBanco(nome).replace(/\s+/g, '-');
+    const dataRef = dataNasc.replace(/-/g, '');
+    return `${nomeSlug}-${dataRef}`;
+  };
+
+  const buscarAlunos = async (termo, idMestre = null) => {
     try {
-      const q = query(collection(db, "alunos"), where("nomeBusca", "==", nomeUpper.toUpperCase()), limit(1));
+      if (idMestre) {
+        const d = await getDoc(doc(db, "alunos", idMestre));
+        if (d.exists()) return { id: d.id, ...d.data() };
+      }
+      const q = query(collection(db, "alunos"), where("nome", "==", termo), limit(1));
       const snap = await getDocs(q);
       return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
     } catch (err) { return null; }
   };
 
-  const buscarFuncionarios = async (nomeUpper) => {
+  const buscarFuncionarios = async (termo) => {
     try {
-      const q = query(collection(db, "funcionarios"), where("nomeBusca", "==", nomeUpper.toUpperCase()), limit(1));
+      const q = query(collection(db, "funcionarios"), where("nome", "==", termo), limit(1));
       const snap = await getDocs(q);
       return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
     } catch (err) { return null; }
   };
 
-  const buscarPastasDigitais = async (nomeUpper) => {
+  const buscarPastasDigitais = async (termo, idMestre = null) => {
     try {
-      const q = query(collection(db, "pastas_digitais"), where("nomeBusca", "==", nomeUpper.toUpperCase()), limit(1));
+      if (idMestre) {
+        const d = await getDoc(doc(db, "pastas_digitais", idMestre));
+        if (d.exists()) return { id: d.id, ...d.data() };
+      }
+      const q = query(collection(db, "pastas_digitais"), where("nomeBusca", "==", termo), limit(1));
       const snap = await getDocs(q);
       return snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
     } catch (err) { return null; }
   };
 
-  const buscarQuestionario = async (nomeNormal) => {
+  const buscarQuestionario = async (termo, idMestre = null) => {
     try {
-      const q = query(collection(db, "questionarios_saude"), where("alunoNome", "==", nomeNormal), limit(1));
+      if (idMestre) {
+        const d = await getDoc(doc(db, "questionarios_saude", idMestre));
+        if (d.exists()) return { id: d.id, ...d.data() };
+      }
+      const q = query(collection(db, "questionarios_saude"), where("alunoNome", "==", termo), limit(1));
       const snap = await getDocs(q);
       if (snap.empty) return null;
       const data = snap.docs[0].data();
       return { 
         id: snap.docs[0].id, 
         ...data, 
-        contatos: (data.contatos || []).filter(c => c.nome?.trim()) 
+        contatos: (data.contatos || [])
+          .filter(c => c.nome?.trim())
+          .map(c => ({ nome: paraBanco(c.nome), telefone: c.telefone }))
       };
     } catch (err) { return null; }
   };
 
-  const buscarAtendimentos = async (nomeUpper) => {
+  const buscarAtendimentos = async (termo) => {
     try {
       const q = query(
         collection(db, "atendimentos_enfermagem"), 
-        where("nomePacienteBusca", "==", nomeUpper.toUpperCase()), 
+        where("nomePaciente", "==", termo), 
         orderBy("createdAt", "desc")
       );
       const snap = await getDocs(q);
@@ -56,57 +89,68 @@ export const useBuscaPaciente = () => {
         ...doc.data(),
         dataAtendimento: doc.data().dataAtendimento || doc.data().data || "---"
       }));
-    } catch (err) { return []; }
+    } catch (err) { 
+      console.error("Erro atendimentos:", err);
+      return []; 
+    }
   };
 
-  const buscarDadosCompletos = async (nomePesquisado) => {
+  const buscarDadosCompletos = async (nomePesquisado, dataNascOpcional = null) => {
     if (!nomePesquisado) return null;
     setLoading(true);
-    const nomeUpper = nomePesquisado.trim().toUpperCase();
-    const nomeNormal = nomePesquisado.trim();
+    
+    const termoBusca = paraBanco(nomePesquisado);
+    const idMestre = gerarIdMestre(termoBusca, dataNascOpcional);
 
     try {
+      // Busca em paralelo usando ID Mestre (se houver) ou Termo
       const [aluno, funcionario, pasta, saude, atendimentos] = await Promise.all([
-        buscarAlunos(nomeUpper),
-        buscarFuncionarios(nomeUpper),
-        buscarPastasDigitais(nomeUpper),
-        buscarQuestionario(nomeNormal),
-        buscarAtendimentos(nomeUpper)
+        buscarAlunos(termoBusca, idMestre),
+        buscarFuncionarios(termoBusca),
+        buscarPastasDigitais(termoBusca, idMestre),
+        buscarQuestionario(termoBusca, idMestre),
+        buscarAtendimentos(termoBusca)
       ]);
 
-      // Consolida o perfil (Pasta Digital tem prioridade total)
       const perfilOriginal = pasta || aluno || funcionario;
       
       const limparString = (val) => {
         if (!val) return "";
-        const proibidos = ["NÃO INFORMADO", "---", "UNDEFINED", "NULL", "NÃO"];
-        return proibidos.includes(val.toString().toUpperCase()) ? "" : val;
+        const termoLimpo = paraBanco(val);
+        const proibidos = ["nao informado", "---", "undefined", "null", "nao", "nenhum", "nenhuma"];
+        return proibidos.includes(termoLimpo) ? "" : paraBanco(val);
       };
 
-      const nomeFinal = perfilOriginal?.nome || saude?.alunoNome || nomeNormal;
+      const nomeFinal = paraBanco(perfilOriginal?.nome || perfilOriginal?.nomeBusca || saude?.alunoNome || termoBusca);
 
-      // Montamos um objeto perfil "blindado" para o componente não se perder
+      // Consolidação Final Rigorosa (Sincronismo Circular)
       const perfilConsolidado = {
         ...perfilOriginal,
+        id: idMestre || perfilOriginal?.id,
         nome: nomeFinal,
-        turma: perfilOriginal?.turma || perfilOriginal?.serie || (funcionario ? "STAFF" : "N/A"),
-        dataNascimento: perfilOriginal?.dataNascimento || perfilOriginal?.nascimento || "",
-        qualAlergia: perfilOriginal?.qualAlergia || perfilOriginal?.alergia || saude?.alergias?.detalhes || "",
+        turma: paraBanco(perfilOriginal?.turma || saude?.turma || (funcionario ? "staff" : "n/a")),
+        dataNascimento: perfilOriginal?.dataNascimento || saude?.dataNascimento || dataNascOpcional || "",
+        sexo: paraBanco(perfilOriginal?.sexo || saude?.sexo || ""),
+        peso: perfilOriginal?.peso || saude?.peso || "",
+        altura: perfilOriginal?.altura || saude?.altura || "",
+        qualAlergia: paraBanco(perfilOriginal?.qualAlergia || saude?.alergias?.detalhes || ""),
+        alunoPossuiAlergia: paraBanco(perfilOriginal?.alunoPossuiAlergia || saude?.alergias?.possui || "não"),
         cartaoSus: limparString(perfilOriginal?.cartaoSus || saude?.cartaoSus)
       };
 
       return {
-        perfil: perfilConsolidado, // Aqui agora tem TUDO (turma, nascimento, alergia)
-        saude,
-        atendimentos,
+        perfil: perfilConsolidado,
+        saude: saude,
+        atendimentos: atendimentos,
         isFuncionario: !!funcionario || perfilOriginal?.tipoPerfil === 'funcionario',
         nome: nomeFinal,
         
         statusClinico: {
-          asma: saude?.asma?.possui || perfilOriginal?.possuiAsma || "Não",
-          diabetes: saude?.diabetes?.possui || perfilOriginal?.possuiDiabetes || "Não",
-          cardiaco: saude?.doencasCardiacas?.possui || "Não",
-          epilepsia: saude?.epilepsia?.possui || "Não"
+          asma: paraBanco(saude?.asma?.possui || "não"),
+          diabetes: paraBanco(saude?.diabetes?.possui || "não"),
+          cardiaco: paraBanco(saude?.doencasCardiacas?.possui || "não"),
+          epilepsia: paraBanco(saude?.epilepsia?.possui || "não"),
+          medicacaoContinua: paraBanco(saude?.medicacaoContinua?.possui || "não")
         },
 
         dadosParaForm: {
