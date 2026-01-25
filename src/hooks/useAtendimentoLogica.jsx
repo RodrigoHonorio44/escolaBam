@@ -14,7 +14,7 @@ export const useAtendimentoLogica = (user) => {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
   const [configUI, setConfigUI] = useState({
-    tipoAtendimento: 'local', 
+    tipoAtendimento: 'local', // 'local' ou 'remocao'
     perfilPaciente: 'aluno',
     naoSabeDataNasc: false,
     naoSabePeso: false,
@@ -47,9 +47,8 @@ export const useAtendimentoLogica = (user) => {
     procedimentos: '',
     medicacao: '',
     observacoes: '',
-    destinoHospital: '', 
+    destinoHospital: '',
     motivoEncaminhamento: '',
-    obsEncaminhamento: '', 
     alunoPossuiAlergia: 'não',
     qualAlergia: '',
     pacienteId: ''
@@ -57,37 +56,30 @@ export const useAtendimentoLogica = (user) => {
 
   const [formData, setFormData] = useState(getInitialFormState());
 
-  // Lógica de cálculo de IMC aprimorada
-  const calcularIMC = (peso, altura) => {
-    const p = parseFloat(String(peso).replace(',', '.'));
-    const a = parseFloat(String(altura).replace(',', '.'));
-    if (p > 0 && a > 0.5) {
-      return (p / (a * a)).toFixed(2);
-    }
-    return '';
-  };
-
-  const updateField = useCallback((campo, valor) => {
-    setFormData(prev => {
-      // Normalização: Strings em lowercase, números mantidos para cálculo
-      const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
-      const novoEstado = { ...prev, [campo]: valorFormatado };
-      
-      if (campo === 'peso' || campo === 'altura') {
-        novoEstado.imc = calcularIMC(novoEstado.peso, novoEstado.altura);
-      }
-      return novoEstado;
-    });
-  }, []);
-
-  // Sincronização de sugestões
   useEffect(() => {
     if (formData.nomePaciente.length > 2) {
       buscarSugestoes(formData.nomePaciente.toLowerCase());
     }
   }, [formData.nomePaciente, buscarSugestoes]);
 
-  // Cálculo de Idade
+  const updateField = useCallback((campo, valor) => {
+    setFormData(prev => {
+      const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
+      const novoEstado = { ...prev, [campo]: valorFormatado };
+      
+      if (campo === 'peso' || campo === 'altura') {
+        const p = parseFloat(String(novoEstado.peso).replace(',', '.'));
+        const a = parseFloat(String(novoEstado.altura).replace(',', '.'));
+        if (p > 0 && a > 0.5) { 
+          novoEstado.imc = (p / (a * a)).toFixed(2);
+        } else {
+          novoEstado.imc = '';
+        }
+      }
+      return novoEstado;
+    });
+  }, []);
+
   useEffect(() => {
     if (formData.dataNascimento && !configUI.naoSabeDataNasc) {
       const hoje = new Date();
@@ -109,41 +101,51 @@ export const useAtendimentoLogica = (user) => {
     const nomeParaId = nomeLimpo.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                                 .replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, '-');
     const dataParaId = dataNasc ? dataNasc.replace(/-/g, '') : 'nd';
-    const idSugerido = (p.id || p.pacienteId || `${nomeParaId}-${dataParaId}`).toLowerCase();
+    const idSugerido = p.id || p.pacienteId || `${nomeParaId}-${dataParaId}`;
 
     let dados = await puxarDadosCompletos(nomeLimpo, dataNasc);
 
+    if (!dados) {
+      try {
+        const docRef = doc(db, "pastas_digitais", idSugerido);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          dados = { id: docSnap.id, ...docSnap.data() };
+        }
+      } catch (err) {
+        console.error("Erro na busca direta:", err);
+      }
+    }
+
     if (dados) {
-      // GARANTE QUE NÚMEROS NÃO QUEBREM O FORMULÁRIO
-      const pesoValue = dados.peso ? String(dados.peso).replace('.', ',') : "";
-      const alturaValue = dados.altura ? String(dados.altura).replace('.', ',') : "";
-      
+      const pesoStr = dados.peso ? String(dados.peso).replace('.', ',') : "";
+      const alturaStr = dados.altura ? String(dados.altura).replace('.', ',') : "";
+      const imcStr = dados.imc ? String(dados.imc).replace('.', ',') : "";
+      const tempStr = dados.temperatura ? String(dados.temperatura).replace('.', ',') : "";
+
       setFormData(prev => ({
         ...prev,
-        pacienteId: idSugerido,
-        nomePaciente: nomeLimpo, 
+        pacienteId: dados.id || idSugerido,
+        nomePaciente: (dados.nomeBusca || dados.nome || nomeLimpo).toLowerCase(), 
         dataNascimento: dados.dataNascimento || dataNasc,
-        sexo: (dados.sexo || "").toLowerCase(),
-        turma: (dados.turma || "").toLowerCase(),
-        cargo: (dados.cargo || "").toLowerCase(),
-        etnia: (dados.etnia || "").toLowerCase(),
-        peso: pesoValue,
-        altura: alturaValue,
-        imc: calcularIMC(pesoValue, alturaValue),
+        sexo: (dados.sexo || prev.sexo || "").toLowerCase(),
+        turma: (dados.turma || prev.turma || "").toLowerCase(),
+        cargo: (dados.cargo || prev.cargo || "").toLowerCase(),
+        etnia: (dados.etnia || prev.etnia || "").toLowerCase(),
+        peso: pesoStr,
+        altura: alturaStr,
+        imc: imcStr,
+        temperatura: tempStr,
         alunoPossuiAlergia: (dados.alunoPossuiAlergia || 'não').toLowerCase(),
         qualAlergia: (dados.qualAlergia || '').toLowerCase(),
         observacoes: (dados.observacoes || "").toLowerCase()
       }));
 
-      setConfigUI(prev => ({ 
-        ...prev, 
-        naoSabePeso: !dados.peso, 
-        naoSabeAltura: !dados.altura,
-        perfilPaciente: (dados.perfil || 'aluno').toLowerCase()
-      }));
+      setConfigUI(prev => ({ ...prev, naoSabePeso: !pesoStr, naoSabeAltura: !alturaStr }));
       setTemCadastro(true);
       toast.success("perfil sincronizado!", { id: toastId });
     } else {
+      setFormData(prev => ({ ...prev, nomePaciente: nomeLimpo, dataNascimento: dataNasc, pacienteId: idSugerido }));
       toast.error("histórico não encontrado.", { id: toastId });
     }
   };
@@ -162,17 +164,15 @@ export const useAtendimentoLogica = (user) => {
       const batch = writeBatch(db);
       const horaSaida = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-      // 1. Limpeza e Normalização (Lowercase em tudo que é string)
+      // Determina status com base no tipo de atendimento da UI
+      const statusAtendimento = configUI.tipoAtendimento === 'local' ? 'finalizado' : 'pendente';
+      const tipoRegistro = configUI.tipoAtendimento === 'remocao' ? 'remoção' : 'local';
+
+      // Normalização recursiva para lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
 
-      // 2. Definição de Status
-      const ehRemocao = configUI.tipoAtendimento === 'remocao' || payload.motivoEncaminhamento.length > 2;
-      const statusAtendimento = ehRemocao ? 'pendente' : 'finalizado';
-      const tipoRegistro = ehRemocao ? 'remoção' : 'local';
-
-      // 3. Conversão Numérica Rigorosa para o Firebase
       const numericData = {
         ...payload,
         idade: parseInt(payload.idade) || 0,
@@ -182,30 +182,29 @@ export const useAtendimentoLogica = (user) => {
         temperatura: parseFloat(String(payload.temperatura).replace(',', '.')) || 0
       };
 
-      // 4. Criação do ID Único da Pasta Digital
       const nomeParaId = payload.nomePaciente
         .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
         .replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, '-');
       const dataParaId = payload.dataNascimento ? payload.dataNascimento.replace(/-/g, '') : 'nd';
-      const idPasta = `${nomeParaId}-${dataParaId}`.toLowerCase();
+      const idPasta = payload.pacienteId || `${nomeParaId}-${dataParaId}`;
 
       const finalData = {
         ...numericData,
         pacienteId: idPasta,
         horarioSaida: horaSaida,
-        statusAtendimento, 
-        tipoRegistro,      
+        statusAtendimento, // automático: finalizado ou pendente
+        tipoRegistro,      // automático: local ou remoção
         perfilPaciente: configUI.perfilPaciente.toLowerCase(),
-        escola: (user?.escola || "unidade").toLowerCase(), // Usa 'escola' em vez de escolaId
+        escola: (user?.escolaId || "unidade").toLowerCase(),
         profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
-        registroProfissional: (user?.registroProfissional || "n/a").toLowerCase(),
+        registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase(),
         createdAt: serverTimestamp()
       };
 
-      // Salva o Atendimento
+      // Salva o atendimento
       batch.set(doc(collection(db, "atendimentos_enfermagem")), finalData);
 
-      // Atualiza ou Cria a Pasta Digital (Histórico Acumulado)
+      // Atualiza a Pasta Digital com o último estado
       batch.set(doc(db, "pastas_digitais", idPasta), {
         nomeBusca: finalData.nomePaciente,
         dataNascimento: finalData.dataNascimento,
@@ -218,18 +217,21 @@ export const useAtendimentoLogica = (user) => {
         alunoPossuiAlergia: finalData.alunoPossuiAlergia,
         qualAlergia: finalData.qualAlergia,
         ultimoStatusClinico: statusAtendimento === 'pendente' ? 'em remoção' : 'estável',
-        ultimaUnidade: finalData.escola,
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
       await batch.commit();
       
-      toast.success(ehRemocao ? "remoção registrada!" : "atendimento finalizado!", { id: toastId });
+      const msgSucesso = statusAtendimento === 'finalizado' 
+        ? "atendimento local finalizado!" 
+        : "remoção registrada como pendente!";
+        
+      toast.success(msgSucesso, { id: toastId });
       setFormData(getInitialFormState());
       setTemCadastro(false);
     } catch (error) {
-      console.error("Erro ao salvar:", error);
-      toast.error("erro ao salvar no banco", { id: toastId });
+      console.error(error);
+      toast.error("erro ao salvar", { id: toastId });
     } finally {
       setLoading(false);
     }

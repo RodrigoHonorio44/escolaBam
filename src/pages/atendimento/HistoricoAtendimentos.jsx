@@ -25,23 +25,18 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     observacoesFinais: ''
   });
 
-  // Regra Especial: "R S" maiúsculo, demais capitalizados
+  // Formata nomes para exibição visual
   const formatarNomeDisplay = (nome) => {
     if (!nome) return "---";
-    return nome.split(' ').map(p => {
-      const termo = p.toLowerCase();
-      if (termo === 'r' || termo === 's') return termo.toUpperCase();
-      return p.charAt(0).toUpperCase() + p.slice(1).toLowerCase();
-    }).join(' ');
+    return nome.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
   };
 
   useEffect(() => {
-    // IMPORTANTE: Busca pelo campo 'escola' que você confirmou no log
-    const escolaBusca = (user?.escola || "unidade").toLowerCase().trim();
+    const escolaUsuario = (user?.escolaId || "E. M. ANÍSIO TEIXEIRA");
     
     const q = query(
       collection(db, "atendimentos_enfermagem"),
-      where("escola", "==", escolaBusca),
+      where("escola", "in", [escolaUsuario.toUpperCase(), escolaUsuario.toLowerCase()]),
       orderBy("createdAt", "desc")
     );
 
@@ -52,21 +47,19 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         docs.push({ 
           id: doc.id, 
           ...data,
-          // Normalização para o filtro funcionar sem erros de case
-          statusAtendimento: (data.statusAtendimento || 'finalizado').toLowerCase().trim()
+          statusAtendimento: (data.statusAtendimento || 'aberto').toLowerCase(),
+          tipoRegistro: (data.tipoRegistro || 'local').toLowerCase()
         });
       });
-      
       setAtendimentos(docs);
       setLoading(false);
     }, (error) => {
       console.error("Erro Firestore:", error);
-      toast.error("erro na conexão com o banco.");
-      setLoading(false);
+      toast.error("Erro ao carregar fluxo clínico.");
     });
 
     return () => unsubscribe();
-  }, [user?.escola]);
+  }, [user]);
 
   if (viewPrint) {
     return <FichaImpressao dados={viewPrint} onVoltar={() => setViewPrint(null)} />;
@@ -75,7 +68,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   const handleFinalizarAtendimento = async (e) => {
     e.preventDefault();
     setClosingLoading(true);
-    const toastId = toast.loading("sincronizando prontuário...");
+    const toastId = toast.loading("Sincronizando prontuário...");
 
     try {
       const atendRef = doc(db, "atendimentos_enfermagem", selectedAtend.id);
@@ -86,7 +79,8 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         observacoesFinais: hospitalInfo.observacoesFinais.toLowerCase().trim(),
         statusAtendimento: 'finalizado',
         finalizadoEm: new Date().toISOString(),
-        finalizadoPor: (user?.nome || 'profissional').toLowerCase().trim()
+        finalizadoPor: (user?.nome || 'profissional').toLowerCase().trim(),
+        registroFinalizador: (user?.registroProfissional || user?.coren || 'sem registro').toLowerCase().trim()
       };
 
       await updateDoc(atendRef, updateData);
@@ -94,16 +88,19 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
       if (selectedAtend.pacienteId) {
         const pastaRef = doc(db, "pastas_digitais", selectedAtend.pacienteId.toLowerCase());
         await updateDoc(pastaRef, {
-          ultimoStatusClinico: 'estável / alta',
+          ultimoStatusClinico: 'estável / alta hospitalar',
           dataUltimaAlta: hospitalInfo.dataAlta,
+          ultimaConduta: hospitalInfo.condutaHospitalar.toLowerCase().trim(),
           ultimaAtualizacao: new Date()
         });
       }
 
-      toast.success("ocorrência encerrada!", { id: toastId });
+      toast.success("Ocorrência finalizada e arquivada!", { id: toastId });
       setSelectedAtend(null);
+      setHospitalInfo({ condutaHospitalar: '', dataAlta: new Date().toISOString().split('T')[0], observacoesFinais: '' });
     } catch (error) {
-      toast.error("erro ao salvar alta.", { id: toastId });
+      console.error(error);
+      toast.error("Falha ao encerrar caso.", { id: toastId });
     } finally {
       setClosingLoading(false);
     }
@@ -111,16 +108,16 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
 
   const atendimentosFiltrados = atendimentos.filter(atend => {
     const statusDoc = atend.statusAtendimento;
-    
-    // CORREÇÃO DO FILTRO: Aceita 'pendente' ou 'aberto'
-    const ehPendente = statusDoc === 'pendente' || statusDoc === 'aberto';
-    const ehFinalizado = statusDoc === 'finalizado';
+    const tipoDoc = atend.tipoRegistro;
+
+    // Lógica Corrigida: "pendente" e "aberto" são tratados como pendências em laranja
+    const ehPendente = statusDoc === 'pendente' || statusDoc === 'aberto' || tipoDoc === 'remoção' && statusDoc !== 'finalizado';
 
     const matchesStatus = filtroStatus === 'Todos' 
       ? true 
-      : (filtroStatus === 'Aberto' ? ehPendente : ehFinalizado);
+      : (filtroStatus === 'Aberto' ? ehPendente : statusDoc === 'finalizado');
 
-    const dataDoc = atend.data || "";
+    const dataDoc = atend.dataAtendimento || atend.data || "";
     const matchesData = filtroData ? dataDoc === filtroData : true;
     
     return matchesStatus && matchesData;
@@ -138,7 +135,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
           </div>
           <div>
             <h2 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">Fluxo <span className="text-blue-600">Clínico</span></h2>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Gestão de Prontuários e bams</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Gestão de Prontuários e BAMs</p>
           </div>
         </div>
 
@@ -172,28 +169,32 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         {loading ? (
           <div className="py-24 flex flex-col items-center gap-4">
             <Loader2 className="animate-spin text-blue-600" size={40} />
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">sincronizando nuvem...</p>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Acessando banco de dados...</p>
           </div>
         ) : atendimentosFiltrados.length === 0 ? (
           <div className="py-24 text-center border-2 border-dashed border-slate-100 rounded-[40px]">
-            <p className="text-slate-300 font-black uppercase text-xs tracking-[0.2em]">sem registros encontrados</p>
+            <p className="text-slate-300 font-black uppercase text-xs tracking-[0.2em]">Nenhuma ocorrência encontrada</p>
           </div>
         ) : (
           atendimentosFiltrados.map((atend) => {
-            const precisaResolver = atend.statusAtendimento === 'pendente' || atend.statusAtendimento === 'aberto';
-            const detalheAlergia = (atend.qualAlergia || "").toLowerCase();
-            const temAlergiaReal = detalheAlergia.length > 2 && !["não", "n/a", "nenhuma"].includes(detalheAlergia);
+            const statusAtual = atend.statusAtendimento;
+            // Se for pendente ou aberto, ganha destaque laranja
+            const precisaResolver = statusAtual === 'pendente' || statusAtual === 'aberto';
+            
+            const detalheAlergia = (atend.alergias || atend.qualAlergia || "").toLowerCase();
+            const temAlergiaReal = detalheAlergia.length > 0 && 
+                                  !["não", "não possui", "nenhuma", "n/a"].includes(detalheAlergia.trim());
 
             return (
               <div 
                 key={atend.id}
-                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${precisaResolver ? 'bg-orange-50/40 border-orange-100' : 'bg-white'}`}
+                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${precisaResolver ? 'bg-orange-50/20 border-orange-100' : 'bg-white'}`}
               >
                 <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${precisaResolver ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                 
                 <div className="flex items-center gap-5 w-full md:w-auto">
                   <div className={`w-14 h-14 rounded-[20px] flex items-center justify-center ${precisaResolver ? 'bg-orange-100 text-orange-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    {atend.tipoRegistro === 'remoção' ? <Hospital size={28} /> : <Stethoscope size={28} />}
+                    {atend.destinoHospital ? <Hospital size={28} /> : <Stethoscope size={28} />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -201,37 +202,31 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                         {formatarNomeDisplay(atend.nomePaciente)}
                       </h3>
                       {temAlergiaReal && (
-                        <span className="bg-rose-600 text-white text-[8px] font-black px-2 py-1 rounded-full flex items-center gap-1">
+                        <span className="bg-rose-600 text-white text-[8px] font-black px-2 py-1 rounded-full flex items-center gap-1 animate-pulse">
                           <AlertCircle size={10} /> ALERGIA
                         </span>
                       )}
                     </div>
-
-                    {/* DADOS VITAIS EXIBIDOS NO CARD (ALTURA, PESO, IMC) */}
-                    <div className="flex gap-2 my-1">
-                       {atend.peso && <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">P: {atend.peso}kg</span>}
-                       {atend.altura && <span className="text-[9px] font-black bg-slate-100 text-slate-500 px-2 py-0.5 rounded uppercase">A: {atend.altura}m</span>}
-                       {atend.imc && <span className="text-[9px] font-black bg-blue-100 text-blue-600 px-2 py-0.5 rounded uppercase">IMC: {atend.imc}</span>}
-                    </div>
-
                     {precisaResolver && (
                        <p className="text-[9px] font-black text-orange-600 uppercase tracking-tighter flex items-center gap-1">
-                         <AlertCircle size={10} /> {atend.motivoEncaminhamento || 'aguardando retorno clínico'}
+                         <AlertCircle size={10} /> Aguardando finalização do atendimento
                        </p>
                     )}
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
                       <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">
-                        {atend.perfilPaciente}
+                        {atend.perfilPaciente?.toUpperCase()}
                       </span>
-                      <span className="tabular-nums">{atend.data} • {atend.horario}</span>
+                      <span className="tabular-nums">{atend.data || atend.dataAtendimento} • {atend.horario || atend.horarioReferencia}</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
-                  <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest ${precisaResolver ? 'bg-orange-500 text-white shadow-lg' : 'bg-emerald-100 text-emerald-700'}`}>
-                    {precisaResolver ? 'Pendente' : 'Finalizado'}
-                  </span>
+                  <div className="flex flex-col md:items-end gap-1.5">
+                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest ${precisaResolver ? 'bg-orange-500 text-white shadow-lg' : 'bg-emerald-100 text-emerald-700'}`}>
+                      {precisaResolver ? 'Pendente' : 'Finalizado'}
+                    </span>
+                  </div>
 
                   <div className="flex items-center gap-3">
                     <button onClick={() => setViewPrint(atend)} className="w-12 h-12 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"><Printer size={20} /></button>
@@ -254,21 +249,21 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
       {/* MODAL DE ALTA */}
       {selectedAtend && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden">
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
             <div className="bg-orange-500 p-8 text-white flex justify-between items-center">
               <div>
                 <h3 className="text-xl font-black uppercase italic tracking-tighter">Retorno Clínico</h3>
-                <p className="text-[10px] font-bold uppercase opacity-80">paciente: {formatarNomeDisplay(selectedAtend.nomePaciente)}</p>
+                <p className="text-[10px] font-bold uppercase opacity-80">Paciente: {formatarNomeDisplay(selectedAtend.nomePaciente)}</p>
               </div>
               <button onClick={() => setSelectedAtend(null)} className="p-2 hover:bg-white/10 rounded-full"><X size={24} /></button>
             </div>
 
             <form onSubmit={handleFinalizarAtendimento} className="p-10 space-y-8">
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-500 uppercase ml-2">conduta e procedimentos realizados</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Diagnóstico e Procedimentos</label>
                 <textarea 
                   required
-                  placeholder="descreva o atendimento..."
+                  placeholder="Descreva o que foi realizado..."
                   className="w-full bg-slate-50 border-2 border-transparent rounded-[25px] px-6 py-5 text-sm outline-none focus:border-orange-500 transition-all uppercase"
                   rows="4"
                   value={hospitalInfo.condutaHospitalar}
@@ -278,12 +273,12 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
 
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">data da alta</label>
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Data Alta</label>
                   <input type="date" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-orange-500" value={hospitalInfo.dataAlta} onChange={(e) => setHospitalInfo({...hospitalInfo, dataAlta: e.target.value})} />
                 </div>
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">observações de repouso</label>
-                  <input type="text" placeholder="ex: 3 dias de repouso" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-orange-500 uppercase" value={hospitalInfo.observacoesFinais} onChange={(e) => setHospitalInfo({...hospitalInfo, observacoesFinais: e.target.value})} />
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Repouso/Obs</label>
+                  <input type="text" placeholder="Ex: 2 dias" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-orange-500 uppercase" value={hospitalInfo.observacoesFinais} onChange={(e) => setHospitalInfo({...hospitalInfo, observacoesFinais: e.target.value})} />
                 </div>
               </div>
 
@@ -292,7 +287,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                 disabled={closingLoading}
                 className="w-full py-6 bg-slate-900 hover:bg-orange-600 text-white rounded-[30px] font-black uppercase italic text-xs shadow-2xl transition-all flex items-center justify-center gap-3"
               >
-                {closingLoading ? <Loader2 className="animate-spin" /> : <><Save size={20}/> finalizar e arquivar</>}
+                {closingLoading ? <Loader2 className="animate-spin" /> : <><Save size={20}/> Finalizar Ocorrência</>}
               </button>
             </form>
           </div>
@@ -300,7 +295,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
       )}
 
       <div className="mt-8 text-center text-[9px] font-black text-slate-300 uppercase tracking-[0.5em]">
-        rodhon intelligence — monitoramento clínico 2026
+        Rodhon Intelligence — Monitoramento Clínico 2026
       </div>
     </div>
   );
