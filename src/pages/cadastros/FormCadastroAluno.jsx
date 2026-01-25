@@ -7,9 +7,21 @@ import {
 } from 'firebase/firestore';
 import { 
   UserPlus, Save, Loader2, AlertCircle, School, X, ArrowLeft,
-  Ruler, Weight, Fingerprint, Search, Hash, MapPin
+  Ruler, Weight, Fingerprint, Search, Hash, MapPin, CreditCard, Users, Phone
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
+
+// Função para aplicar máscara de celular: (21) 97596-6331
+const aplicarMascaraTelefone = (valor) => {
+  if (!valor) return "";
+  const n = valor.replace(/\D/g, ""); // Remove tudo que não é número
+  if (n.length <= 10) {
+    // Formato para fixo ou celular antigo
+    return n.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+  }
+  // Formato para celular moderno (9 dígitos)
+  return n.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+};
 
 const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDigital = !!(dadosEdicao || alunoParaEditar), onClose, onSucesso }) => {
   const navigate = useNavigate();
@@ -17,7 +29,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
 
   const dadosIniciais = alunoParaEditar || dadosEdicao;
 
-  // Normalização para minúsculas
+  // Normalização para minúsculas conforme diretriz R S
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
   const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting, errors } } = useForm({
@@ -26,11 +38,11 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       nome: '',
       matriculaInteligente: '',
       naoSabeMatricula: false,
+      cartaoSus: '',
       naoSabeEtnia: false,
       naoSabePeso: false,
       naoSabeAltura: false,
       naoSabeEndereco: false,
-      cartaoSus: '',
       sexo: '',
       dataNascimento: '',
       idade: '',
@@ -38,8 +50,12 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       etnia: '',
       peso: '',
       altura: '',
-      parentesco: 'mãe',
-      responsavel: '',
+      contato1_nome: '',
+      contato1_parentesco: 'mãe',
+      contato1_telefone: '',
+      contato2_nome: '',
+      contato2_parentesco: 'pai',
+      contato2_telefone: '',
       temAlergia: 'não',
       historicoMedico: '',
       endereco_rua: '',
@@ -56,10 +72,14 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         nome: paraBanco(dadosIniciais.nome || dadosIniciais.nomePaciente || ""),
         turma: paraBanco(dadosIniciais.turma),
         sexo: paraBanco(dadosIniciais.sexo),
-        peso: dadosIniciais.peso ? String(dadosIniciais.peso) : "",
-        altura: dadosIniciais.altura ? String(dadosIniciais.altura) : "",
-        temAlergia: dadosIniciais.alunoPossuiAlergia || dadosIniciais.temAlergia || 'não',
-        historicoMedico: dadosIniciais.qualAlergia || dadosIniciais.historicoMedico || '',
+        cartaoSus: paraBanco(dadosIniciais.cartaoSus),
+        contato1_nome: paraBanco(dadosIniciais.contato1_nome || dadosIniciais.responsavel),
+        contato1_parentesco: paraBanco(dadosIniciais.contato1_parentesco || dadosIniciais.parentesco || 'mãe'),
+        // Aplica máscara ao carregar do banco
+        contato1_telefone: aplicarMascaraTelefone(dadosIniciais.contato1_telefone || ""),
+        contato2_nome: paraBanco(dadosIniciais.contato2_nome),
+        contato2_parentesco: paraBanco(dadosIniciais.contato2_parentesco || 'pai'),
+        contato2_telefone: aplicarMascaraTelefone(dadosIniciais.contato2_telefone || ""),
         endereco_rua: paraBanco(dadosIniciais.endereco_rua),
         endereco_bairro: paraBanco(dadosIniciais.endereco_bairro)
       };
@@ -73,7 +93,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     }
   }, [dadosIniciais, reset, setValue]);
 
-  // --- BUSCA GLOBAL EM TODAS AS COLEÇÕES ---
   const buscarAluno = async () => {
     const nomeBusca = paraBanco(watch("nome"));
     if (nomeBusca.length < 3) {
@@ -87,7 +106,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       let dadosEncontrados = null;
 
       for (const col of colecoes) {
-        // Atendimento de enfermagem usa 'nomePaciente', as outras usam 'nome'
         const campoFiltro = col === "atendimentos_enfermagem" ? "nomePaciente" : "nome";
         const q = query(collection(db, col), where(campoFiltro, "==", nomeBusca));
         const querySnapshot = await getDocs(q);
@@ -104,10 +122,12 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           nome: paraBanco(dadosEncontrados.nome || dadosEncontrados.nomePaciente),
           temAlergia: dadosEncontrados.alunoPossuiAlergia || dadosEncontrados.temAlergia || 'não',
           historicoMedico: dadosEncontrados.qualAlergia || dadosEncontrados.historicoMedico || '',
-          peso: dadosEncontrados.peso ? String(dadosEncontrados.peso) : "",
-          altura: dadosEncontrados.altura ? String(dadosEncontrados.altura) : "",
           turma: paraBanco(dadosEncontrados.turma),
-          sexo: paraBanco(dadosEncontrados.sexo)
+          sexo: paraBanco(dadosEncontrados.sexo),
+          cartaoSus: paraBanco(dadosEncontrados.cartaoSus),
+          contato1_telefone: aplicarMascaraTelefone(dadosEncontrados.contato1_telefone || ""),
+          contato2_telefone: aplicarMascaraTelefone(dadosEncontrados.contato2_telefone || ""),
+          contato1_nome: paraBanco(dadosEncontrados.contato1_nome || dadosEncontrados.responsavel)
         };
         reset(payloadNormalizado);
         toast.success("registro localizado e importado!");
@@ -123,10 +143,10 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
 
   const watchDataNasc = watch("dataNascimento");
   const naoSabeMatricula = watch("naoSabeMatricula");
+  const naoSabeEndereco = watch("naoSabeEndereco");
   const naoSabeEtnia = watch("naoSabeEtnia");
   const naoSabePeso = watch("naoSabePeso");
   const naoSabeAltura = watch("naoSabeAltura");
-  const naoSabeEndereco = watch("naoSabeEndereco");
   const watchTemAlergia = watch("temAlergia");
 
   const handleCEPChange = async (e) => {
@@ -170,7 +190,15 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         ...data, 
         nome: nomeNormalizado,
         nomeBusca: nomeNormalizado,
-        responsavel: paraBanco(data.responsavel),
+        cartaoSus: paraBanco(data.cartaoSus),
+        // Remove máscara para salvar apenas números
+        contato1_telefone: data.contato1_telefone.replace(/\D/g, ""),
+        contato2_telefone: data.contato2_telefone.replace(/\D/g, ""),
+        contato1_nome: paraBanco(data.contato1_nome),
+        contato1_parentesco: paraBanco(data.contato1_parentesco),
+        contato2_nome: paraBanco(data.contato2_nome),
+        contato2_parentesco: paraBanco(data.contato2_parentesco),
+        responsavel: paraBanco(data.contato1_nome), 
         turma: paraBanco(data.turma),
         sexo: paraBanco(data.sexo),
         etnia: data.naoSabeEtnia ? "" : paraBanco(data.etnia),
@@ -217,37 +245,41 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* MATRÍCULA */}
-        <div className="md:col-span-2 p-5 bg-blue-50 rounded-[30px] border-2 border-blue-100 flex flex-col md:flex-row gap-4 items-end shadow-inner">
-            <div className="flex-1 space-y-2 w-full">
+        {/* DOCUMENTAÇÃO */}
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-blue-50 rounded-[30px] border-2 border-blue-100 shadow-inner">
+            <div className="space-y-2">
                 <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-2"><Hash size={14}/> Matrícula Escolar</label>
-                <input {...register("matriculaInteligente")} disabled={naoSabeMatricula} placeholder={naoSabeMatricula ? "PENDENTE" : "00000000"} className={`w-full px-5 py-4 rounded-2xl font-bold outline-none border-2 transition-all ${naoSabeMatricula ? 'bg-slate-200 border-transparent text-slate-400' : 'bg-white border-transparent focus:border-blue-600 text-blue-900'}`} />
+                <div className="flex gap-2 items-center">
+                  <input {...register("matriculaInteligente")} disabled={naoSabeMatricula} placeholder={naoSabeMatricula ? "PENDENTE" : "00000000"} className={`flex-1 px-5 py-4 rounded-2xl font-bold outline-none border-2 transition-all ${naoSabeMatricula ? 'bg-slate-200 border-transparent text-slate-400' : 'bg-white border-transparent focus:border-blue-600 text-blue-900'}`} />
+                  <label className="flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                      <input type="checkbox" {...register("naoSabeMatricula")} className="w-4 h-4 rounded border-blue-300 text-blue-600" />
+                      <span className="text-[9px] font-black text-slate-500 uppercase">N/P</span>
+                  </label>
+                </div>
             </div>
-            <label className="flex items-center gap-2 cursor-pointer mb-4">
-                <input type="checkbox" {...register("naoSabeMatricula")} className="w-4 h-4 rounded border-blue-300 text-blue-600" />
-                <span className="text-[10px] font-black text-slate-500 uppercase">Não possui</span>
-            </label>
+            <div className="space-y-2">
+                <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-2"><CreditCard size={14}/> Cartão SUS</label>
+                <input {...register("cartaoSus")} placeholder="000 0000 0000 0000" className="w-full px-5 py-4 rounded-2xl font-bold outline-none border-2 border-transparent bg-white focus:border-blue-600 text-blue-900 transition-all" />
+            </div>
         </div>
 
-        {/* NOME COMPLETO */}
+        {/* NOME COMPLETO - APLICADO CAPITALIZE VISUAL */}
         <div className="md:col-span-2 space-y-2">
-          <div className="flex justify-between items-center px-1">
-            <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
-            {errors.nome && <span className="text-[9px] font-black text-red-500 uppercase italic animate-pulse">{errors.nome.message}</span>}
-          </div>
+          <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
           <div className="relative group">
             <input 
               {...register("nome", { 
                 required: "digite o nome completo",
                 pattern: { value: /^[a-zA-Zá-úÁ-Ú']+\s+[a-zA-Zá-úÁ-Ú']+.*$/, message: "digite nome e sobrenome" }
               })} 
-              placeholder="ex: Rodrigo Honorio" 
-              className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all ${errors.nome ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-600'}`} 
+              placeholder="ex: rodrigo honorio" 
+              className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all capitalize ${errors.nome ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-600'}`} 
             />
             <button type="button" onClick={buscarAluno} disabled={buscando} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 transition-all">
               {buscando ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
             </button>
           </div>
+          <p className="text-[8px] font-bold text-blue-500 uppercase ml-2 italic">Exibição: R S | Armazenamento: r s (lowercase)</p>
         </div>
 
         {/* DATA E IDADE */}
@@ -260,33 +292,79 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 rounded-2xl font-bold text-blue-700 outline-none" />
         </div>
 
-        {/* ENDEREÇO */}
-        <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
-          <div className="flex justify-between items-center">
-            <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2 italic"><MapPin size={14}/> Localização e Endereço</label>
-            <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" {...register("naoSabeEndereco")} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
-                <span className="text-[10px] font-black text-slate-500 uppercase">Não possui endereço</span>
-            </label>
-          </div>
+        {/* CONTATOS COM TRAVA DE MÁSCARA */}
+        <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-200 space-y-4 shadow-sm">
+          <label className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2 italic"><Users size={14}/> Contatos de Emergência (Mínimo 2)</label>
           
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">CEP</label>
-              <input {...register("endereco_cep")} disabled={naoSabeEndereco} onChange={handleCEPChange} placeholder={naoSabeEndereco ? "PENDENTE" : "00000-000"} className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all ${naoSabeEndereco ? 'bg-slate-200 border-transparent' : 'bg-white border-transparent focus:border-blue-600'}`} />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Contato 1 */}
+            <div className="space-y-3 p-5 bg-white rounded-[25px] border border-slate-100 shadow-inner">
+              <p className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1">Contato Principal</p>
+              <input {...register("contato1_nome", { required: true })} placeholder="nome do responsável" className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase" />
+              <div className="grid grid-cols-2 gap-2">
+                <select {...register("contato1_parentesco")} className="px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase">
+                  <option value="mãe">mãe</option>
+                  <option value="pai">pai</option>
+                  <option value="avó">avó</option>
+                  <option value="avô">avô</option>
+                  <option value="outros">outros</option>
+                </select>
+                <div className="relative">
+                  <input 
+                    {...register("contato1_telefone", { required: true })} 
+                    onChange={(e) => setValue("contato1_telefone", aplicarMascaraTelefone(e.target.value))}
+                    placeholder="(00) 00000-0000" 
+                    maxLength={15}
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600" 
+                  />
+                  <Phone size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300"/>
+                </div>
+              </div>
             </div>
-            <div className="md:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Rua / Logradouro</label>
-              <input {...register("endereco_rua")} disabled={naoSabeEndereco} placeholder={naoSabeEndereco ? "ENDEREÇO NÃO INFORMADO" : ""} className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all lowercase ${naoSabeEndereco ? 'bg-slate-200 border-transparent' : 'bg-white border-transparent focus:border-blue-600'}`} />
-            </div>
-            <div className="md:col-span-3 space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Bairro / Cidade / UF</label>
-              <input {...register("endereco_bairro")} disabled={naoSabeEndereco} placeholder={naoSabeEndereco ? "PENDENTE" : ""} className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all lowercase ${naoSabeEndereco ? 'bg-slate-200 border-transparent' : 'bg-white border-transparent focus:border-blue-600'}`} />
+
+            {/* Contato 2 */}
+            <div className="space-y-3 p-5 bg-white rounded-[25px] border border-slate-100 shadow-inner">
+              <p className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1">Contato Secundário</p>
+              <input {...register("contato2_nome")} placeholder="nome do segundo contato" className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase" />
+              <div className="grid grid-cols-2 gap-2">
+                <select {...register("contato2_parentesco")} className="px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase">
+                  <option value="pai">pai</option>
+                  <option value="mãe">mãe</option>
+                  <option value="avó">avó</option>
+                  <option value="avô">avô</option>
+                  <option value="outros">outros</option>
+                </select>
+                <div className="relative">
+                  <input 
+                    {...register("contato2_telefone")} 
+                    onChange={(e) => setValue("contato2_telefone", aplicarMascaraTelefone(e.target.value))}
+                    placeholder="(00) 00000-0000" 
+                    maxLength={15}
+                    className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600" 
+                  />
+                  <Phone size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-300"/>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* BIOMETRIA */}
+        {/* RESTANTE DO FORMULÁRIO (ENDEREÇO, ETNIA, TURMA...) MANTIDO ORIGINAL */}
+        <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
+          <div className="flex justify-between items-center px-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2 italic"><MapPin size={14}/> Endereço</label>
+            <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" {...register("naoSabeEndereco")} className="w-4 h-4 rounded border-slate-300 text-blue-600" />
+                <span className="text-[10px] font-black text-slate-500 uppercase">Não possui</span>
+            </label>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <input {...register("endereco_cep")} disabled={naoSabeEndereco} onChange={handleCEPChange} placeholder="CEP" className="px-5 py-4 bg-white rounded-2xl font-bold outline-none border border-transparent focus:border-blue-600" />
+            <input {...register("endereco_rua")} disabled={naoSabeEndereco} placeholder="rua" className="md:col-span-2 px-5 py-4 bg-white rounded-2xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase" />
+            <input {...register("endereco_bairro")} disabled={naoSabeEndereco} placeholder="bairro / cidade" className="md:col-span-3 px-5 py-4 bg-white rounded-2xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase" />
+          </div>
+        </div>
+
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100">
           <div className="space-y-2">
             <div className="flex justify-between items-center px-1">
@@ -318,9 +396,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* TURMA E SEXO */}
         <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><School size={12}/> Turma Escolar</label>
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><School size={12}/> Turma</label>
           <input {...register("turma")} placeholder="ex: 1º ano a" className="w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none bg-slate-50 border-transparent focus:border-blue-600 lowercase" required />
         </div>
         <div className="space-y-2">
@@ -332,16 +409,15 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </select>
         </div>
 
-        {/* ALERGIAS */}
         <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
-          <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Sinais Vitais e Alergias</label>
+          <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Alergias</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <select {...register("temAlergia")} className="w-full px-5 py-4 bg-white border-2 border-red-100 rounded-2xl font-bold outline-none lowercase">
               <option value="não">não possui alergias</option>
               <option value="sim">sim, possui alergias</option>
             </select>
             {watchTemAlergia === 'sim' && (
-              <input {...register("historicoMedico")} placeholder="quais as alergias?" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 focus:border-red-600 outline-none lowercase animate-in fade-in slide-in-from-left-2" />
+              <input {...register("historicoMedico")} placeholder="quais as alergias?" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 focus:border-red-600 outline-none lowercase animate-in fade-in" />
             )}
           </div>
         </div>

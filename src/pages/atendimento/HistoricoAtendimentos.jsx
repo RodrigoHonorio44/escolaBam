@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ClipboardList, Calendar, AlertCircle, CheckCircle2, 
-  ChevronRight, Hospital, X, Save, Loader2, Stethoscope, Printer, FileSearch
+  ChevronRight, Hospital, X, Save, Loader2, Stethoscope, Printer, FileSearch,
+  Activity, Thermometer, Droplets, Search // Adicionado Search para os detalhes
 } from 'lucide-react';
 import { db } from '../../firebase/firebaseConfig';
 import { 
@@ -9,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 import FichaImpressao from '../../components/FichaImpressao'; 
+import ModalDetalhesDigital from '../../components/ModalDetalhesDigital'; // Certifique-se do caminho correto
 
 const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   const [atendimentos, setAtendimentos] = useState([]);
@@ -16,7 +18,8 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   const [filtroStatus, setFiltroStatus] = useState('Aberto'); 
   const [filtroData, setFiltroData] = useState('');
   
-  const [selectedAtend, setSelectedAtend] = useState(null);
+  const [selectedAtend, setSelectedAtend] = useState(null); // Modal de Alta
+  const [showDetails, setShowDetails] = useState(null);     // Modal de Detalhes lateral
   const [viewPrint, setViewPrint] = useState(null); 
   const [closingLoading, setClosingLoading] = useState(false);
   const [hospitalInfo, setHospitalInfo] = useState({
@@ -25,10 +28,13 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     observacoesFinais: ''
   });
 
-  // Formata nomes para exibição visual
   const formatarNomeDisplay = (nome) => {
     if (!nome) return "---";
-    return nome.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    const palavras = nome.toLowerCase().split(' ');
+    return palavras.map(p => {
+      if (p === 'r' || p === 's' || p.length === 1) return p.toUpperCase();
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }).join(' ');
   };
 
   useEffect(() => {
@@ -108,24 +114,24 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
 
   const atendimentosFiltrados = atendimentos.filter(atend => {
     const statusDoc = atend.statusAtendimento;
-    const tipoDoc = atend.tipoRegistro;
-
-    // Lógica Corrigida: "pendente" e "aberto" são tratados como pendências em laranja
-    const ehPendente = statusDoc === 'pendente' || statusDoc === 'aberto' || tipoDoc === 'remoção' && statusDoc !== 'finalizado';
-
-    const matchesStatus = filtroStatus === 'Todos' 
-      ? true 
-      : (filtroStatus === 'Aberto' ? ehPendente : statusDoc === 'finalizado');
-
+    const ehPendente = statusDoc === 'pendente' || statusDoc === 'aberto' || (atend.tipoRegistro === 'remoção' && statusDoc !== 'finalizado');
+    const matchesStatus = filtroStatus === 'Todos' ? true : (filtroStatus === 'Aberto' ? ehPendente : statusDoc === 'finalizado');
     const dataDoc = atend.dataAtendimento || atend.data || "";
     const matchesData = filtroData ? dataDoc === filtroData : true;
-    
     return matchesStatus && matchesData;
   });
 
   return (
     <div className="bg-white rounded-[40px] p-8 border border-slate-200 shadow-sm relative animate-in fade-in duration-500 font-sans antialiased">
       <Toaster position="top-center" />
+
+      {/* MODAL DE DETALHES DIGITAL (ABRE NA LATERAL) */}
+      {showDetails && (
+        <ModalDetalhesDigital 
+          atendimento={showDetails} 
+          onClose={() => setShowDetails(null)} 
+        />
+      )}
 
       {/* Header com Filtros */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border-b border-slate-50 pb-8">
@@ -178,17 +184,14 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         ) : (
           atendimentosFiltrados.map((atend) => {
             const statusAtual = atend.statusAtendimento;
-            // Se for pendente ou aberto, ganha destaque laranja
             const precisaResolver = statusAtual === 'pendente' || statusAtual === 'aberto';
-            
             const detalheAlergia = (atend.alergias || atend.qualAlergia || "").toLowerCase();
-            const temAlergiaReal = detalheAlergia.length > 0 && 
-                                  !["não", "não possui", "nenhuma", "n/a"].includes(detalheAlergia.trim());
+            const temAlergiaReal = detalheAlergia.length > 0 && !["não", "não possui", "nenhuma", "n/a"].includes(detalheAlergia.trim());
 
             return (
               <div 
                 key={atend.id}
-                className={`group relative bg-white border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${precisaResolver ? 'bg-orange-50/20 border-orange-100' : 'bg-white'}`}
+                className={`group relative border border-slate-100 p-6 rounded-[30px] hover:border-blue-200 hover:shadow-2xl transition-all flex flex-col md:flex-row items-center justify-between gap-6 ${precisaResolver ? 'bg-orange-50/20 border-orange-100' : 'bg-white'}`}
               >
                 <div className={`absolute left-0 top-6 bottom-6 w-1.5 rounded-r-full ${precisaResolver ? 'bg-orange-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                 
@@ -209,12 +212,12 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                     </div>
                     {precisaResolver && (
                        <p className="text-[9px] font-black text-orange-600 uppercase tracking-tighter flex items-center gap-1">
-                         <AlertCircle size={10} /> Aguardando finalização do atendimento
+                         <AlertCircle size={10} /> Aguardando finalização
                        </p>
                     )}
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black">
-                        {atend.perfilPaciente?.toUpperCase()}
+                      <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-black uppercase">
+                        {atend.perfilPaciente}
                       </span>
                       <span className="tabular-nums">{atend.data || atend.dataAtendimento} • {atend.horario || atend.horarioReferencia}</span>
                     </p>
@@ -222,14 +225,18 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
                 </div>
 
                 <div className="flex items-center gap-6 w-full md:w-auto justify-between md:justify-end">
-                  <div className="flex flex-col md:items-end gap-1.5">
-                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest ${precisaResolver ? 'bg-orange-500 text-white shadow-lg' : 'bg-emerald-100 text-emerald-700'}`}>
-                      {precisaResolver ? 'Pendente' : 'Finalizado'}
-                    </span>
-                  </div>
-
                   <div className="flex items-center gap-3">
+                    {/* BOTÃO DE DETALHES (LUPA) */}
+                    <button 
+                      onClick={() => setShowDetails(atend)} 
+                      className="w-12 h-12 flex items-center justify-center bg-blue-50 text-blue-600 rounded-2xl hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                      title="Ver Detalhes do Prontuário"
+                    >
+                      <Search size={20} />
+                    </button>
+
                     <button onClick={() => setViewPrint(atend)} className="w-12 h-12 flex items-center justify-center bg-slate-100 text-slate-500 rounded-2xl hover:bg-blue-600 hover:text-white transition-all"><Printer size={20} /></button>
+                    
                     {precisaResolver && (
                       <button 
                         onClick={() => setSelectedAtend(atend)}
@@ -246,50 +253,78 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         )}
       </div>
 
-      {/* MODAL DE ALTA */}
+      {/* RESTANTE DO CÓDIGO DO MODAL DE ALTA... */}
       {selectedAtend && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95">
-            <div className="bg-orange-500 p-8 text-white flex justify-between items-center">
+          <div className="bg-white w-full max-w-2xl rounded-[40px] shadow-2xl overflow-hidden animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            <div className="bg-orange-500 p-8 text-white flex justify-between items-center shrink-0">
               <div>
-                <h3 className="text-xl font-black uppercase italic tracking-tighter">Retorno Clínico</h3>
+                <h3 className="text-xl font-black uppercase italic tracking-tighter">Finalizar Fluxo Clínico</h3>
                 <p className="text-[10px] font-bold uppercase opacity-80">Paciente: {formatarNomeDisplay(selectedAtend.nomePaciente)}</p>
               </div>
-              <button onClick={() => setSelectedAtend(null)} className="p-2 hover:bg-white/10 rounded-full"><X size={24} /></button>
+              <button onClick={() => setSelectedAtend(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X size={24} /></button>
             </div>
 
-            <form onSubmit={handleFinalizarAtendimento} className="p-10 space-y-8">
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Diagnóstico e Procedimentos</label>
-                <textarea 
-                  required
-                  placeholder="Descreva o que foi realizado..."
-                  className="w-full bg-slate-50 border-2 border-transparent rounded-[25px] px-6 py-5 text-sm outline-none focus:border-orange-500 transition-all uppercase"
-                  rows="4"
-                  value={hospitalInfo.condutaHospitalar}
-                  onChange={(e) => setHospitalInfo({...hospitalInfo, condutaHospitalar: e.target.value})}
-                />
+            <div className="overflow-y-auto p-10 pt-6 space-y-8">
+              <div className="bg-slate-50 rounded-[30px] p-6 border border-slate-100 space-y-4">
+                <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+                  <FileSearch size={18} className="text-orange-500" />
+                  <h4 className="text-[11px] font-black uppercase text-slate-700 tracking-wider">Quadro Inicial Registrado</h4>
+                </div>
+                
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase">Motivo / Queixa Principal:</span>
+                    <p className="text-sm font-bold text-slate-700 uppercase leading-relaxed">
+                      {selectedAtend.motivoAtendimento || selectedAtend.queixaPrincipal || "não informado"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3 mt-2">
+                    {selectedAtend.pa && (
+                      <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-[10px] font-black text-slate-600">
+                        <Activity size={12} className="text-blue-500" /> PA: {selectedAtend.pa}
+                      </div>
+                    )}
+                    {selectedAtend.temperatura && (
+                      <div className="flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-slate-200 text-[10px] font-black text-slate-600">
+                        <Thermometer size={12} className="text-orange-500" /> {selectedAtend.temperatura}°C
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <form onSubmit={handleFinalizarAtendimento} className="space-y-6">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Data Alta</label>
-                  <input type="date" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-orange-500" value={hospitalInfo.dataAlta} onChange={(e) => setHospitalInfo({...hospitalInfo, dataAlta: e.target.value})} />
+                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Conduta de Alta / Diagnóstico Final</label>
+                  <textarea 
+                    required
+                    placeholder="O que foi realizado agora?"
+                    className="w-full bg-slate-50 border-2 border-transparent rounded-[25px] px-6 py-5 text-sm outline-none focus:border-orange-500 transition-all uppercase font-bold"
+                    rows="4"
+                    value={hospitalInfo.condutaHospitalar}
+                    onChange={(e) => setHospitalInfo({...hospitalInfo, condutaHospitalar: e.target.value})}
+                  />
                 </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Repouso/Obs</label>
-                  <input type="text" placeholder="Ex: 2 dias" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none focus:ring-2 focus:ring-orange-500 uppercase" value={hospitalInfo.observacoesFinais} onChange={(e) => setHospitalInfo({...hospitalInfo, observacoesFinais: e.target.value})} />
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Data da Alta</label>
+                    <input type="date" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none border-none" value={hospitalInfo.dataAlta} onChange={(e) => setHospitalInfo({...hospitalInfo, dataAlta: e.target.value})} />
+                  </div>
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase ml-2">Observações / Repouso</label>
+                    <input type="text" placeholder="Ex: repouso" className="w-full bg-slate-50 rounded-2xl px-6 py-4 text-sm font-black outline-none border-none uppercase" value={hospitalInfo.observacoesFinais} onChange={(e) => setHospitalInfo({...hospitalInfo, observacoesFinais: e.target.value})} />
+                  </div>
                 </div>
-              </div>
-
-              <button 
-                type="submit"
-                disabled={closingLoading}
-                className="w-full py-6 bg-slate-900 hover:bg-orange-600 text-white rounded-[30px] font-black uppercase italic text-xs shadow-2xl transition-all flex items-center justify-center gap-3"
-              >
-                {closingLoading ? <Loader2 className="animate-spin" /> : <><Save size={20}/> Finalizar Ocorrência</>}
-              </button>
-            </form>
+                <button 
+                  type="submit"
+                  disabled={closingLoading}
+                  className="w-full py-6 bg-slate-900 hover:bg-orange-600 text-white rounded-[30px] font-black uppercase italic text-xs shadow-2xl transition-all flex items-center justify-center gap-3"
+                >
+                  {closingLoading ? <Loader2 className="animate-spin" /> : <><Save size={20}/> Finalizar Atendimento</>}
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       )}

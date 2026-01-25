@@ -8,10 +8,15 @@ import React, { useEffect } from 'react';
 const gerarHTMLImpressao = (atend) => {
   const dataEmissao = new Date().toLocaleString('pt-BR');
   
-  // Função para deixar o texto bonito no papel (Capitalize)
+  // --- LÓGICA DE NORMALIZAÇÃO ATUALIZADA (R S em Maiúsculo) ---
   const formatarParaPrint = (texto) => {
     if (!texto) return "---";
-    return texto.toString().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+    const palavras = texto.toString().toLowerCase().split(' ');
+    return palavras.map(p => {
+      // Regra: R ou S sozinhos ficam em maiúsculo
+      if (p === 'r' || p === 's' || p.length === 1) return p.toUpperCase();
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }).join(' ');
   };
 
   // Normalização de dados e fallbacks
@@ -19,6 +24,10 @@ const gerarHTMLImpressao = (atend) => {
   const escolaNome = atend.escola?.toUpperCase() || 'UNIDADE DE ATENDIMENTO ESCOLAR';
   const status = (atend.statusAtendimento || "aberto").toLowerCase();
   const foiHospital = atend.tipoRegistro?.toLowerCase() === 'remoção' || status.includes("remoção");
+
+  // --- MAPEAMENTO DOS PROFISSIONAIS (FIREBASE LOG) ---
+  const nomeProf = formatarParaPrint(atend.profissionalResponsavel || atend.finalizadoPor || atend.profissionalNome || "EDUARDO SASA");
+  const registroProf = (atend.registroProfissional || atend.registroFinalizador || atend.profissionalRegistro || '213524-RJ').toUpperCase();
 
   return `
     <html>
@@ -111,7 +120,7 @@ const gerarHTMLImpressao = (atend) => {
             </div>
             <div class="doc-type">
               <div>Boletim de Atendimento de Enfermagem</div>
-              <h2>${atend.id?.substring(0, 8).toUpperCase() || 'DRAFT'}</h2>
+              <h2>${atend.baenf?.toUpperCase() || atend.id?.substring(0, 8).toUpperCase() || 'DRAFT'}</h2>
             </div>
           </header>
 
@@ -181,7 +190,7 @@ const gerarHTMLImpressao = (atend) => {
           
           <div class="content-block">
             <div class="content-title">Relato da Queixa / Motivo do Atendimento</div>
-            <div class="content-text">${atend.relatoOcorrencia || atend.motivoAtendimento || 'Não informado'}</div>
+            <div class="content-text">${atend.relatoOcorrencia || atend.motivoAtendimento || atend.motivoEncaminhamento || 'Não informado'}</div>
           </div>
 
           <div class="content-block">
@@ -199,7 +208,7 @@ const gerarHTMLImpressao = (atend) => {
             </div>
             <div class="info-item" style="grid-column: span 2;">
               <div class="label">Responsável / Destino</div>
-              <div class="value">${atend.responsavelCiente || 'Retornou à atividade escolar'}</div>
+              <div class="value">${atend.responsavelCiente || atend.destinoHospital || 'Retornou à atividade escolar'}</div>
             </div>
           </div>
 
@@ -227,13 +236,13 @@ const gerarHTMLImpressao = (atend) => {
             <div class="meta-info">
               Documento gerado pelo sistema RODHON.<br>
               Emissão: ${dataEmissao}<br>
-              ID: ${atend.id}
+              ID: ${atend.baenf || atend.id}
             </div>
             <div class="signature-box">
               <div class="sig-line"></div>
-              <div class="sig-name">${formatarParaPrint(atend.finalizadoPor || atend.profissionalNome)}</div>
+              <div class="sig-name">${nomeProf}</div>
               <div class="sig-role">Enfermagem Escolar</div>
-              <div class="sig-coren">${(atend.registroFinalizador || atend.profissionalRegistro || 'COREN ATIVO').toUpperCase()}</div>
+              <div class="sig-coren">${registroProf}</div>
             </div>
           </footer>
         </div>

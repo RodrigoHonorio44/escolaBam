@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Search, Users, AlertCircle } from 'lucide-re
 const AbaFichasMedicas = ({ grupos, darkMode }) => {
   const [subAba, setSubAba] = useState('alergias');
   const [pagina, setPagina] = useState(1);
+  const [busca, setBusca] = useState("");
   const itensPorPagina = 8;
 
   // Função de normalização para o padrão "caio giromba"
@@ -11,7 +12,7 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
 
   if (!grupos) return null;
 
-  // Mapeamento das categorias (Labels em lowercase para manter o padrão visual técnico)
+  // Mapeamento das categorias
   const categorias = [
     { id: 'alergias', label: 'alergias', dados: grupos.alergias || [] },
     { id: 'acessibilidade', label: 'pcd / acessibilidade', dados: grupos.acessibilidade || [] },
@@ -20,31 +21,54 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
   ];
 
   const categoriaAtiva = categorias.find(c => c.id === subAba);
-  const dadosAtuais = categoriaAtiva.dados;
-  const totalPaginas = Math.ceil(dadosAtuais.length / itensPorPagina);
   
+  // Filtragem por busca antes da paginação
+  const dadosFiltrados = (categoriaAtiva.dados || []).filter(aluno => 
+    normalizar(aluno.nome).includes(normalizar(busca)) ||
+    normalizar(aluno.turma).includes(normalizar(busca))
+  );
+
+  const totalPaginas = Math.ceil(dadosFiltrados.length / itensPorPagina);
   const inicio = (pagina - 1) * itensPorPagina;
-  const dadosExibidos = dadosAtuais.slice(inicio, inicio + itensPorPagina);
+  const dadosExibidos = dadosFiltrados.slice(inicio, inicio + itensPorPagina);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
       
-      {/* Seletores de Categoria */}
-      <div className="flex flex-wrap gap-3">
-        {categorias.map(cat => (
-          <button
-            key={cat.id}
-            onClick={() => { setSubAba(cat.id); setPagina(1); }}
-            className={`px-6 py-4 rounded-[22px] text-[10px] font-black uppercase tracking-[2px] transition-all flex items-center gap-3 ${
-              subAba === cat.id 
-                ? 'bg-rose-600 text-white shadow-xl shadow-rose-600/30 ring-2 ring-rose-600 ring-offset-2 ring-offset-transparent' 
-                : darkMode ? 'bg-white/5 text-slate-400 hover:bg-white/10' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue-500'
+      {/* Header da Aba: Seletores + Busca */}
+      <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center">
+        <div className="flex flex-wrap gap-3">
+          {categorias.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => { setSubAba(cat.id); setPagina(1); setBusca(""); }}
+              className={`px-6 py-4 rounded-[22px] text-[10px] font-black uppercase tracking-[2px] transition-all flex items-center gap-3 ${
+                subAba === cat.id 
+                  ? 'bg-rose-600 text-white shadow-xl shadow-rose-600/30 ring-2 ring-rose-600 ring-offset-2 ring-offset-transparent' 
+                  : darkMode ? 'bg-white/5 text-slate-400 hover:bg-white/10' : 'bg-white text-slate-500 border border-slate-200 hover:border-blue-500'
+              }`}
+            >
+              <div className={`w-2 h-2 rounded-full ${subAba === cat.id ? 'bg-white animate-pulse' : 'bg-current opacity-30'}`} />
+              {cat.label} <span className="opacity-50 ml-1">[{cat.dados.length}]</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Campo de Busca Interno */}
+        <div className="relative w-full xl:w-80 group">
+          <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${darkMode ? 'text-slate-600 group-focus-within:text-blue-500' : 'text-slate-300 group-focus-within:text-blue-500'}`} size={18} />
+          <input 
+            type="text"
+            placeholder="buscar aluno ou turma..."
+            value={busca}
+            onChange={(e) => { setBusca(e.target.value); setPagina(1); }}
+            className={`w-full pl-14 pr-6 py-4 rounded-[22px] text-[11px] font-bold border-2 outline-none transition-all lowercase placeholder:text-slate-500/30 ${
+              darkMode 
+                ? 'bg-black/20 border-white/5 focus:border-blue-500/50 text-white' 
+                : 'bg-white border-slate-100 focus:border-blue-500/50 text-slate-700'
             }`}
-          >
-            <div className={`w-2 h-2 rounded-full ${subAba === cat.id ? 'bg-white animate-pulse' : 'bg-current opacity-30'}`} />
-            {cat.label} <span className="opacity-50 ml-1">[{cat.dados.length}]</span>
-          </button>
-        ))}
+          />
+        </div>
       </div>
 
       {/* Tabela de Dados */}
@@ -100,7 +124,7 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
         {totalPaginas > 1 && (
           <div className={`p-8 flex items-center justify-between border-t ${darkMode ? 'border-white/5' : 'border-slate-100'}`}>
             <span className="text-[10px] font-black lowercase opacity-40 tracking-widest">
-              exibindo {dadosExibidos.length} de {dadosAtuais.length} pacientes
+              exibindo {dadosExibidos.length} de {dadosFiltrados.length} resultados
             </span>
             
             <div className="flex gap-4">
