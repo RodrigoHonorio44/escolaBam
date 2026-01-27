@@ -3,7 +3,7 @@ import {
   Search, Briefcase, GraduationCap, PlusCircle, ShieldAlert,
   FileSearch, CheckCircle2, ClipboardList, ArrowLeft, 
   X, HeartPulse, FileText, Settings, AlertTriangle,
-  Loader2 
+  Loader2, ShieldCheck, Phone
 } from 'lucide-react';
 import { db } from '../firebase/firebaseConfig';
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
@@ -33,7 +33,6 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
     return str.toString().toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   };
 
-  // FORMATAÇÃO VISUAL "Rodrigo Giromba"
   const formatarNomeRS = (str) => {
     if (!str || str === '---') return '---';
     return str.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
@@ -65,7 +64,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
   useEffect(() => {
     if (alunoParaReabrir?.nomePaciente || alunoParaReabrir?.nome) {
       const nomeOriginal = alunoParaReabrir.nomePaciente || alunoParaReabrir.nome;
-      setBusca(nomeOriginal); // Mantém o original para o input
+      setBusca(nomeOriginal);
       pesquisarPaciente(nomeOriginal);
     }
   }, [alunoParaReabrir]);
@@ -86,45 +85,66 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
     }
   };
 
+  // --- LOGICA DOS ESCUDOS ATUALIZADA ---
+  const validarDocumentacao = () => {
+    if (!resultado) return { vacinas: false, emergencia: false };
+    
+    const s = resultado.saude || {};
+    const p = resultado.perfil || {};
+
+    return {
+      // Verifica campos "vacinaStatus" e "vacinaAtualizada" que vieram no seu log
+      vacinas: s.vacinaStatus === "atualizado" || s.vacinaAtualizada === "sim" || paraBanco(p.vacinaDia) === "sim",
+      // Verifica se há contatos no array de contatos ou se o perfil antigo tem dados
+      emergencia: (s.contatos && s.contatos.length > 0) || (!!p.responsavel && !!p.telefone)
+    };
+  };
+
+  const statusDoc = validarDocumentacao();
+
+  // --- LOGICA DE SAÚDE ATUALIZADA PARA MAPAS ---
   const consolidarSaude = () => {
     if (!resultado) return { alertas: [], listaAlergias: [], listaMedicacao: [] };
-    
     const p = resultado.perfil || {};
     const s = resultado.saude || {};
     const alertas = [];
     const listaAlergias = [];
     const listaMedicacao = [];
-    
     const termosNegativos = ["não", "nao", "n", "nenhuma", "negativo", "-", "não informado", "n/a", "sem", "null", "", "não possui", "nada"];
 
-    const doencas = [
+    // Mapeamento para os campos de Objeto do Questionário
+    const camposSaude = [
       { id: 'diabetes', label: 'diabetes' },
       { id: 'asma', label: 'asma' },
       { id: 'epilepsia', label: 'epilepsia' },
-      { id: 'doencasCardiacas', label: 'cardiopata' }
+      { id: 'doencasCardiacas', label: 'cardiopatia' },
+      { id: 'diagnosticoNeuro', label: 'neuro' }
     ];
 
-    doencas.forEach(d => {
-      const status = paraBanco(s[d.id]?.possui || p[d.id]);
-      if (status === "sim") {
-        const detalhe = paraBanco(s[d.id]?.detalhes);
-        alertas.push(!termosNegativos.includes(detalhe) ? `${d.label}: ${detalhe}` : d.label);
+    camposSaude.forEach(item => {
+      const obj = s[item.id];
+      // Verifica se o objeto "possui" é sim ou se o perfil antigo tem a marcação
+      if (obj?.possui === "sim" || paraBanco(p[item.id]) === "sim") {
+        const detalhe = obj?.detalhes || obj?.tipo || "";
+        alertas.push(detalhe && !termosNegativos.includes(paraBanco(detalhe)) ? `${item.label}: ${detalhe}` : item.label);
       }
     });
 
-    [p.qualAlergia, s.alergias?.detalhes, p.alergias].forEach(val => {
-      const normal = paraBanco(val);
-      if (normal && !termosNegativos.includes(normal)) {
-        if (!listaAlergias.includes(normal)) listaAlergias.push(normal);
-      }
-    });
+    // Alergias (Extrai do s.alergias.detalhes do log)
+    const alergiasTexto = s.alergias?.detalhes || p.qualAlergia || p.alergias;
+    if (alergiasTexto && !termosNegativos.includes(paraBanco(alergiasTexto))) {
+      // Divide por espaços ou vírgulas para criar as tags
+      const partes = alergiasTexto.split(/[\s,]+/);
+      partes.forEach(a => {
+        if (a.length > 2 && !listaAlergias.includes(a.toLowerCase())) listaAlergias.push(a.toLowerCase());
+      });
+    }
 
-    [s.medicacaoContinua?.detalhes, p.medicacao, p.usoMedicamento].forEach(val => {
-      const normal = paraBanco(val);
-      if (normal && !termosNegativos.includes(normal)) {
-        if (!listaMedicacao.includes(normal)) listaMedicacao.push(normal);
-      }
-    });
+    // Medicação (Extrai do s.medicacaoContinua.detalhes do log)
+    const medTexto = s.medicacaoContinua?.detalhes || p.medicacao || p.usoMedicamento;
+    if (medTexto && !termosNegativos.includes(paraBanco(medTexto))) {
+      listaMedicacao.push(medTexto.toLowerCase());
+    }
 
     return { alertas, listaAlergias, listaMedicacao };
   };
@@ -152,7 +172,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text"
-              style={{ textTransform: 'capitalize' }} // RESOLVE: Exibe Rodrigo Giromba no Input
+              style={{ textTransform: 'capitalize' }}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-12 pr-10 text-sm font-bold outline-none focus:ring-2 ring-blue-500/10 focus:bg-white transition-all"
               placeholder="pesquisar paciente..."
               value={busca}
@@ -214,9 +234,9 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
               </div>
 
               <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm space-y-4">
-                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3">documentação</h3>
-                <StatusLine label="vacinas" status={paraBanco(resultado.perfil?.vacinaDia) === "sim" || paraBanco(resultado.perfil?.carteiraVacina) === "sim"} />
-                <StatusLine label="emergência" status={resultado.perfil?.autorizacaoEmergencia === true || paraBanco(resultado.perfil?.autorizacaoHospitalar) === "sim"} />
+                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b pb-3 italic">Documentação</h3>
+                <StatusLine label="Vacinas" status={statusDoc.vacinas} />
+                <StatusLine label="Emergência" status={statusDoc.emergencia} />
               </div>
             </div>
 
@@ -250,9 +270,23 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                           </div>
                         )}
 
+                        {/* LISTAGEM DINÂMICA DE CONTATOS DO SEU ARRAY */}
                         <div className="space-y-4">
-                           <DataBox label="responsável" value={formatarNomeRS(resultado.perfil?.nomeMae || resultado.perfil?.responsavel)} />
-                           <DataBox label="contato" value={resultado.perfil?.telefone || resultado.perfil?.contato} />
+                           <SectionHeader title="contatos de emergência" icon={<Phone className="text-slate-400" size={16}/>} />
+                           {(resultado.saude?.contatos || []).length > 0 ? (
+                             resultado.saude.contatos.map((cont, idx) => (
+                               <DataBox 
+                                 key={idx}
+                                 label={idx === 0 ? "contato prioritário" : "contato secundário"} 
+                                 value={`${formatarNomeRS(cont.nome)} - ${cont.telefone}`} 
+                               />
+                             ))
+                           ) : (
+                             <>
+                               <DataBox label="responsável" value={formatarNomeRS(resultado.perfil?.nomeMae || resultado.perfil?.responsavel)} />
+                               <DataBox label="contato" value={resultado.perfil?.telefone || resultado.perfil?.contato} />
+                             </>
+                           )}
                         </div>
                       </div>
 
@@ -282,8 +316,8 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
                            </div>
                          </div>
 
-                         <button onClick={() => setFormAtivo('saude')} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors">
-                           VER QUESTIONÁRIO
+                         <button onClick={() => setFormAtivo('saude')} className="w-full py-4 bg-slate-900 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-blue-600 transition-colors shadow-lg">
+                           VER QUESTIONÁRIO DE SAÚDE
                          </button>
                       </div>
                     </div>
@@ -356,7 +390,7 @@ const PastaDigital = ({ onVoltar, onNovoAtendimento, alunoParaReabrir }) => {
   );
 };
 
-// SUB-COMPONENTES (Sem alterações de lógica, apenas mantendo a estrutura)
+// SUB-COMPONENTES
 const TabButton = ({ active, label, onClick, icon }) => (
   <button onClick={onClick} className={`px-8 py-6 text-[10px] font-black uppercase tracking-widest flex items-center gap-3 border-b-2 transition-all ${active ? 'border-blue-600 text-blue-600 bg-white' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
     {icon} {label}
@@ -371,9 +405,13 @@ const DataBox = ({ label, value, small }) => (
 );
 
 const StatusLine = ({ label, status }) => (
-  <div className="flex items-center justify-between py-2">
-    <span className="text-[10px] font-black text-slate-500 uppercase">{label}</span>
-    {status ? <CheckCircle2 size={18} className="text-emerald-500" /> : <ShieldAlert size={18} className="text-slate-200" />}
+  <div className="flex items-center justify-between p-4 bg-slate-50/50 rounded-2xl border border-slate-100 mb-2">
+    <span className="text-[10px] font-black text-slate-500 uppercase tracking-tight">{label}</span>
+    {status ? (
+      <ShieldCheck size={20} className="text-emerald-500 fill-emerald-50" />
+    ) : (
+      <ShieldAlert size={20} className="text-slate-200" />
+    )}
   </div>
 );
 

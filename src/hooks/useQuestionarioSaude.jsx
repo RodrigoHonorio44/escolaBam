@@ -1,8 +1,8 @@
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { db } from '../firebase/firebaseConfig';
 import { 
   doc, getDoc, serverTimestamp, collection, 
-  query, orderBy, getDocs, limit, startAt, endAt, writeBatch 
+  query, orderBy, getDocs, limit, startAt, endAt, writeBatch, where 
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
@@ -14,13 +14,11 @@ export const useQuestionarioSaude = (onSucesso) => {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const campoBuscaRef = useRef(null);
 
-  // --- LÓGICA DE FORMATAÇÃO VISUAL "R S" ---
   const formatarNomeRS = (str) => {
     if (!str) return '';
     return str.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
   };
 
-  // Normalização padrão para o banco (sempre minúsculo)
   const normalizeParaBanco = (val) => {
     if (typeof val !== 'string') return val;
     return val.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -30,27 +28,31 @@ export const useQuestionarioSaude = (onSucesso) => {
     alunoNome: '',
     dataNascimento: '',
     turma: '',
+    etnia: '', // <-- ADICIONADO
+    sexo: '',  // <-- ADICIONADO
     peso: '',
     altura: '',
-    historicoDoencas: { possui: 'não', detalhes: '' },
-    alergias: { possui: 'não', detalhes: '' },
-    medicacaoContinua: { possui: 'não', detalhes: '' },
+    historicoDoencas: { possui: 'não', detalhes: '', motivo: '', qual: '' },
+    alergias: { possui: 'não', detalhes: '', motivo: '', qual: '' },
+    medicacaoContinua: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     cirurgias: { possui: 'não', detalhes: '' },
     diabetes: { possui: 'não', tipo: '' }, 
-    asma: { possui: 'não', detalhes: '' },
+    asma: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     doencasCardiacas: { possui: 'não', detalhes: '' },
     epilepsia: { possui: 'não' },
     desmaioConvulsao: 'não',
     problemaColuna: { possui: 'não', detalhes: '' },
     restricoesAlimentares: { possui: 'não', detalhes: '' },
     necessidadesEspeciais: { possui: 'não', detalhes: '' },
-    diagnosticoNeuro: { possui: 'não', detalhes: '' }, 
-    atrasoDesenvolvimento: { possui: 'não', detalhes: '' },
-    atrasoCrescimento: { possui: 'não', detalhes: '' },
+    pcdStatus: { possui: 'não', detalhes: '', motivo: '', qual: '' },
+    diagnosticoNeuro: { possui: 'não', detalhes: '', motivo: '', qual: '' }, 
+    atrasoDesenvolvimento: { possui: 'não', detalhes: '', motivo: '', qual: '' },
+    atrasoCrescimento: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     tratamentoEspecializado: { 
       possui: 'não', psicologo: false, fonoaudiologo: false, terapiaOcupacional: false, outro: '' 
     },
     vacinaStatus: '', 
+    atestadoAtividadeFisica: 'pendente',
     carteiraVacina: 'não',
     vacinaAtualizada: 'não',
     dentistaUltimaConsulta: '', 
@@ -60,6 +62,7 @@ export const useQuestionarioSaude = (onSucesso) => {
       enxergar: false, falar: false, ouvir: false, andar: false, movimentarMembros: false
     },
     caminharDificuldade: 'não',
+    problemaVisao: 'não',
     contatoEmergenciaPrioridade: '',
     contatos: [
       { nome: '', telefone: '' },
@@ -83,6 +86,13 @@ export const useQuestionarioSaude = (onSucesso) => {
     const tel = (valor || "").replace(/\D/g, "");
     if (tel.length <= 11) return tel.replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d)(\d{4})$/, "$1-$2");
     return valor;
+  };
+
+  const limparFormulario = () => {
+    setFormData(estadoInicial);
+    setSugestoes([]);
+    setMostrarSugestoes(false);
+    toast.success("formulário resetado");
   };
 
   const buscarSugestoes = async (valor) => {
@@ -120,29 +130,52 @@ export const useQuestionarioSaude = (onSucesso) => {
     const toastId = toast.loading("sincronizando dados...");
     
     try {
-      const [questSnap, pastaSnap, alunoSnap] = await Promise.all([
+      // Busca o último atendimento de enfermagem para pegar etnia/sexo/peso atualizados
+      const qAtend = query(
+        collection(db, "atendimentos_enfermagem"),
+        where("pacienteId", "==", paciente.id),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+
+      const [questSnap, pastaSnap, alunoSnap, atendSnap] = await Promise.all([
         getDoc(doc(db, "questionarios_saude", paciente.id)),
         getDoc(doc(db, "pastas_digitais", paciente.id)),
-        getDoc(doc(db, "alunos", paciente.id))
+        getDoc(doc(db, "alunos", paciente.id)),
+        getDocs(qAtend)
       ]);
 
       const dQuest = questSnap.exists() ? questSnap.data() : {};
       const dPasta = pastaSnap.exists() ? pastaSnap.data() : {};
       const dAlu = alunoSnap.exists() ? alunoSnap.data() : {};
+      const dAtend = !atendSnap.empty ? atendSnap.docs[0].data() : {};
 
       setFormData(prev => ({
         ...estadoInicial,
         ...dQuest,
         pacienteId: paciente.id,
-        alunoNome: formatarNomeRS(dQuest.alunoNome || dPasta.nomeBusca || dAlu.nome || paciente.nome || ''),
-        dataNascimento: dQuest.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || '',
-        turma: dQuest.turma || dPasta.turma || dAlu.turma || '',
-        peso: dQuest.peso || dPasta.peso || '',
-        altura: dQuest.altura || dPasta.altura || '',
+        // Cruzamento de dados incluindo Atendimentos e Pasta Digital
+        alunoNome: formatarNomeRS(dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || paciente.nome || ''),
+        etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || '', // <-- BUSCA ETNIA
+        sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || '',   // <-- BUSCA SEXO
+        dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || '',
+        turma: dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || '',
+        peso: dQuest.peso || dAtend.peso || dPasta.peso || '',
+        altura: dQuest.altura || dAtend.altura || dPasta.altura || '',
+        atestadoAtividadeFisica: dQuest.atestadoAtividadeFisica || dPasta.atestadoAtividadeFisica || 'pendente',
+        
+        pcdStatus: {
+          possui: dQuest.pcdStatus?.possui || dAtend.isPCD === true ? 'sim' : (dPasta.pcdStatus?.possui || 'não'),
+          detalhes: dQuest.pcdStatus?.detalhes || dQuest.pcdStatus?.qual || dPasta.pcdStatus?.detalhes || '',
+          motivo: dQuest.pcdStatus?.motivo || dQuest.pcdStatus?.detalhes || '',
+          qual: dQuest.pcdStatus?.qual || dQuest.pcdStatus?.detalhes || ''
+        },
         
         alergias: {
-          possui: dQuest.alergias?.possui || dPasta.alunoPossuiAlergia || 'não',
-          detalhes: dQuest.alergias?.detalhes || dPasta.qualAlergia || ''
+          possui: dQuest.alergias?.possui || dAtend.alunoPossuiAlergia || dPasta.alunoPossuiAlergia || 'não',
+          detalhes: dQuest.alergias?.detalhes || dAtend.qualAlergia || dPasta.qualAlergia || '',
+          motivo: dQuest.alergias?.motivo || dQuest.alergias?.detalhes || '',
+          qual: dQuest.alergias?.qual || dQuest.alergias?.detalhes || ''
         },
         
         contatos: dQuest.contatos || [
@@ -165,12 +198,20 @@ export const useQuestionarioSaude = (onSucesso) => {
 
   const handleChange = (path, value) => {
     const keys = path.split('.');
-    const finalValue = path === 'alunoNome' ? formatarNomeRS(value) : value;
-    
     setFormData(prev => {
       if (keys.length > 1) {
-        return { ...prev, [keys[0]]: { ...prev[keys[0]], [keys[1]]: finalValue ?? '' } };
+        const rootKey = keys[0];
+        const childKey = keys[1];
+        const rootObj = prev[rootKey] || {};
+        if (['detalhes', 'motivo', 'qual'].includes(childKey)) {
+          return { 
+            ...prev, 
+            [rootKey]: { ...rootObj, detalhes: value, motivo: value, qual: value } 
+          };
+        }
+        return { ...prev, [rootKey]: { ...rootObj, [childKey]: value } };
       }
+      const finalValue = path === 'alunoNome' ? formatarNomeRS(value) : value;
       return { ...prev, [path]: finalValue ?? '' };
     });
   };
@@ -198,7 +239,6 @@ export const useQuestionarioSaude = (onSucesso) => {
     try {
       const batch = writeBatch(db);
 
-      // --- TUDO VIRA LOWERCASE PARA O BANCO ---
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? normalizeParaBanco(value) : value
       );
@@ -213,38 +253,40 @@ export const useQuestionarioSaude = (onSucesso) => {
         alturaAtual: payload.altura,
         possuiDiabetes: payload.diabetes.possui,
         medicacaoContinua: payload.medicacaoContinua.detalhes,
+        isPCD: payload.pcdStatus.possui === 'sim',
+        atestadoFisico: payload.atestadoAtividadeFisica,
         lastHealthUpdate: serverTimestamp()
       };
 
-      // 1. Salva na coleção Questionários
       batch.set(doc(db, "questionarios_saude", formData.pacienteId), payload, { merge: true });
 
-      // 2. Atualiza Pasta Digital (Adicionadas flags de status para visualização)
       batch.set(doc(db, "pastas_digitais", formData.pacienteId), {
         nomeBusca: payload.alunoNome, 
+        etnia: payload.etnia, // Salva na pasta para facilitar futuros acessos
+        sexo: payload.sexo,
         alertaSaude: resumoSaude,
         alunoPossuiAlergia: payload.alergias.possui,
         qualAlergia: payload.alergias.detalhes || 'nenhuma informada',
         peso: payload.peso,
         altura: payload.altura,
-        
-        // --- BLOCO DE STATUS PARA A PASTA DIGITAL ---
+        atestadoAtividadeFisica: payload.atestadoAtividadeFisica,
+        pcdStatus: payload.pcdStatus,
         temQuestionarioSaude: true,
-        questionarioSaude: true,
         statusSaude: 'preenchido',
         questionarioSaudeStatus: 'concluido',
         dataQuestionarioSaude: serverTimestamp(),
-        
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
-      // 3. Atualiza Base de Alunos
       batch.set(doc(db, "alunos", formData.pacienteId), {
         nome: payload.alunoNome,
+        etnia: payload.etnia,
+        sexo: payload.sexo,
         dataNascimento: payload.dataNascimento,
         turma: payload.turma,
         responsavel: payload.contatos[0].nome,
         contato: payload.contatos[0].telefone,
+        pcd: payload.pcdStatus.possui === 'sim',
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
@@ -262,6 +304,6 @@ export const useQuestionarioSaude = (onSucesso) => {
   return {
     formData, loading, fetching, buscandoNome, sugestoes, mostrarSugestoes, campoBuscaRef,
     setMostrarSugestoes, handleChange, handleContactChange, handleDificuldadeToggle,
-    buscarSugestoes, selecionarPaciente, handleSubmit, setFormData
+    buscarSugestoes, selecionarPaciente, handleSubmit, setFormData, limparFormulario
   };
 };

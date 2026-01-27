@@ -11,60 +11,70 @@ import {
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
-// Função para aplicar máscara de celular: (21) 97596-6331
 const aplicarMascaraTelefone = (valor) => {
   if (!valor) return "";
-  const n = valor.replace(/\D/g, ""); // Remove tudo que não é número
+  const n = valor.replace(/\D/g, "");
   if (n.length <= 10) {
-    // Formato para fixo ou celular antigo
     return n.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
   }
-  // Formato para celular moderno (9 dígitos)
   return n.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
 
 const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDigital = !!(dadosEdicao || alunoParaEditar), onClose, onSucesso }) => {
   const navigate = useNavigate();
   const [buscando, setBuscando] = useState(false);
+  const [sugestoes, setSugestoes] = useState([]);
 
   const dadosIniciais = alunoParaEditar || dadosEdicao;
-
-  // Normalização para minúsculas conforme diretriz R S
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
+
+  // Objeto de valores padrão para facilitar o reset
+  const defaultValues = {
+    nome: '',
+    matriculaInteligente: '',
+    naoSabeMatricula: false,
+    cartaoSus: '',
+    naoSabeEtnia: false,
+    naoSabePeso: false,
+    naoSabeAltura: false,
+    naoSabeEndereco: false,
+    sexo: '',
+    dataNascimento: '',
+    idade: '',
+    turma: '',
+    etnia: '',
+    peso: '',
+    altura: '',
+    contato1_nome: '',
+    contato1_parentesco: 'mãe',
+    contato1_telefone: '',
+    contato2_nome: '',
+    contato2_parentesco: 'pai',
+    contato2_telefone: '',
+    temAlergia: 'não',
+    historicoMedico: '',
+    endereco_rua: '',
+    endereco_cep: '',
+    endereco_bairro: ''
+  };
 
   const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting, errors } } = useForm({
     mode: "onChange", 
-    defaultValues: {
-      nome: '',
-      matriculaInteligente: '',
-      naoSabeMatricula: false,
-      cartaoSus: '',
-      naoSabeEtnia: false,
-      naoSabePeso: false,
-      naoSabeAltura: false,
-      naoSabeEndereco: false,
-      sexo: '',
-      dataNascimento: '',
-      idade: '',
-      turma: '',
-      etnia: '',
-      peso: '',
-      altura: '',
-      contato1_nome: '',
-      contato1_parentesco: 'mãe',
-      contato1_telefone: '',
-      contato2_nome: '',
-      contato2_parentesco: 'pai',
-      contato2_telefone: '',
-      temAlergia: 'não',
-      historicoMedico: '',
-      endereco_rua: '',
-      endereco_cep: '',
-      endereco_bairro: ''
-    }
+    defaultValues
   });
 
-  // Carregamento inicial de dados para edição
+  useEffect(() => {
+    const carregarNomes = async () => {
+      try {
+        const q = query(collection(db, "alunos"));
+        const snap = await getDocs(q);
+        const nomes = snap.docs.map(doc => doc.data().nome).filter(Boolean);
+        setSugestoes([...new Set(nomes)]);
+      } catch (e) { console.error("Erro ao carregar sugestões", e); }
+    };
+    carregarNomes();
+  }, []);
+
   useEffect(() => {
     if (dadosIniciais) {
       const mapeado = {
@@ -75,7 +85,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         cartaoSus: paraBanco(dadosIniciais.cartaoSus),
         contato1_nome: paraBanco(dadosIniciais.contato1_nome || dadosIniciais.responsavel),
         contato1_parentesco: paraBanco(dadosIniciais.contato1_parentesco || dadosIniciais.parentesco || 'mãe'),
-        // Aplica máscara ao carregar do banco
         contato1_telefone: aplicarMascaraTelefone(dadosIniciais.contato1_telefone || ""),
         contato2_nome: paraBanco(dadosIniciais.contato2_nome),
         contato2_parentesco: paraBanco(dadosIniciais.contato2_parentesco || 'pai'),
@@ -83,7 +92,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         endereco_rua: paraBanco(dadosIniciais.endereco_rua),
         endereco_bairro: paraBanco(dadosIniciais.endereco_bairro)
       };
-
       reset(mapeado);
       setValue("naoSabeEtnia", !dadosIniciais.etnia);
       setValue("naoSabePeso", !dadosIniciais.peso);
@@ -94,13 +102,20 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   }, [dadosIniciais, reset, setValue]);
 
   const buscarAluno = async () => {
-    const nomeBusca = paraBanco(watch("nome"));
+    const nomeAtual = watch("nome");
+    const nomeBusca = paraBanco(nomeAtual);
+
     if (nomeBusca.length < 3) {
       toast.error("digite ao menos 3 letras para buscar");
       return;
     }
 
     setBuscando(true);
+
+    // --- LIMPEZA PREVENTIVA ---
+    // Reseta todos os campos para o padrão, mas mantém o nome que está sendo digitado
+    reset({ ...defaultValues, nome: nomeAtual });
+
     try {
       const colecoes = ["alunos", "pastas_digitais", "atendimentos_enfermagem", "triagens"];
       let dadosEncontrados = null;
@@ -129,6 +144,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           contato2_telefone: aplicarMascaraTelefone(dadosEncontrados.contato2_telefone || ""),
           contato1_nome: paraBanco(dadosEncontrados.contato1_nome || dadosEncontrados.responsavel)
         };
+        
         reset(payloadNormalizado);
         toast.success("registro localizado e importado!");
       } else {
@@ -138,6 +154,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       toast.error("erro na busca global.");
     } finally {
       setBuscando(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      buscarAluno();
     }
   };
 
@@ -191,7 +214,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         nome: nomeNormalizado,
         nomeBusca: nomeNormalizado,
         cartaoSus: paraBanco(data.cartaoSus),
-        // Remove máscara para salvar apenas números
         contato1_telefone: data.contato1_telefone.replace(/\D/g, ""),
         contato2_telefone: data.contato2_telefone.replace(/\D/g, ""),
         contato1_nome: paraBanco(data.contato1_nome),
@@ -220,7 +242,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       await batch.commit();
       if (onSucesso) onSucesso();
       if (modoPastaDigital) { handleActionVoltar(); } 
-      else { reset(); }
+      else { reset(defaultValues); }
     };
     toast.promise(saveAction(), { loading: 'sincronizando...', success: 'base atualizada!', error: 'erro ao salvar.' });
   };
@@ -263,7 +285,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
         </div>
 
-        {/* NOME COMPLETO - APLICADO CAPITALIZE VISUAL */}
+        {/* NOME COMPLETO */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
           <div className="relative group">
@@ -272,14 +294,20 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                 required: "digite o nome completo",
                 pattern: { value: /^[a-zA-Zá-úÁ-Ú']+\s+[a-zA-Zá-úÁ-Ú']+.*$/, message: "digite nome e sobrenome" }
               })} 
-              placeholder="ex: rodrigo honorio" 
+              list="lista-sugestoes"
+              onKeyDown={handleKeyDown}
+              autoComplete="off"
+              placeholder="ex: caio giromba" 
               className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all capitalize ${errors.nome ? 'bg-red-50 border-red-500 text-red-900' : 'bg-slate-50 border-transparent focus:border-blue-600'}`} 
             />
+            <datalist id="lista-sugestoes">
+              {sugestoes.map((s, idx) => <option key={idx} value={s} />)}
+            </datalist>
             <button type="button" onClick={buscarAluno} disabled={buscando} className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-blue-600 text-white rounded-xl shadow-lg hover:bg-blue-700 transition-all">
               {buscando ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
             </button>
           </div>
-          <p className="text-[8px] font-bold text-blue-500 uppercase ml-2 italic">Exibição: R S | Armazenamento: r s (lowercase)</p>
+          <p className="text-[8px] font-bold text-blue-500 uppercase ml-2 italic">Dica: Filtre pelo sobrenome e aperte Enter para buscar</p>
         </div>
 
         {/* DATA E IDADE */}
@@ -292,12 +320,10 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 rounded-2xl font-bold text-blue-700 outline-none" />
         </div>
 
-        {/* CONTATOS COM TRAVA DE MÁSCARA */}
+        {/* CONTATOS */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-200 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2 italic"><Users size={14}/> Contatos de Emergência (Mínimo 2)</label>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Contato 1 */}
             <div className="space-y-3 p-5 bg-white rounded-[25px] border border-slate-100 shadow-inner">
               <p className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1">Contato Principal</p>
               <input {...register("contato1_nome", { required: true })} placeholder="nome do responsável" className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase" />
@@ -321,8 +347,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                 </div>
               </div>
             </div>
-
-            {/* Contato 2 */}
             <div className="space-y-3 p-5 bg-white rounded-[25px] border border-slate-100 shadow-inner">
               <p className="text-[9px] font-black text-slate-500 uppercase flex items-center gap-1">Contato Secundário</p>
               <input {...register("contato2_nome")} placeholder="nome do segundo contato" className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none border border-transparent focus:border-blue-600 lowercase" />
@@ -349,7 +373,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* RESTANTE DO FORMULÁRIO (ENDEREÇO, ETNIA, TURMA...) MANTIDO ORIGINAL */}
+        {/* ENDEREÇO */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2 italic"><MapPin size={14}/> Endereço</label>
@@ -365,6 +389,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
+        {/* ETNIA, PESO, ALTURA */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100">
           <div className="space-y-2">
             <div className="flex justify-between items-center px-1">
@@ -409,6 +434,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </select>
         </div>
 
+        {/* ALERGIAS */}
         <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Alergias</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

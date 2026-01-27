@@ -27,7 +27,18 @@ export const useAtendimentoLogica = (user) => {
     return partes.length >= 2 && partes[1].length >= 2;
   };
 
-  const getInitialFormState = () => ({
+  const gerarIdPadrao = useCallback((nome, data) => {
+    if (!nome) return '';
+    const nomeLimpo = nome.toLowerCase().trim()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") 
+      .replace(/[^a-z0-9\s]/g, "") 
+      .replace(/\s+/g, '-'); 
+    
+    const dataLimpa = data ? data.replace(/-/g, '') : 'nd';
+    return `${nomeLimpo}-${dataLimpa}`;
+  }, []);
+
+  const getInitialFormState = useCallback(() => ({
     baenf: `baenf-2026-${Math.random().toString(36).substring(2, 8).toLowerCase()}`,
     data: new Date().toISOString().split('T')[0],
     horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
@@ -49,10 +60,12 @@ export const useAtendimentoLogica = (user) => {
     observacoes: '',
     destinoHospital: '',
     motivoEncaminhamento: '',
+    obsEncaminhamento: '',
     alunoPossuiAlergia: 'não',
     qualAlergia: '',
-    pacienteId: ''
-  });
+    pacienteId: '',
+    registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase()
+  }), [user]);
 
   const [formData, setFormData] = useState(getInitialFormState());
 
@@ -71,9 +84,9 @@ export const useAtendimentoLogica = (user) => {
         const p = parseFloat(String(novoEstado.peso).replace(',', '.'));
         const a = parseFloat(String(novoEstado.altura).replace(',', '.'));
         if (p > 0 && a > 0.5) { 
-          novoEstado.imc = (p / (a * a)).toFixed(2);
+          novoEstado.imc = parseFloat((p / (a * a)).toFixed(2));
         } else {
-          novoEstado.imc = '';
+          novoEstado.imc = 0; 
         }
       }
       return novoEstado;
@@ -84,149 +97,140 @@ export const useAtendimentoLogica = (user) => {
     if (formData.dataNascimento && !configUI.naoSabeDataNasc) {
       const hoje = new Date();
       const nasc = new Date(formData.dataNascimento);
-      let idade = hoje.getFullYear() - nasc.getFullYear();
+      let idadeCalc = hoje.getFullYear() - nasc.getFullYear();
       const m = hoje.getMonth() - nasc.getMonth();
-      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) { idade--; }
-      setFormData(prev => ({ ...prev, idade: idade >= 0 ? idade.toString() : '' }));
+      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) { idadeCalc--; }
+      setFormData(prev => ({ ...prev, idade: idadeCalc >= 0 ? idadeCalc : '' }));
     }
   }, [formData.dataNascimento, configUI.naoSabeDataNasc]);
 
   const selecionarPaciente = async (p) => {
     setMostrarSugestoes(false);
-    const toastId = toast.loading("sincronizando dados...");
-    
-    const nomeLimpo = (p.nome || p.nomeBusca || p.nomePaciente || "").toLowerCase();
-    const dataNasc = p.dataNascimento || "";
+    const toastId = toast.loading("sincronizando...");
+    const nomeOriginal = (p.nome || p.nomeBusca || p.nomePaciente || "").toLowerCase().trim();
+    let dataParaInput = p.dataNascimento || "";
 
-    const nomeParaId = nomeLimpo.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                                .replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, '-');
-    const dataParaId = dataNasc ? dataNasc.replace(/-/g, '') : 'nd';
-    const idSugerido = p.id || p.pacienteId || `${nomeParaId}-${dataParaId}`;
-
-    let dados = await puxarDadosCompletos(nomeLimpo, dataNasc);
-
-    if (!dados) {
-      try {
-        const docRef = doc(db, "pastas_digitais", idSugerido);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          dados = { id: docSnap.id, ...docSnap.data() };
-        }
-      } catch (err) {
-        console.error("Erro na busca direta:", err);
-      }
+    if (dataParaInput.includes('-') && dataParaInput.split('-')[0].length === 2) {
+      const [d, m, a] = dataParaInput.split('-');
+      dataParaInput = `${a}-${m}-${d}`;
     }
 
-    if (dados) {
-      const pesoStr = dados.peso ? String(dados.peso).replace('.', ',') : "";
-      const alturaStr = dados.altura ? String(dados.altura).replace('.', ',') : "";
-      const imcStr = dados.imc ? String(dados.imc).replace('.', ',') : "";
-      const tempStr = dados.temperatura ? String(dados.temperatura).replace('.', ',') : "";
+    const idSugerido = gerarIdPadrao(nomeOriginal, dataParaInput);
 
-      setFormData(prev => ({
-        ...prev,
-        pacienteId: dados.id || idSugerido,
-        nomePaciente: (dados.nomeBusca || dados.nome || nomeLimpo).toLowerCase(), 
-        dataNascimento: dados.dataNascimento || dataNasc,
-        sexo: (dados.sexo || prev.sexo || "").toLowerCase(),
-        turma: (dados.turma || prev.turma || "").toLowerCase(),
-        cargo: (dados.cargo || prev.cargo || "").toLowerCase(),
-        etnia: (dados.etnia || prev.etnia || "").toLowerCase(),
-        peso: pesoStr,
-        altura: alturaStr,
-        imc: imcStr,
-        temperatura: tempStr,
-        alunoPossuiAlergia: (dados.alunoPossuiAlergia || 'não').toLowerCase(),
-        qualAlergia: (dados.qualAlergia || '').toLowerCase(),
-        observacoes: (dados.observacoes || "").toLowerCase()
-      }));
+    try {
+      const docRef = doc(db, "pastas_digitais", idSugerido);
+      const docSnap = await getDoc(docRef);
+      let dados = docSnap.exists() ? docSnap.data() : await puxarDadosCompletos(nomeOriginal, dataParaInput);
 
-      setConfigUI(prev => ({ ...prev, naoSabePeso: !pesoStr, naoSabeAltura: !alturaStr }));
-      setTemCadastro(true);
-      toast.success("perfil sincronizado!", { id: toastId });
-    } else {
-      setFormData(prev => ({ ...prev, nomePaciente: nomeLimpo, dataNascimento: dataNasc, pacienteId: idSugerido }));
-      toast.error("histórico não encontrado.", { id: toastId });
+      if (dados) {
+        setFormData(prev => ({
+          ...prev,
+          pacienteId: idSugerido,
+          nomePaciente: nomeOriginal,
+          dataNascimento: dataParaInput, 
+          sexo: (dados.sexo || "").toLowerCase(),
+          turma: (dados.turma || "").toLowerCase(),
+          cargo: (dados.cargo || "").toLowerCase(),
+          etnia: (dados.etnia || "").toLowerCase(),
+          peso: dados.peso || "",
+          altura: dados.altura || "",
+          imc: dados.imc || 0,
+          alunoPossuiAlergia: (dados.alunoPossuiAlergia || 'não').toLowerCase(),
+          qualAlergia: (dados.qualAlergia || '').toLowerCase()
+        }));
+
+        const perfil = dados.tipoPerfil || (dados.cargo ? 'funcionario' : 'aluno');
+        setConfigUI(prev => ({ ...prev, perfilPaciente: perfil }));
+        setTemCadastro(true);
+        toast.success("perfil carregado!", { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("erro ao carregar dados.", { id: toastId });
     }
   };
 
   const salvarAtendimento = async (e) => {
     if (e) e.preventDefault();
     if (!validarNomeCompleto(formData.nomePaciente)) {
-      toast.error("nome e sobrenome!");
+      toast.error("nome completo obrigatório!");
       return;
     }
 
     setLoading(true);
-    const toastId = toast.loading("processando registro...");
+    const toastId = toast.loading("salvando...");
 
     try {
       const batch = writeBatch(db);
-      const horaSaida = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const agoraHora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const eFuncionario = configUI.perfilPaciente === 'funcionario';
+      const colecaoBase = eFuncionario ? "funcionarios" : "alunos";
 
-      // Determina status com base no tipo de atendimento da UI
-      const statusAtendimento = configUI.tipoAtendimento === 'local' ? 'finalizado' : 'pendente';
-      const tipoRegistro = configUI.tipoAtendimento === 'remocao' ? 'remoção' : 'local';
-
-      // Normalização recursiva para lowercase
+      // Normaliza strings para lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
 
-      const numericData = {
-        ...payload,
-        idade: parseInt(payload.idade) || 0,
-        peso: parseFloat(String(payload.peso).replace(',', '.')) || 0,
-        altura: parseFloat(String(payload.altura).replace(',', '.')) || 0,
-        imc: parseFloat(String(payload.imc).replace(',', '.')) || 0,
-        temperatura: parseFloat(String(payload.temperatura).replace(',', '.')) || 0
-      };
+      const idPasta = gerarIdPadrao(payload.nomePaciente, formData.dataNascimento);
 
-      const nomeParaId = payload.nomePaciente
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, '-');
-      const dataParaId = payload.dataNascimento ? payload.dataNascimento.replace(/-/g, '') : 'nd';
-      const idPasta = payload.pacienteId || `${nomeParaId}-${dataParaId}`;
+      // --- LÓGICA DE DEFINIÇÃO DE TIPO (FORMS DIFERENTES) ---
+      const eRemocao = configUI.tipoAtendimento === 'remocao';
 
       const finalData = {
-        ...numericData,
-        pacienteId: idPasta,
-        horarioSaida: horaSaida,
-        statusAtendimento, // automático: finalizado ou pendente
-        tipoRegistro,      // automático: local ou remoção
-        perfilPaciente: configUI.perfilPaciente.toLowerCase(),
-        escola: (user?.escolaId || "unidade").toLowerCase(),
+        ...payload,
+        dataNascimento: formData.dataNascimento, 
+        pacienteId: idPasta, 
+        // Força tipos numéricos conforme seu exemplo (Caio Giromba)
+        idade: Number(payload.idade) || 0,
+        peso: Number(payload.peso) || 0,
+        altura: Number(payload.altura) || 0,
+        imc: Number(payload.imc) || 0,
+        temperatura: Number(payload.temperatura) || 0,
+        horarioSaida: agoraHora,
+        
+        // Se for form de remoção, salva pendente. Se for local, finalizado.
+        statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
+        tipoRegistro: eRemocao ? 'remoção' : 'local',
+        
+        perfilPaciente: configUI.perfilPaciente,
+        escola: (user?.escolaId || "e. m. anísio teixeira").toLowerCase(),
         profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
-        registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase(),
         createdAt: serverTimestamp()
       };
 
-      // Salva o atendimento
-      batch.set(doc(collection(db, "atendimentos_enfermagem")), finalData);
+      // 1. Grava atendimento usando o BAENF como ID fixo
+      batch.set(doc(db, "atendimentos_enfermagem", finalData.baenf), finalData);
 
-      // Atualiza a Pasta Digital com o último estado
+      // 2. Atualiza Coleção Específica
+      batch.set(doc(db, colecaoBase, idPasta), {
+        nome: finalData.nomePaciente,
+        dataNascimento: finalData.dataNascimento,
+        sexo: finalData.sexo,
+        ultimaAtualizacao: serverTimestamp(),
+        ...(eFuncionario ? { cargo: finalData.cargo } : { turma: finalData.turma })
+      }, { merge: true });
+
+      // 3. Atualiza Pasta Digital (Mantendo histórico de peso/altura)
       batch.set(doc(db, "pastas_digitais", idPasta), {
+        id: idPasta,
         nomeBusca: finalData.nomePaciente,
         dataNascimento: finalData.dataNascimento,
+        sexo: finalData.sexo,
+        etnia: finalData.etnia,
         peso: finalData.peso,
         altura: finalData.altura,
         imc: finalData.imc,
-        etnia: finalData.etnia,
-        sexo: finalData.sexo,
-        turma: finalData.turma,
+        tipoPerfil: finalData.perfilPaciente,
+        cargo: eFuncionario ? finalData.cargo : '',
+        turma: !eFuncionario ? finalData.turma : '',
         alunoPossuiAlergia: finalData.alunoPossuiAlergia,
         qualAlergia: finalData.qualAlergia,
-        ultimoStatusClinico: statusAtendimento === 'pendente' ? 'em remoção' : 'estável',
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
       await batch.commit();
       
-      const msgSucesso = statusAtendimento === 'finalizado' 
-        ? "atendimento local finalizado!" 
-        : "remoção registrada como pendente!";
-        
-      toast.success(msgSucesso, { id: toastId });
+      toast.success(eRemocao ? "remoção pendente!" : "atendimento finalizado!", { id: toastId });
       setFormData(getInitialFormState());
       setTemCadastro(false);
     } catch (error) {

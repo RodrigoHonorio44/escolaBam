@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronLeft, ChevronRight, Search, Users, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Search, AlertCircle } from 'lucide-react';
 
 const AbaFichasMedicas = ({ grupos, darkMode }) => {
   const [subAba, setSubAba] = useState('alergias');
@@ -7,24 +7,69 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
   const [busca, setBusca] = useState("");
   const itensPorPagina = 8;
 
-  // Função de normalização para o padrão "caio giromba"
+  // Função de normalização alinhada com suas preferências (lowercase e trim)
   const normalizar = (str) => str?.toString().toLowerCase().trim() || "";
 
   if (!grupos) return null;
 
-  // Mapeamento das categorias
+  // --- MAPEAMENTO REFINADO COM BASE NO LOG DO FIREBASE ---
   const categorias = [
-    { id: 'alergias', label: 'alergias', dados: grupos.alergias || [] },
-    { id: 'acessibilidade', label: 'pcd / acessibilidade', dados: grupos.acessibilidade || [] },
-    { id: 'cronicos', label: 'doenças crônicas', dados: grupos.cronicos || [] },
-    { id: 'restricao', label: 'restrição alimentar', dados: grupos.restricaoAlimentar || [] },
+    { 
+      id: 'alergias', 
+      label: 'alergias', 
+      dados: (grupos.alergias || []).map(aluno => ({
+        ...aluno,
+        detalhesExibicao: normalizar(aluno.alergias?.detalhes || 'alergia registrada')
+      }))
+    },
+    { 
+      id: 'acessibilidade', 
+      label: 'pcd / acessibilidade', 
+      dados: (grupos.acessibilidade || []).map(aluno => {
+        const pcd = aluno.pcdStatus?.detalhes ? `pcd: ${aluno.pcdStatus.detalhes}` : "";
+        const neuro = aluno.diagnosticoNeuro?.detalhes ? `neuro: ${aluno.diagnosticoNeuro.detalhes}` : "";
+        const motor = aluno.caminharDificuldade === "sim" ? "dificuldade motora" : "";
+        const visao = aluno.problemaVisao === "sim" ? "baixa visão" : "";
+        
+        return {
+          ...aluno,
+          detalhesExibicao: normalizar([pcd, neuro, motor, visao].filter(Boolean).join(' | ') || 'apoio especializado')
+        };
+      })
+    },
+    { 
+      id: 'cronicos', 
+      label: 'doenças crônicas', 
+      dados: (grupos.cronicos || []).map(aluno => {
+        const condicoes = [
+          aluno.asma?.possui === "sim" ? `asma: ${aluno.asma.detalhes}` : null,
+          aluno.diabetes?.possui === "sim" ? `diabetes: ${aluno.diabetes.tipo || ''}` : null,
+          aluno.epilepsia?.possui === "sim" ? `epilepsia: ${aluno.epilepsia.detalhes}` : null,
+          aluno.desmaioConvulsao === "sim" ? "histórico de desmaio/convulsão" : null,
+          aluno.medicacaoContinua?.possui === "sim" ? `medicação: ${aluno.medicacaoContinua.detalhes}` : null
+        ].filter(Boolean).join(' | ');
+
+        return {
+          ...aluno,
+          detalhesExibicao: normalizar(condicoes || 'condição crônica registrada')
+        };
+      })
+    },
+    { 
+      id: 'restricao', 
+      label: 'restrição alimentar', 
+      dados: (grupos.restricaoAlimentar || []).map(aluno => ({
+        ...aluno,
+        detalhesExibicao: normalizar(aluno.restricoesAlimentares?.detalhes || 'restrição alimentar registrada')
+      }))
+    },
   ];
 
   const categoriaAtiva = categorias.find(c => c.id === subAba);
   
-  // Filtragem por busca antes da paginação
+  // Filtro de busca aprimorado para lowercase
   const dadosFiltrados = (categoriaAtiva.dados || []).filter(aluno => 
-    normalizar(aluno.nome).includes(normalizar(busca)) ||
+    normalizar(aluno.alunoNome || aluno.nome).includes(normalizar(busca)) ||
     normalizar(aluno.turma).includes(normalizar(busca))
   );
 
@@ -34,8 +79,7 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
-      
-      {/* Header da Aba: Seletores + Busca */}
+      {/* Header com Filtros e Busca */}
       <div className="flex flex-col xl:flex-row gap-6 justify-between items-start xl:items-center">
         <div className="flex flex-wrap gap-3">
           {categorias.map(cat => (
@@ -54,7 +98,6 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
           ))}
         </div>
 
-        {/* Campo de Busca Interno */}
         <div className="relative w-full xl:w-80 group">
           <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${darkMode ? 'text-slate-600 group-focus-within:text-blue-500' : 'text-slate-300 group-focus-within:text-blue-500'}`} size={18} />
           <input 
@@ -88,7 +131,7 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
                 dadosExibidos.map((aluno, idx) => (
                   <tr key={idx} className={`hover:bg-blue-600/5 transition-colors group ${darkMode ? 'text-white' : 'text-slate-700'}`}>
                     <td className="p-8 font-black lowercase italic text-[13px] tracking-tight">
-                      {normalizar(aluno.nome) || 'não identificado'}
+                      {normalizar(aluno.alunoNome || aluno.nome)}
                     </td>
                     <td className="p-8 text-center font-bold opacity-60 text-sm">
                       {aluno.idade || '--'} <span className="text-[9px] uppercase">anos</span>
@@ -100,10 +143,7 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
                     </td>
                     <td className="p-8">
                       <div className={`p-4 rounded-2xl text-[11px] leading-relaxed font-medium lowercase ${darkMode ? 'bg-white/5 text-slate-400' : 'bg-slate-50 text-slate-600'}`}>
-                        {subAba === 'alergias' && normalizar(aluno.detalhesAlergia || aluno.alergiaObs || 'sim (ver prontuário)')}
-                        {subAba === 'cronicos' && normalizar(aluno.detalhesDoenca || 'paciente crônico')}
-                        {subAba === 'restricao' && normalizar(aluno.detalhesRestricao || 'possui restrição')}
-                        {subAba === 'acessibilidade' && normalizar(aluno.tipoDeficiencia || 'apoio especializado')}
+                        {aluno.detalhesExibicao}
                       </div>
                     </td>
                   </tr>
@@ -126,7 +166,6 @@ const AbaFichasMedicas = ({ grupos, darkMode }) => {
             <span className="text-[10px] font-black lowercase opacity-40 tracking-widest">
               exibindo {dadosExibidos.length} de {dadosFiltrados.length} resultados
             </span>
-            
             <div className="flex gap-4">
               <button 
                 disabled={pagina === 1}

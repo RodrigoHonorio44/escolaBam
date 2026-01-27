@@ -7,7 +7,7 @@ import {
 import { useAtendimentoLogica } from '../../hooks/useAtendimentoLogica';
 import { Toaster, toast } from 'react-hot-toast';
 
-const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
+const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDigital }) => {
   const { 
     formData, updateField, loading, 
     configUI, setConfigUI, 
@@ -17,23 +17,56 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
 
   const [erroNome, setErroNome] = useState(false);
 
-  // Validação e normalização
+  // --- FUNÇÕES DE FORMATAÇÃO VISUAL ---
+  const formatarCapitalize = (texto) => {
+    if (!texto) return "";
+    return texto.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase());
+  };
+
+  const formatarNomeExibicao = (nome) => {
+    if (!nome) return "";
+    let nomeFormatado = formatarCapitalize(nome);
+    return nomeFormatado
+      .replace(/\bR\s+S\b/gi, "R S")
+      .replace(/\bRs\b/gi, "RS");
+  };
+
   const validarNomeCompleto = (valor) => {
-    const nomeLimpo = valor.trim();
+    const nomeLimpo = valor.trim().toLowerCase(); 
     const partes = nomeLimpo.split(/\s+/).filter(p => p.length > 0);
     const valido = partes.length >= 2;
     setErroNome(!valido && nomeLimpo.length > 0);
     return valido;
   };
 
-  const lidarSubmit = (e) => {
-    e.preventDefault();
-    if (!validarNomeCompleto(formData.nomePaciente)) {
+  const lidarSubmit = async (e) => {
+    if (e) e.preventDefault();
+    
+    const nomeNormalizado = formData.nomePaciente.toLowerCase().trim();
+
+    if (!validarNomeCompleto(nomeNormalizado)) {
       setErroNome(true);
       toast.error("nome e sobrenome obrigatórios!", { id: 'trava-nome' });
       return;
     }
-    salvarAtendimento(e);
+
+    try {
+      const sucesso = await salvarAtendimento(e);
+      
+      if (sucesso) {
+        if (configUI.perfilPaciente === 'funcionario' && typeof onAbrirPastaDigital === 'function') {
+          onAbrirPastaDigital({
+            ...formData,
+            nomePaciente: nomeNormalizado,
+            pacienteId: formData.pacienteId || nomeNormalizado.replace(/\s+/g, '-')
+          });
+        } else {
+          onVoltar();
+        }
+      }
+    } catch (error) {
+      console.error("erro ao processar submissão:", error);
+    }
   };
 
   const queixasComuns = [
@@ -62,7 +95,11 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
         </div>
         <div className="flex gap-3">
           {temCadastro && (
-            <button type="button" onClick={() => onVerHistorico(formData.nomePaciente)} className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-xs font-black transition-all shadow-lg flex items-center gap-2 tracking-widest text-white">
+            <button 
+              type="button" 
+              onClick={() => onVerHistorico?.(formData.nomePaciente.toLowerCase())} 
+              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-xs font-black transition-all shadow-lg flex items-center gap-2 tracking-widest text-white"
+            >
               <History size={14} /> ver histórico
             </button>
           )}
@@ -86,7 +123,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
           </div>
         </div>
 
-        {/* Seletores Perfil/Atendimento */}
+        {/* Seletores Perfil/Atendimento - CORRIGIDO */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto font-sans">
           <div className="bg-slate-100 p-2 rounded-[25px] flex shadow-inner">
             <button type="button" onClick={() => setConfigUI({...configUI, perfilPaciente: 'aluno'})} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all tracking-widest ${configUI.perfilPaciente === 'aluno' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-400'}`}>
@@ -100,14 +137,14 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
             <button type="button" onClick={() => setConfigUI({...configUI, tipoAtendimento: 'local'})} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all tracking-widest ${configUI.tipoAtendimento === 'local' ? 'bg-white text-emerald-600 shadow-md' : 'text-slate-400'}`}>
               <Home size={18} /> local
             </button>
-            <button type="button" onClick={() => setConfigUI({...configUI, tipoAtendimento: 'hospital'})} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all tracking-widest ${configUI.tipoAtendimento === 'hospital' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-400'}`}>
+            <button type="button" onClick={() => setConfigUI({...configUI, tipoAtendimento: 'remocao'})} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all tracking-widest ${configUI.tipoAtendimento === 'remocao' ? 'bg-white text-orange-600 shadow-md' : 'text-slate-400'}`}>
               <Hospital size={18} /> remoção
             </button>
           </div>
         </div>
 
         <div className="space-y-6 font-sans">
-          {/* NOME COM TRAVA E BUSCA */}
+          {/* NOME COMPLETO */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
             <div className="md:col-span-2 space-y-2 relative">
               <label className={`text-[10px] font-black uppercase ml-2 tracking-widest flex items-center gap-2 ${erroNome ? 'text-red-500' : 'text-slate-500'}`}>
@@ -117,10 +154,10 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
               <input 
                 type="text" 
                 required 
-                placeholder="ex: maia giromba" 
-                className={`w-full border-2 rounded-2xl px-5 py-4 text-sm font-bold outline-none capitalize transition-all
+                placeholder="Ex: Rodrigo Honorio Silva" 
+                className={`w-full border-2 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all
                   ${erroNome ? 'bg-red-50 border-red-500 focus:ring-red-200' : 'bg-slate-50 border-transparent focus:ring-blue-500'}`} 
-                value={formData.nomePaciente} 
+                value={formatarNomeExibicao(formData.nomePaciente)} 
                 onChange={(e) => {
                   const val = e.target.value.toLowerCase();
                   updateField('nomePaciente', val);
@@ -136,7 +173,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                       setErroNome(false); 
                       setMostrarSugestoes(false); 
                     }} className="p-4 hover:bg-blue-50 cursor-pointer border-b border-slate-50 last:border-none flex flex-col gap-1 text-left">
-                      <p className="text-xs font-black text-slate-800 capitalize">{p.nomePaciente || p.nome || p.nomeBusca}</p>
+                      <p className="text-xs font-black text-slate-800 italic">{formatarNomeExibicao(p.nomePaciente || p.nome || p.nomeBusca)}</p>
                       <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 lowercase italic">
                         <span>{p.turma || p.cargo}</span> <span className="bg-slate-100 px-2 py-0.5 rounded text-blue-600">{p.dataNascimento}</span>
                       </div>
@@ -184,7 +221,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
               </select>
             </div>
             
-            {/* PESO ATUALIZADO COM TRATAMENTO PARA AUTO-PREENCHER */}
             <div className="space-y-2">
               <div className="flex justify-between items-center px-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase italic tracking-widest">peso (kg)</label>
@@ -198,13 +234,11 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                 disabled={configUI.naoSabePeso} 
                 placeholder={configUI.naoSabePeso ? "n/i" : "00.0"} 
                 className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold ${configUI.naoSabePeso ? 'bg-slate-200 text-slate-400' : 'bg-slate-50 text-slate-800'}`} 
-                // Limpeza: Converte vírgula em ponto e remove caracteres não numéricos
-                value={formData.peso ? String(formData.peso).replace(',', '.').replace(/[^0-9.]/g, '') : ''} 
+                value={formData.peso} 
                 onChange={(e) => updateField('peso', e.target.value)} 
               />
             </div>
 
-            {/* ALTURA ATUALIZADA COM TRATAMENTO PARA AUTO-PREENCHER */}
             <div className="space-y-2">
               <div className="flex justify-between items-center px-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase italic tracking-widest">altura (m)</label>
@@ -218,8 +252,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                 disabled={configUI.naoSabeAltura} 
                 placeholder={configUI.naoSabeAltura ? "n/i" : "0.00"} 
                 className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold ${configUI.naoSabeAltura ? 'bg-slate-200 text-slate-400' : 'bg-slate-50 text-slate-800'}`} 
-                // Limpeza: Garante que o input receba apenas o valor numérico esperado
-                value={formData.altura ? String(formData.altura).replace(',', '.').replace(/[^0-9.]/g, '') : ''} 
+                value={formData.altura} 
                 onChange={(e) => updateField('altura', e.target.value)} 
               />
             </div>
@@ -234,7 +267,13 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-blue-500 uppercase ml-2 italic tracking-widest block">{configUI.perfilPaciente === 'aluno' ? 'turma *' : 'cargo *'}</label>
-              <input type="text" required className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold capitalize" value={configUI.perfilPaciente === 'aluno' ? formData.turma : formData.cargo} onChange={(e) => updateField(configUI.perfilPaciente === 'aluno' ? 'turma' : 'cargo', e.target.value)} />
+              <input 
+                type="text" 
+                required 
+                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic" 
+                value={formatarCapitalize(configUI.perfilPaciente === 'aluno' ? formData.turma : formData.cargo)} 
+                onChange={(e) => updateField(configUI.perfilPaciente === 'aluno' ? 'turma' : 'cargo', e.target.value.toLowerCase())} 
+              />
             </div>
           </div>
 
@@ -254,7 +293,13 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
           {formData.alunoPossuiAlergia === 'sim' && (
             <div className="space-y-2 animate-in fade-in slide-in-from-left-2">
               <label className="text-[10px] font-black text-red-600 uppercase ml-2 italic tracking-widest block">qual alergia? *</label>
-              <input type="text" required className="w-full bg-red-50 border-2 border-red-200 rounded-2xl px-5 py-4 text-sm font-bold capitalize" value={formData.qualAlergia} onChange={(e) => updateField('qualAlergia', e.target.value)} />
+              <input 
+                type="text" 
+                required 
+                className="w-full bg-red-50 border-2 border-red-200 rounded-2xl px-5 py-4 text-sm font-bold italic" 
+                value={formatarCapitalize(formData.qualAlergia)} 
+                onChange={(e) => updateField('qualAlergia', e.target.value.toLowerCase())} 
+              />
             </div>
           )}
         </div>
@@ -270,33 +315,45 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">motivo principal *</label>
-                  <select required className="w-full bg-blue-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.motivoAtendimento} onChange={(e) => updateField('motivoAtendimento', e.target.value)}>
+                  <select required className="w-full bg-blue-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.motivoAtendimento} onChange={(e) => updateField('motivoAtendimento', e.target.value.toLowerCase())}>
                     <option value="">selecione...</option>
-                    {queixasComuns.map(q => <option key={q} value={q}>{q}</option>)}
+                    {queixasComuns.map(q => <option key={q} value={q.toLowerCase()}>{q.toLowerCase()}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">procedimentos *</label>
-                  <input type="text" required className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold capitalize" value={formData.procedimentos} onChange={(e) => updateField('procedimentos', e.target.value)} />
+                  <input 
+                    type="text" 
+                    required 
+                    className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic" 
+                    value={formatarCapitalize(formData.procedimentos)} 
+                    onChange={(e) => updateField('procedimentos', e.target.value.toLowerCase())} 
+                  />
                 </div>
                 
                 <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div className="space-y-2">
                     <label className="text-[10px] font-black text-emerald-600 uppercase ml-2 tracking-widest block">medicação administrada</label>
-                    <input type="text" placeholder="ex: paracetamol 500mg..." className="w-full bg-emerald-50 border-none rounded-2xl px-5 py-4 text-sm font-bold capitalize" value={formData.medicacao} onChange={(e) => updateField('medicacao', e.target.value)} />
+                    <input 
+                      type="text" 
+                      placeholder="ex: paracetamol 500mg..." 
+                      className="w-full bg-emerald-50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic" 
+                      value={formatarCapitalize(formData.medicacao)} 
+                      onChange={(e) => updateField('medicacao', e.target.value.toLowerCase())} 
+                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-orange-600 uppercase ml-2 italic tracking-widest block">encaminhamento/destino</label>
-                    <select className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.destinoHospital} onChange={(e) => updateField('destinoHospital', e.target.value)}>
+                    <select className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.destinoHospital} onChange={(e) => updateField('destinoHospital', e.target.value.toLowerCase())}>
                       <option value="">não houve</option>
-                      {opcoesEncaminhamentoAluno.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      {opcoesEncaminhamentoAluno.map(opt => <option key={opt} value={opt.toLowerCase()}>{opt.toLowerCase()}</option>)}
                     </select>
                   </div>
                 </div>
 
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">detalhamento da queixa / observações</label>
-                  <textarea rows="3" className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase resize-none outline-none" placeholder="descreva o quadro clínico aqui..." value={formData.observacoes} onChange={(e) => updateField('observacoes', e.target.value)} />
+                  <textarea rows="3" className="w-full bg-blue-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic resize-none outline-none" placeholder="descreva o quadro clínico aqui..." value={formData.observacoes} onChange={(e) => updateField('observacoes', e.target.value.toLowerCase())} />
                 </div>
               </div>
             </div>
@@ -309,7 +366,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-orange-600 uppercase ml-2 tracking-widest block">unidade de destino</label>
-                  <select required className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.destinoHospital} onChange={(e) => updateField('destinoHospital', e.target.value)}>
+                  <select required className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.destinoHospital} onChange={(e) => updateField('destinoHospital', e.target.value.toLowerCase())}>
                     <option value="">selecione...</option>
                     <option value="hospital conde modesto leal">hospital conde modesto leal</option>
                     <option value="upa inoã">upa inoã</option>
@@ -319,11 +376,11 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-orange-600 uppercase ml-2 tracking-widest block">motivo da remoção</label>
-                  <input type="text" required placeholder="ex: suspeita de fratura..." className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold capitalize" value={formData.motivoEncaminhamento} onChange={(e) => updateField('motivoEncaminhamento', e.target.value)} />
+                  <input type="text" required placeholder="ex: suspeita de fratura..." className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic" value={formatarCapitalize(formData.motivoEncaminhamento)} onChange={(e) => updateField('motivoEncaminhamento', e.target.value.toLowerCase())} />
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-orange-600 uppercase ml-2 tracking-widest block">observações da remoção</label>
-                  <textarea rows="2" className="w-full bg-orange-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase resize-none" value={formData.obsEncaminhamento} onChange={(e) => updateField('obsEncaminhamento', e.target.value)} />
+                  <textarea rows="2" className="w-full bg-orange-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic resize-none" value={formData.obsEncaminhamento} onChange={(e) => updateField('obsEncaminhamento', e.target.value.toLowerCase())} />
                 </div>
               </div>
             </div>
@@ -336,8 +393,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico }) => {
             <div className="bg-blue-600 p-2.5 rounded-xl"><UserCheck size={22} className="text-white" /></div>
             <div className="flex flex-col">
               <span className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em] mb-0.5">assinatura digital baenf</span>
-              <p className="text-white font-black text-lg capitalize italic leading-none tracking-tight">{user?.nome?.toLowerCase() || 'profissional'}</p>
-              <span className="text-emerald-400 text-[10px] font-bold lowercase tracking-[0.1em] mt-1">
+              <p className="text-white font-black text-lg italic leading-none tracking-tight">{formatarNomeExibicao(user?.nome) || 'Profissional'}</p>
+              <span className="text-emerald-400 text-[10px] font-bold lowercase tracking-[0.1em] mt-1 italic">
                 {user?.cargo?.toLowerCase() || 'enfermagem'} — reg: {user?.registroProfissional}
               </span>
             </div>

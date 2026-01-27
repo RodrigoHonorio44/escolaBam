@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebaseConfig';
-import { collection, serverTimestamp, doc, writeBatch } from 'firebase/firestore';
+import { 
+  serverTimestamp, doc, writeBatch, 
+  query, collection, where, getDocs, limit 
+} from 'firebase/firestore'; 
 import { 
   Briefcase, Save, Loader2, CreditCard, AlertCircle, MapPin, Phone, UserPlus2, X, ArrowLeft,
   Ruler, Weight, Fingerprint
-} from 'lucide-react';
+} from 'lucide-react'; // CORRIGIDO: de lucide-center para lucide-react
 import toast, { Toaster } from 'react-hot-toast';
 
 const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, modoPastaDigital = !!dadosEdicao }) => {
@@ -14,8 +17,17 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
   const [mostrarEndereco, setMostrarEndereco] = useState(false);
   const [mostrarSegundoContato, setMostrarSegundoContato] = useState(false);
   const [carregandoCep, setCarregandoCep] = useState(false);
+  const [buscandoDados, setBuscandoDados] = useState(false);
 
-  const paraBanco = (val) => val ? String(val).toLowerCase().trim() : "";
+  // Normalização para o Banco de Dados (Sempre em lowercase)
+  const paraBanco = (val) => val ? String(val).toLowerCase().trim().replace(/\s+/g, ' ') : "";
+  const paraBusca = (val) => val ? val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
+  
+  // Formatação para Exibição (Padrão Caio Giromba / R S)
+  const paraExibicao = (val) => {
+    if (!val) return "";
+    return val.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase());
+  };
 
   const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting, errors } } = useForm({
     mode: "onChange",
@@ -45,14 +57,87 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     }
   });
 
+  const watchNome = watch("nome");
   const watchDataNasc = watch("dataNascimento");
-  const naoSabeSus = watch("naoSabeSus");
   const naoSabeEtnia = watch("naoSabeEtnia");
   const naoSabePeso = watch("naoSabePeso");
   const naoSabeAltura = watch("naoSabeAltura");
+  const naoSabeSus = watch("naoSabeSus");
   const temAlergia = watch("temAlergia");
   const watchCep = watch("endereco_cep");
 
+  // --- BUSCA AUTOMÁTICA ---
+  useEffect(() => {
+    const buscarPorNome = async () => {
+      const nomeLimpo = paraBusca(watchNome);
+      const termos = nomeLimpo.split(/\s+/).filter(t => t.length > 0);
+
+      if (termos.length >= 2 && !modoPastaDigital) {
+        setBuscandoDados(true);
+        try {
+          const q = query(
+            collection(db, "pastas_digitais"), 
+            where("nomeBusca", "==", nomeLimpo),
+            limit(1)
+          );
+
+          const querySnapshot = await getDocs(q);
+
+          if (!querySnapshot.empty) {
+            const dados = querySnapshot.docs[0].data();
+            toast.success("cadastro localizado!", { icon: '👤' });
+            
+            Object.keys(dados).forEach(key => {
+              let valor = dados[key];
+
+              if (key === 'alunoPossuiAlergia') {
+                setValue('temAlergia', valor);
+              } 
+              else if (key === 'qualAlergia') {
+                setValue('historicoMedico', valor);
+              } 
+              else if (key === 'dataNascimento' && valor) {
+                let dataFormatada = valor.replace(/\D/g, '');
+                if (dataFormatada.length === 8) {
+                   if (valor.includes('/')) {
+                     const [d, m, y] = valor.split('/');
+                     setValue('dataNascimento', `${y}-${m}-${d}`);
+                   } else if (valor.includes('-')) {
+                     setValue('dataNascimento', valor);
+                   } else {
+                     const y = dataFormatada.substring(0, 4);
+                     const m = dataFormatada.substring(4, 6);
+                     const d = dataFormatada.substring(6, 8);
+                     setValue('dataNascimento', `${y}-${m}-${d}`);
+                   }
+                } else {
+                  setValue('dataNascimento', valor);
+                }
+              } 
+              else if (key === 'nome') {
+                setValue('nome', paraExibicao(valor));
+              } 
+              else {
+                setValue(key, valor);
+              }
+            });
+
+            if (dados.endereco_cep) setMostrarEndereco(true);
+            if (dados.nomeContato2 || dados.contato2) setMostrarSegundoContato(true);
+          }
+        } catch (error) {
+          console.error("erro na busca:", error);
+        } finally {
+          setBuscandoDados(false);
+        }
+      }
+    };
+
+    const timer = setTimeout(buscarPorNome, 800);
+    return () => clearTimeout(timer);
+  }, [watchNome, setValue, modoPastaDigital]);
+
+  // --- BUSCA DE CEP ---
   useEffect(() => {
     const buscarCep = async () => {
       const cepLimpo = watchCep?.replace(/\D/g, '');
@@ -62,9 +147,10 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
           const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
           const data = await response.json();
           if (!data.erro) {
-            setValue("endereco_rua", paraBanco(data.logradouro));
-            setValue("endereco_bairro", paraBanco(`${data.bairro} - ${data.localidade}/${data.uf}`));
+            setValue("endereco_rua", paraExibicao(data.logradouro));
+            setValue("endereco_bairro", paraExibicao(`${data.bairro} - ${data.localidade}/${data.uf}`));
             toast.success("endereço localizado!");
+            setMostrarEndereco(true);
           }
         } catch (error) {
           toast.error("erro ao buscar cep");
@@ -75,6 +161,18 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     };
     buscarCep();
   }, [watchCep, setValue]);
+
+  // --- CÁLCULO DE IDADE ---
+  useEffect(() => {
+    if (watchDataNasc) {
+      const hoje = new Date();
+      const nasc = new Date(watchDataNasc);
+      let idade = hoje.getFullYear() - nasc.getFullYear();
+      const m = hoje.getMonth() - nasc.getMonth();
+      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+      setValue("idade", idade >= 0 ? idade : "");
+    }
+  }, [watchDataNasc, setValue]);
 
   const handleActionVoltar = () => {
     if (modoPastaDigital) {
@@ -98,34 +196,25 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     setValue(fieldName, valor);
   };
 
-  useEffect(() => {
-    if (watchDataNasc) {
-      const hoje = new Date();
-      const nasc = new Date(watchDataNasc);
-      let idade = hoje.getFullYear() - nasc.getFullYear();
-      const m = hoje.getMonth() - nasc.getMonth();
-      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
-      setValue("idade", idade >= 0 ? idade : "");
-    }
-  }, [watchDataNasc, setValue]);
-
   const onSubmit = async (data) => {
     const saveAction = async () => {
       const nomeNormalizado = paraBanco(data.nome);
+      const nomeParaBusca = paraBusca(data.nome);
       const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
-      const idPasta = `${nomeNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
+      const idPasta = `${nomeParaBusca.replace(/\s+/g, '-')}-${dataNascLimpa}`;
 
       const payload = {
         ...data,
-        nome: nomeNormalizado,
-        nomeBusca: nomeNormalizado,
+        nome: nomeNormalizado, 
+        nomeBusca: nomeParaBusca,
         pacienteId: idPasta,
+        perfil: 'funcionario',
         tipoPerfil: 'funcionario',
         cargo: paraBanco(data.cargo),
         sexo: paraBanco(data.sexo),
         etnia: data.naoSabeEtnia ? "não informado" : paraBanco(data.etnia),
-        peso: data.naoSabePeso ? "não informado" : data.peso,
-        altura: data.naoSabeAltura ? "não informado" : data.altura,
+        peso: data.naoSabePeso ? 0 : parseFloat(String(data.peso).replace(',', '.')),
+        altura: data.naoSabeAltura ? 0 : parseFloat(String(data.altura).replace(',', '.')),
         cartaoSus: data.naoSabeSus ? "não informado" : data.cartaoSus,
         nomeContato1: paraBanco(data.nomeContato1),
         nomeContato2: paraBanco(data.nomeContato2),
@@ -138,7 +227,8 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
 
       const batch = writeBatch(db);
       batch.set(doc(db, "pastas_digitais", idPasta), payload, { merge: true });
-      batch.set(doc(db, "funcionario", idPasta), payload, { merge: true });
+      batch.set(doc(db, "funcionarios", idPasta), payload, { merge: true });
+      
       await batch.commit();
       
       if (modoPastaDigital) {
@@ -182,10 +272,11 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
 
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
         
-        {/* Nome com Validação de Sobrenome */}
         <div className="md:col-span-2 space-y-2">
           <div className="flex justify-between items-center px-1">
-            <label className={`text-[10px] font-black uppercase tracking-widest block ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo</label>
+            <label className={`text-[10px] font-black uppercase tracking-widest block flex items-center gap-2 ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>
+              Nome Completo {buscandoDados && <Loader2 size={12} className="animate-spin text-blue-500" />}
+            </label>
             {errors.nome && <span className="text-[9px] font-black text-red-500 uppercase italic animate-pulse">{errors.nome.message}</span>}
           </div>
           <input 
@@ -194,17 +285,21 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
               pattern: {
                 value: /^[a-zA-Zá-úÁ-Ú']+\s+[a-zA-Zá-úÁ-Ú']+.*$/,
                 message: "digite o nome e sobrenome"
+              },
+              onChange: (e) => {
+                const formatted = paraExibicao(e.target.value);
+                setValue("nome", formatted);
               }
             })} 
             readOnly={modoPastaDigital}
-            placeholder="ex: caio giromba"
-            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold lowercase outline-none transition-all ${modoPastaDigital ? 'bg-slate-100 cursor-not-allowed border-transparent text-slate-500' : errors.nome ? 'bg-red-50 border-red-500 text-red-900 focus:border-red-600' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
+            placeholder="R S"
+            className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none transition-all ${modoPastaDigital ? 'bg-slate-100 cursor-not-allowed border-transparent text-slate-500' : errors.nome ? 'bg-red-50 border-red-500 text-red-900 focus:border-red-600' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} 
           />
         </div>
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Data de Nascimento</label>
-          <input type="date" {...register("dataNascimento")} readOnly={modoPastaDigital} className={`w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none ${modoPastaDigital ? 'bg-slate-100 border-transparent' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} required />
+          <input type="date" {...register("dataNascimento")} className="w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none bg-slate-50 border-transparent focus:border-slate-900" required />
         </div>
 
         <div className="space-y-2">
@@ -245,7 +340,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
 
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block">Cargo / Função</label>
-          <input {...register("cargo")} readOnly={modoPastaDigital} placeholder="ex: professor" className={`w-full px-5 py-4 border-2 rounded-2xl font-bold lowercase outline-none ${modoPastaDigital ? 'bg-slate-100 border-transparent' : 'bg-slate-50 border-transparent focus:border-slate-900'}`} required />
+          <input {...register("cargo")} placeholder="ex: professor" className="w-full px-5 py-4 border-2 rounded-2xl font-bold lowercase outline-none bg-slate-50 border-transparent focus:border-slate-900" required />
         </div>
 
         <div className="space-y-2">
