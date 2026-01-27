@@ -14,7 +14,7 @@ export const useAtendimentoLogica = (user) => {
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
   const [configUI, setConfigUI] = useState({
-    tipoAtendimento: 'local', // 'local' ou 'remocao'
+    tipoAtendimento: 'local', 
     perfilPaciente: 'aluno',
     naoSabeDataNasc: false,
     naoSabePeso: false,
@@ -166,67 +166,79 @@ export const useAtendimentoLogica = (user) => {
       const eFuncionario = configUI.perfilPaciente === 'funcionario';
       const colecaoBase = eFuncionario ? "funcionarios" : "alunos";
 
-      // Normaliza strings para lowercase
+      // Normaliza para lowercase (Caio Giromba Style)
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
 
       const idPasta = gerarIdPadrao(payload.nomePaciente, formData.dataNascimento);
-
-      // --- LÓGICA DE DEFINIÇÃO DE TIPO (FORMS DIFERENTES) ---
       const eRemocao = configUI.tipoAtendimento === 'remocao';
 
-      const finalData = {
+      // 1. Objeto Final do Atendimento
+      const finalDataAtendimento = {
         ...payload,
         dataNascimento: formData.dataNascimento, 
         pacienteId: idPasta, 
-        // Força tipos numéricos conforme seu exemplo (Caio Giromba)
         idade: Number(payload.idade) || 0,
         peso: Number(payload.peso) || 0,
         altura: Number(payload.altura) || 0,
         imc: Number(payload.imc) || 0,
         temperatura: Number(payload.temperatura) || 0,
         horarioSaida: agoraHora,
-        
-        // Se for form de remoção, salva pendente. Se for local, finalizado.
         statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
         tipoRegistro: eRemocao ? 'remoção' : 'local',
-        
         perfilPaciente: configUI.perfilPaciente,
         escola: (user?.escolaId || "e. m. anísio teixeira").toLowerCase(),
         profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
         createdAt: serverTimestamp()
       };
 
-      // 1. Grava atendimento usando o BAENF como ID fixo
-      batch.set(doc(db, "atendimentos_enfermagem", finalData.baenf), finalData);
+      // Limpeza lógica: Remove cargo de aluno e turma de funcionário no Atendimento
+      if (eFuncionario) {
+        delete finalDataAtendimento.turma;
+      } else {
+        delete finalDataAtendimento.cargo;
+      }
 
-      // 2. Atualiza Coleção Específica
-      batch.set(doc(db, colecaoBase, idPasta), {
-        nome: finalData.nomePaciente,
-        dataNascimento: finalData.dataNascimento,
-        sexo: finalData.sexo,
-        ultimaAtualizacao: serverTimestamp(),
-        ...(eFuncionario ? { cargo: finalData.cargo } : { turma: finalData.turma })
-      }, { merge: true });
-
-      // 3. Atualiza Pasta Digital (Mantendo histórico de peso/altura)
-      batch.set(doc(db, "pastas_digitais", idPasta), {
+      // 2. Objeto para Pasta Digital
+      const finalDataPasta = {
         id: idPasta,
-        nomeBusca: finalData.nomePaciente,
-        dataNascimento: finalData.dataNascimento,
-        sexo: finalData.sexo,
-        etnia: finalData.etnia,
-        peso: finalData.peso,
-        altura: finalData.altura,
-        imc: finalData.imc,
-        tipoPerfil: finalData.perfilPaciente,
-        cargo: eFuncionario ? finalData.cargo : '',
-        turma: !eFuncionario ? finalData.turma : '',
-        alunoPossuiAlergia: finalData.alunoPossuiAlergia,
-        qualAlergia: finalData.qualAlergia,
+        nomeBusca: finalDataAtendimento.nomePaciente,
+        dataNascimento: finalDataAtendimento.dataNascimento,
+        sexo: finalDataAtendimento.sexo,
+        etnia: finalDataAtendimento.etnia,
+        peso: finalDataAtendimento.peso,
+        altura: finalDataAtendimento.altura,
+        imc: finalDataAtendimento.imc,
+        tipoPerfil: finalDataAtendimento.perfilPaciente,
+        alunoPossuiAlergia: finalDataAtendimento.alunoPossuiAlergia,
+        qualAlergia: finalDataAtendimento.qualAlergia,
         ultimaAtualizacao: serverTimestamp()
-      }, { merge: true });
+      };
+
+      // Adiciona apenas o campo relevante na Pasta Digital
+      if (eFuncionario) {
+        finalDataPasta.cargo = finalDataAtendimento.cargo;
+      } else {
+        finalDataPasta.turma = finalDataAtendimento.turma;
+      }
+
+      // EXCUÇÃO DO BATCH
+      // A. Atendimento
+      batch.set(doc(db, "atendimentos_enfermagem", finalDataAtendimento.baenf), finalDataAtendimento);
+
+      // B. Coleção Específica (Alunos/Funcionários)
+      const dataEspecifica = {
+        nome: finalDataAtendimento.nomePaciente,
+        dataNascimento: finalDataAtendimento.dataNascimento,
+        sexo: finalDataAtendimento.sexo,
+        ultimaAtualizacao: serverTimestamp(),
+        ...(eFuncionario ? { cargo: finalDataAtendimento.cargo } : { turma: finalDataAtendimento.turma })
+      };
+      batch.set(doc(db, colecaoBase, idPasta), dataEspecifica, { merge: true });
+
+      // C. Pasta Digital
+      batch.set(doc(db, "pastas_digitais", idPasta), finalDataPasta, { merge: true });
 
       await batch.commit();
       

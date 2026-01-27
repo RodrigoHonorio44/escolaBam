@@ -9,7 +9,7 @@ import {
 import { 
   Briefcase, Save, Loader2, CreditCard, AlertCircle, MapPin, Phone, UserPlus2, X, ArrowLeft,
   Ruler, Weight, Fingerprint
-} from 'lucide-react'; // CORRIGIDO: de lucide-center para lucide-react
+} from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, modoPastaDigital = !!dadosEdicao }) => {
@@ -19,11 +19,10 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
   const [carregandoCep, setCarregandoCep] = useState(false);
   const [buscandoDados, setBuscandoDados] = useState(false);
 
-  // Normalização para o Banco de Dados (Sempre em lowercase)
+  // Normalização conforme solicitado (R S -> r s para o banco)
   const paraBanco = (val) => val ? String(val).toLowerCase().trim().replace(/\s+/g, ' ') : "";
   const paraBusca = (val) => val ? val.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim() : "";
   
-  // Formatação para Exibição (Padrão Caio Giromba / R S)
   const paraExibicao = (val) => {
     if (!val) return "";
     return val.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase());
@@ -66,27 +65,41 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
   const temAlergia = watch("temAlergia");
   const watchCep = watch("endereco_cep");
 
-  // --- BUSCA AUTOMÁTICA ---
+  // --- BUSCA AUTOMÁTICA EM FUNCIONÁRIOS E PASTAS DIGITAIS ---
   useEffect(() => {
-    const buscarPorNome = async () => {
+    const buscarExistente = async () => {
       const nomeLimpo = paraBusca(watchNome);
       const termos = nomeLimpo.split(/\s+/).filter(t => t.length > 0);
 
       if (termos.length >= 2 && !modoPastaDigital) {
         setBuscandoDados(true);
         try {
-          const q = query(
-            collection(db, "pastas_digitais"), 
-            where("nomeBusca", "==", nomeLimpo),
-            limit(1)
-          );
+          // Busca primeiro na coleção de funcionários
+          let q = query(collection(db, "funcionarios"), where("nomeBusca", "==", nomeLimpo), limit(1));
+          let querySnapshot = await getDocs(q);
 
-          const querySnapshot = await getDocs(q);
+          // Se não achar, busca na pasta digital geral
+          if (querySnapshot.empty) {
+            q = query(collection(db, "pastas_digitais"), where("nomeBusca", "==", nomeLimpo), limit(1));
+            querySnapshot = await getDocs(q);
+          }
 
           if (!querySnapshot.empty) {
             const dados = querySnapshot.docs[0].data();
-            toast.success("cadastro localizado!", { icon: '👤' });
             
+            // BLOQUEIO: Se não tiver cargo, é aluno, então ignoramos
+            if (!dados.cargo || dados.cargo.trim() === "") {
+              setBuscandoDados(false);
+              return;
+            }
+
+            toast.success("registro localizado!", { icon: '👤' });
+            
+            // Mapeamento explícito para garantir campos que estavam falhando
+            if (dados.cargo) setValue('cargo', dados.cargo.toLowerCase());
+            if (dados.sexo) setValue('sexo', dados.sexo.toLowerCase());
+            if (dados.etnia) setValue('etnia', dados.etnia.toLowerCase());
+
             Object.keys(dados).forEach(key => {
               let valor = dados[key];
 
@@ -95,7 +108,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
               } 
               else if (key === 'qualAlergia') {
                 setValue('historicoMedico', valor);
-              } 
+              }
               else if (key === 'dataNascimento' && valor) {
                 let dataFormatada = valor.replace(/\D/g, '');
                 if (dataFormatada.length === 8) {
@@ -117,7 +130,7 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
               else if (key === 'nome') {
                 setValue('nome', paraExibicao(valor));
               } 
-              else {
+              else if (!['cargo', 'sexo', 'etnia'].includes(key) && !key.startsWith('naoSabe')) {
                 setValue(key, valor);
               }
             });
@@ -133,11 +146,11 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
       }
     };
 
-    const timer = setTimeout(buscarPorNome, 800);
+    const timer = setTimeout(buscarExistente, 800);
     return () => clearTimeout(timer);
   }, [watchNome, setValue, modoPastaDigital]);
 
-  // --- BUSCA DE CEP ---
+  // --- LÓGICA DE CEP, IDADE E HANDLERS ---
   useEffect(() => {
     const buscarCep = async () => {
       const cepLimpo = watchCep?.replace(/\D/g, '');
@@ -162,7 +175,6 @@ const FormCadastroFuncionario = ({ onVoltar, dadosEdicao, onSucesso, onClose, mo
     buscarCep();
   }, [watchCep, setValue]);
 
-  // --- CÁLCULO DE IDADE ---
   useEffect(() => {
     if (watchDataNasc) {
       const hoje = new Date();

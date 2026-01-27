@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebaseConfig';
 import { 
-  collection, serverTimestamp, doc, getDocs, query, where, writeBatch 
+  collection, serverTimestamp, doc, getDoc, getDocs, query, where, writeBatch, orderBy, limit 
 } from 'firebase/firestore';
 import { 
   UserPlus, Save, Loader2, AlertCircle, School, X, ArrowLeft,
@@ -28,7 +28,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   const dadosIniciais = alunoParaEditar || dadosEdicao;
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
-  // Objeto de valores padrão para facilitar o reset
   const defaultValues = {
     nome: '',
     matriculaInteligente: '',
@@ -83,6 +82,12 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         turma: paraBanco(dadosIniciais.turma),
         sexo: paraBanco(dadosIniciais.sexo),
         cartaoSus: paraBanco(dadosIniciais.cartaoSus),
+        etnia: paraBanco(dadosIniciais.etnia),
+        peso: dadosIniciais.peso || '',
+        altura: dadosIniciais.altura || '',
+        temAlergia: dadosIniciais.alunoPossuiAlergia || dadosIniciais.temAlergia || 'não',
+        historicoMedico: dadosIniciais.qualAlergia || dadosIniciais.historicoMedico || '',
+        
         contato1_nome: paraBanco(dadosIniciais.contato1_nome || dadosIniciais.responsavel),
         contato1_parentesco: paraBanco(dadosIniciais.contato1_parentesco || dadosIniciais.parentesco || 'mãe'),
         contato1_telefone: aplicarMascaraTelefone(dadosIniciais.contato1_telefone || ""),
@@ -110,48 +115,90 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       return;
     }
 
-    setBuscando(true);
-
-    // --- LIMPEZA PREVENTIVA ---
-    // Reseta todos os campos para o padrão, mas mantém o nome que está sendo digitado
+    // --- LIMPEZA AUTOMÁTICA ANTES DA BUSCA ---
+    // Reseta tudo para o padrão, mas mantém o nome digitado para o usuário ver o que buscou
     reset({ ...defaultValues, nome: nomeAtual });
 
+    setBuscando(true);
+    const toastId = toast.loading("sincronizando dados escolares...");
+
     try {
-      const colecoes = ["alunos", "pastas_digitais", "atendimentos_enfermagem", "triagens"];
-      let dadosEncontrados = null;
+      let pacienteId = null;
 
-      for (const col of colecoes) {
-        const campoFiltro = col === "atendimentos_enfermagem" ? "nomePaciente" : "nome";
-        const q = query(collection(db, col), where(campoFiltro, "==", nomeBusca));
-        const querySnapshot = await getDocs(q);
+      const qPasta = query(
+        collection(db, "pastas_digitais"), 
+        where("nomeBusca", "==", nomeBusca),
+        where("tipoPerfil", "==", "aluno"),
+        limit(1)
+      );
 
-        if (!querySnapshot.empty) {
-          dadosEncontrados = querySnapshot.docs[0].data();
-          break; 
-        }
-      }
-
-      if (dadosEncontrados) {
-        const payloadNormalizado = {
-          ...dadosEncontrados,
-          nome: paraBanco(dadosEncontrados.nome || dadosEncontrados.nomePaciente),
-          temAlergia: dadosEncontrados.alunoPossuiAlergia || dadosEncontrados.temAlergia || 'não',
-          historicoMedico: dadosEncontrados.qualAlergia || dadosEncontrados.historicoMedico || '',
-          turma: paraBanco(dadosEncontrados.turma),
-          sexo: paraBanco(dadosEncontrados.sexo),
-          cartaoSus: paraBanco(dadosEncontrados.cartaoSus),
-          contato1_telefone: aplicarMascaraTelefone(dadosEncontrados.contato1_telefone || ""),
-          contato2_telefone: aplicarMascaraTelefone(dadosEncontrados.contato2_telefone || ""),
-          contato1_nome: paraBanco(dadosEncontrados.contato1_nome || dadosEncontrados.responsavel)
-        };
-        
-        reset(payloadNormalizado);
-        toast.success("registro localizado e importado!");
+      const snapId = await getDocs(qPasta);
+      
+      if (!snapId.empty) {
+        pacienteId = snapId.docs[0].id;
       } else {
-        toast.error("não encontrado em nenhuma base.");
+        const qAlu = query(collection(db, "alunos"), where("nomeBusca", "==", nomeBusca), limit(1));
+        const snapAluOnly = await getDocs(qAlu);
+        if (!snapAluOnly.empty) pacienteId = snapAluOnly.docs[0].id;
       }
+
+      if (!pacienteId) {
+        toast.error("aluno não localizado nesta base.", { id: toastId });
+        setBuscando(false);
+        return;
+      }
+
+      const qAtend = query(
+        collection(db, "atendimentos_enfermagem"),
+        where("pacienteId", "==", pacienteId),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+
+      const [snapQuest, snapPasta, snapAlu, snapAtend] = await Promise.all([
+        getDoc(doc(db, "questionarios_saude", pacienteId)),
+        getDoc(doc(db, "pastas_digitais", pacienteId)),
+        getDoc(doc(db, "alunos", pacienteId)),
+        getDocs(qAtend)
+      ]);
+
+      const dQuest = snapQuest.exists() ? snapQuest.data() : {};
+      const dPasta = snapPasta.exists() ? snapPasta.data() : {};
+      const dAlu = snapAlu.exists() ? snapAlu.data() : {};
+      const dAtend = !snapAtend.empty ? snapAtend.docs[0].data() : {};
+
+      const payloadSincronizado = {
+        pacienteId: pacienteId,
+        nome: paraBanco(dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || nomeAtual),
+        dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || "",
+        turma: paraBanco(dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || ""),
+        sexo: paraBanco(dQuest.sexo || dAtend.sexo || dPasta.sexo || ""),
+        etnia: paraBanco(dQuest.etnia || dAtend.etnia || dPasta.etnia || ""),
+        peso: dQuest.peso || dAtend.peso || dPasta.peso || "",
+        altura: dQuest.altura || dAtend.altura || dPasta.altura || "",
+        cartaoSus: paraBanco(dPasta.cartaoSus || dAtend.cartaoSus || ""),
+        matriculaInteligente: dPasta.matriculaInteligente || dAlu.matriculaInteligente || "",
+        
+        temAlergia: dQuest.alergias?.possui || dAtend.alunoPossuiAlergia || dPasta.alunoPossuiAlergia || "não",
+        historicoMedico: dQuest.alergias?.detalhes || dAtend.qualAlergia || dPasta.qualAlergia || "",
+        
+        contato1_nome: paraBanco(dPasta.responsavel || dAlu.responsavel || dQuest.contatos?.[0]?.nome || ""),
+        contato1_telefone: aplicarMascaraTelefone(dPasta.contato || dAlu.contato || dQuest.contatos?.[0]?.telefone || ""),
+        contato2_nome: paraBanco(dQuest.contatos?.[1]?.nome || ""),
+        contato2_telefone: aplicarMascaraTelefone(dQuest.contatos?.[1]?.telefone || ""),
+        
+        endereco_rua: paraBanco(dPasta.endereco_rua || ""),
+        endereco_bairro: paraBanco(dPasta.endereco_bairro || ""),
+        endereco_cep: dPasta.endereco_cep || "",
+        tipoPerfil: 'aluno'
+      };
+
+      reset(payloadSincronizado);
+      toast.success("perfil do aluno sincronizado!", { id: toastId });
+
     } catch (error) {
-      toast.error("erro na busca global.");
+      console.error(error);
+      toast.error("erro ao cruzar dados.", { id: toastId });
     } finally {
       setBuscando(false);
     }
@@ -207,7 +254,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     const saveAction = async () => {
       const nomeNormalizado = paraBanco(data.nome);
       const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
-      const idGerado = dadosIniciais?.pacienteId || `${nomeNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
+      const idGerado = data.pacienteId || `${nomeNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
       
       const payload = { 
         ...data, 
@@ -267,7 +314,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* DOCUMENTAÇÃO */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-blue-50 rounded-[30px] border-2 border-blue-100 shadow-inner">
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-2"><Hash size={14}/> Matrícula Escolar</label>
@@ -285,7 +331,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
         </div>
 
-        {/* NOME COMPLETO */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
           <div className="relative group">
@@ -310,7 +355,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <p className="text-[8px] font-bold text-blue-500 uppercase ml-2 italic">Dica: Filtre pelo sobrenome e aperte Enter para buscar</p>
         </div>
 
-        {/* DATA E IDADE */}
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
           <input type="date" {...register("dataNascimento")} className="w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none bg-slate-50 border-transparent focus:border-blue-600" required />
@@ -320,7 +364,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 rounded-2xl font-bold text-blue-700 outline-none" />
         </div>
 
-        {/* CONTATOS */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-200 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2 italic"><Users size={14}/> Contatos de Emergência (Mínimo 2)</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -373,7 +416,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* ENDEREÇO */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4">
           <div className="flex justify-between items-center px-1">
             <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2 italic"><MapPin size={14}/> Endereço</label>
@@ -389,7 +431,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* ETNIA, PESO, ALTURA */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100">
           <div className="space-y-2">
             <div className="flex justify-between items-center px-1">
@@ -434,7 +475,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </select>
         </div>
 
-        {/* ALERGIAS */}
         <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Alergias</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
