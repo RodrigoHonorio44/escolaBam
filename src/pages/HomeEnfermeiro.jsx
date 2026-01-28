@@ -174,6 +174,23 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       
+      {/* CSS DE IMPRESSÃO */}
+      <style>{`
+        @media print {
+          .print\\:hidden, nav, aside, button, .menu-lateral { display: none !important; }
+          .print\\:block { display: block !important; }
+          body { background: white !important; padding: 0 !important; color: black !important; }
+          .relatorio-container { border: none !important; box-shadow: none !important; width: 100% !important; margin: 0 !important; }
+          .grid-relatorio-print { display: flex !important; gap: 20px !important; margin-bottom: 30px !important; }
+          .card-print { flex: 1 !important; border-radius: 20px !important; padding: 30px !important; color: white !important; -webkit-print-color-adjust: exact; }
+          .card-blue { background-color: #2563eb !important; }
+          .card-dark { background-color: #1e293b !important; }
+          table { width: 100% !important; border-collapse: collapse !important; }
+          th { background-color: #f8fafc !important; color: #2563eb !important; font-size: 10px !important; padding: 12px !important; text-transform: uppercase !important; text-align: left !important; }
+          td { border-bottom: 1px solid #f1f5f9 !important; padding: 12px !important; font-size: 11px !important; color: #000 !important; }
+        }
+      `}</style>
+
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-500/10 pb-8 print:hidden">
         <div>
@@ -196,80 +213,81 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
         </div>
       </div>
 
-      {/* CARD INTELIGENTE DE FILTRO (Condicional) */}
+      {/* PAINEL DE RELATÓRIO OPERACIONAL (ESTILO IMAGEM) */}
       {mostrarRelatorio && (
-        <div className={`p-8 rounded-[45px] border-2 border-blue-500/20 animate-in slide-in-from-top duration-500 ${darkMode ? "bg-white/5" : "bg-blue-50/50"}`}>
-          <div className="flex flex-col md:flex-row items-end gap-6">
+        <div className={`relatorio-container p-8 rounded-[45px] border-2 animate-in slide-in-from-top duration-500 ${darkMode ? "bg-white/5 border-white/10 text-white" : "bg-white border-blue-500/20 shadow-2xl"}`}>
+          <div className="flex items-center justify-between mb-8 print:hidden">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] italic text-blue-500">Relatório de Gestão Operacional</h3>
+            <button onClick={() => setMostrarRelatorio(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={24}/></button>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-end gap-6 print:hidden mb-10">
             <div className="flex-1 space-y-2">
-              <label className="text-[10px] font-black text-blue-600 uppercase italic ml-4 tracking-widest">Início do Período</label>
-              <input 
-                type="date" 
-                value={filtroDataInicio}
-                onChange={(e) => setFiltroDataInicio(e.target.value)}
-                className={`w-full border-none rounded-2xl p-4 text-sm font-bold shadow-sm focus:ring-2 ring-blue-500 outline-none ${darkMode ? "bg-slate-800 text-white" : "bg-white text-slate-900"}`}
-              />
+              <label className="text-[10px] font-black text-blue-600 uppercase italic ml-4 tracking-widest">Início</label>
+              <input type="date" value={filtroDataInicio} onChange={(e) => setFiltroDataInicio(e.target.value)} className={`w-full border-none rounded-2xl p-4 text-sm font-bold shadow-sm focus:ring-2 ring-blue-500 outline-none ${darkMode ? "bg-slate-800 text-white" : "bg-slate-50"}`} />
             </div>
             <div className="flex-1 space-y-2">
-              <label className="text-[10px] font-black text-blue-600 uppercase italic ml-4 tracking-widest">Fim do Período</label>
-              <input 
-                type="date" 
-                value={filtroDataFim}
-                onChange={(e) => setFiltroDataFim(e.target.value)}
-                className={`w-full border-none rounded-2xl p-4 text-sm font-bold shadow-sm focus:ring-2 ring-blue-500 outline-none ${darkMode ? "bg-slate-800 text-white" : "bg-white text-slate-900"}`}
-              />
+              <label className="text-[10px] font-black text-blue-600 uppercase italic ml-4 tracking-widest">Fim</label>
+              <input type="date" value={filtroDataFim} onChange={(e) => setFiltroDataFim(e.target.value)} className={`w-full border-none rounded-2xl p-4 text-sm font-bold shadow-sm focus:ring-2 ring-blue-500 outline-none ${darkMode ? "bg-slate-800 text-white" : "bg-slate-50"}`} />
             </div>
-            <button 
-              onClick={gerarRelatorioGeral}
-              disabled={carregandoRelatorio}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-2xl font-[1000] uppercase italic text-xs transition-all shadow-lg shadow-blue-500/20 flex items-center gap-3 disabled:opacity-50 h-[52px]"
-            >
-              {carregandoRelatorio ? <RotateCw className="animate-spin" size={18}/> : <Filter size={18}/>}
-              {carregandoRelatorio ? "Processando" : "Consultar"}
+            <button onClick={gerarRelatorioGeral} disabled={carregandoRelatorio} className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-2xl font-[1000] uppercase italic text-xs transition-all shadow-lg shadow-blue-500/20 flex items-center gap-3 h-[52px]">
+              {carregandoRelatorio ? <RotateCw className="animate-spin" size={18}/> : <Filter size={18}/>} Consultar
             </button>
           </div>
 
-          {/* RESULTADOS DA CONSULTA INTELIGENTE */}
           {resultadoRelatorio && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 animate-in fade-in zoom-in duration-300">
-              <div className={`${darkMode ? "bg-white/5 border-white/10" : "bg-white border-blue-100"} p-6 rounded-[35px] shadow-sm border`}>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Período</p>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{resultadoRelatorio.total}</span>
-                  <span className="text-[10px] font-black text-blue-600 uppercase">Ações</span>
+            <div className="space-y-8 animate-in fade-in duration-500">
+              {/* CARDS DE INDICADORES ESTILO IMAGEM */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 grid-relatorio-print">
+                <div className="card-print card-blue p-10 rounded-[40px] bg-blue-600 text-white flex flex-col items-center justify-center text-center shadow-xl shadow-blue-500/20">
+                  <h4 className="text-7xl font-[1000] italic leading-none">{resultadoRelatorio.total}</h4>
+                  <span className="text-[10px] uppercase font-black tracking-widest mt-4 opacity-80">Atendimentos no Período</span>
                 </div>
-              </div>
-              
-              <div className={`${darkMode ? "bg-white/5 border-white/10" : "bg-white border-blue-100"} p-6 rounded-[35px] shadow-sm border`}>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Média de Tempo</p>
-                <div className="flex items-baseline gap-2">
-                  <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{resultadoRelatorio.tempoMedio}</span>
-                  <span className="text-[10px] font-black text-orange-500 uppercase">Minutos</span>
+                <div className="card-print card-dark p-10 rounded-[40px] bg-slate-900 text-white flex flex-col items-center justify-center text-center shadow-xl shadow-slate-900/20">
+                  <h4 className="text-7xl font-[1000] italic leading-none">{resultadoRelatorio.tempoMedio}<span className="text-2xl ml-1">min</span></h4>
+                  <span className="text-[10px] uppercase font-black tracking-widest mt-4 opacity-80">Tempo Médio de Atendimento</span>
                 </div>
               </div>
 
-              <button 
-                onClick={() => window.print()}
-                className="bg-slate-900 p-6 rounded-[35px] shadow-lg flex items-center justify-center gap-4 group hover:bg-blue-600 transition-all text-white"
-              >
-                <Printer className="group-hover:scale-110 transition-transform" size={24} />
-                <div className="text-left">
-                  <p className="font-black italic uppercase text-sm leading-none">Exportar PDF</p>
-                  <p className="text-white/40 font-bold uppercase text-[8px] tracking-tighter">Gerar relatório de auditoria</p>
-                </div>
+              {/* LISTA DETALHADA PARA CONFERÊNCIA E IMPRESSÃO */}
+              <div className={`overflow-hidden rounded-[35px] border ${darkMode ? "border-white/10 bg-black/20" : "border-slate-100 bg-white"}`}>
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className={`${darkMode ? "bg-blue-600/10" : "bg-slate-50"} text-[9px] font-black uppercase text-blue-500`}>
+                      <th className="p-5">Data/Hora</th>
+                      <th className="p-5">Paciente</th>
+                      <th className="p-5 text-right">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody className={darkMode ? "text-white" : "text-slate-800"}>
+                    {resultadoRelatorio.lista.map((atend) => (
+                      <tr key={atend.id} className="border-t border-slate-500/5 text-[11px] hover:bg-blue-500/5 transition-colors">
+                        <td className="p-5 font-bold opacity-60">
+                          {new Date(atend.data).toLocaleDateString('pt-BR')} | {atend.horario}
+                        </td>
+                        <td className="p-5 font-black italic uppercase tracking-tight">
+                          {formatarParaTela(atend.nomePaciente)}
+                        </td>
+                        <td className="p-5 font-bold uppercase opacity-60 text-right">
+                          {atend.motivoAtendimento || "Consulta"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <button onClick={() => window.print()} className="print:hidden w-full p-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[25px] text-[11px] font-[1000] uppercase italic flex items-center justify-center gap-3 transition-all shadow-xl shadow-emerald-500/20 active:scale-95">
+                <Printer size={20} /> Finalizar e Imprimir Relatório Operacional
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* CARDS KPIS - ATUALIZADOS COM TOGGLE */}
+      {/* CARDS KPIS ORIGINAIS (Ocultos na impressão) */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 print:hidden">
-        
-        {/* CARD TEMPO MÉDIO (TOQUE PARA MUDAR) */}
-        <div 
-          onClick={() => setVisaoMensal(!visaoMensal)}
-          className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer group ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}
-        >
+        <div onClick={() => setVisaoMensal(!visaoMensal)} className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer group ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
           <div className="flex justify-between items-start">
             <Clock className="text-orange-500" size={32} />
             <span className={`text-[7px] font-black px-2 py-1 rounded-full uppercase italic tracking-tighter transition-colors ${visaoMensal ? 'bg-blue-600 text-white' : 'bg-slate-500/10 text-slate-400'}`}>
@@ -281,13 +299,10 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
               {visaoMensal ? metricas.tempoMedioMes : metricas.tempoMedio}
             </span>
             <span className="text-xs font-black ml-1 text-slate-400 italic">MIN</span>
-            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">
-              Média {visaoMensal ? "do Mês" : "Hoje"}
-            </p>
+            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">Média {visaoMensal ? "do Mês" : "Hoje"}</p>
           </div>
         </div>
         
-        {/* CARD PENDENTES */}
         <div className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
           <Activity className={metricas.pendentes > 0 ? "text-orange-500 animate-pulse" : "text-slate-400"} size={32} />
           <div>
@@ -296,11 +311,7 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
           </div>
         </div>
 
-        {/* CARD TOTAL ATENDIDOS (TOQUE PARA MUDAR) */}
-        <div 
-          onClick={() => setVisaoMensal(!visaoMensal)}
-          className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer group ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}
-        >
+        <div onClick={() => setVisaoMensal(!visaoMensal)} className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer group ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
           <div className="flex justify-between items-start">
             <CheckCircle2 className="text-emerald-500" size={32} />
             <span className={`text-[7px] font-black px-2 py-1 rounded-full uppercase italic tracking-tighter transition-colors ${visaoMensal ? 'bg-blue-600 text-white' : 'bg-slate-500/10 text-slate-400'}`}>
@@ -311,13 +322,10 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
             <span className={`text-5xl font-[1000] italic leading-none ${darkMode ? "text-white" : "text-slate-900"}`}>
               {visaoMensal ? metricas.atendidosMes : metricas.atendidoshoje}
             </span>
-            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">
-              Total {visaoMensal ? "do Mês" : "Hoje"}
-            </p>
+            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">Total {visaoMensal ? "do Mês" : "Hoje"}</p>
           </div>
         </div>
 
-        {/* CARD POPULAÇÃO */}
         <div className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
           <Users className="text-blue-500" size={32} />
           <div>
@@ -329,7 +337,7 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
         </div>
       </div>
 
-      {/* FLUXO DO DIA */}
+      {/* FLUXO DO DIA (LISTA PRINCIPAL) */}
       <div className={`rounded-[40px] border print:hidden transition-all ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
         <div className="p-6 border-b border-slate-500/5 flex items-center justify-between">
           <h4 className="text-[10px] font-[1000] uppercase text-slate-500 italic tracking-[0.2em] flex items-center gap-2">Fluxo Operacional Diário</h4>
@@ -383,11 +391,10 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
         </div>
       </div>
 
-      {/* MODAL LATERAL "BAM" */}
+      {/* MODAL LATERAL BAM */}
       {atendimentoSelecionado && (
         <div className="fixed inset-0 z-[200] flex items-center justify-end bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
           <div className="bg-white w-full max-w-3xl h-[95vh] rounded-[45px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-500">
-            
             {(() => {
               const statusTexto = (atendimentoSelecionado.statusAtendimento || "").toLowerCase();
               const estaAberto = statusTexto.includes("aberto") || statusTexto.includes("aguardando") || statusTexto === "";
@@ -395,7 +402,6 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
               
               return (
                 <>
-                {/* HEADER DO MODAL */}
                 <div className={`p-10 text-white flex justify-between items-start relative overflow-hidden transition-colors ${estaAberto ? 'bg-orange-600' : 'bg-slate-900'}`}>
                   <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-2">
@@ -413,10 +419,7 @@ const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, vis
                       <UserCheck size={14}/> {formatarParaTela(atendimentoSelecionado.nomePaciente)}
                     </p>
                   </div>
-                  <button 
-                    onClick={() => setAtendimentoSelecionado(null)} 
-                    className="relative z-10 p-3 bg-white/10 hover:bg-rose-600 rounded-2xl transition-all shadow-lg"
-                  >
+                  <button onClick={() => setAtendimentoSelecionado(null)} className="relative z-10 p-3 bg-white/10 hover:bg-rose-600 rounded-2xl transition-all shadow-lg">
                     <X size={24}/>
                   </button>
                 </div>

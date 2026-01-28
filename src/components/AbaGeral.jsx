@@ -1,8 +1,8 @@
 import React from 'react';
-import { Activity, Thermometer, AlertTriangle, Clock, HeartPulse, TrendingUp } from 'lucide-react';
+import { Activity, Thermometer, AlertTriangle, Clock, HeartPulse, TrendingUp, Users } from 'lucide-react';
 
 const AbaGeral = ({ dados, darkMode }) => {
-  // Padronização estrita conforme diretriz do projeto
+  // Padronização estrita: tudo em lowercase para busca e consistência
   const normalizar = (str) => str?.toString().toLowerCase().trim() || "";
 
   const rankingSeguro = Array.isArray(dados?.estatisticas?.rankingQueixas) 
@@ -11,7 +11,13 @@ const AbaGeral = ({ dados, darkMode }) => {
     
   const totalAtendimentos = dados?.estatisticas?.totalAtendimentos || 0;
 
-  // Mapeamento de cards superiores
+  // Cálculos dinâmicos baseados nos novos grupos de saúde
+  const totalAlergias = dados?.gruposSaude?.alergias?.length || 0;
+  const totalCronicos = dados?.gruposSaude?.cronicos?.length || 0;
+  const totalPCD = dados?.gruposSaude?.acessibilidade?.length || 0;
+  const totalRestricoes = dados?.gruposSaude?.restricaoAlimentar?.length || 0;
+
+  // Mapeamento de cards superiores atualizado
   const stats = [
     { 
       label: "total atendimentos", 
@@ -20,20 +26,20 @@ const AbaGeral = ({ dados, darkMode }) => {
       color: "blue" 
     },
     { 
-      label: "casos de febre", 
-      value: dados?.estatisticas?.totalFebre || 0, 
-      icon: <Thermometer />, 
+      label: "alertas críticos", 
+      value: totalAlergias + totalRestricoes, 
+      icon: <AlertTriangle />, 
       color: "orange" 
     },
     { 
-      label: "grupos de risco", 
-      value: (dados?.gruposSaude?.alergias?.length || 0) + (dados?.gruposSaude?.cronicos?.length || 0), 
-      icon: <AlertTriangle />, 
+      label: "doenças crônicas", 
+      value: totalCronicos, 
+      icon: <TrendingUp />, 
       color: "rose" 
     },
     { 
-      label: "alunos pcd", 
-      value: dados?.gruposSaude?.acessibilidade?.length || 0, 
+      label: "pcd / neurodiversos", 
+      value: totalPCD, 
       icon: <HeartPulse />, 
       color: "emerald" 
     },
@@ -68,7 +74,7 @@ const AbaGeral = ({ dados, darkMode }) => {
               {item.value}
             </h2>
             <p className="text-[10px] font-black lowercase tracking-[2px] opacity-40 group-hover:opacity-80 transition-opacity">
-              {normalizar(item.label)}
+              {item.label}
             </p>
           </div>
         ))}
@@ -89,7 +95,7 @@ const AbaGeral = ({ dados, darkMode }) => {
                 </span>
                 distribuição epidemiológica
               </h3>
-              <p className="text-[10px] opacity-40 font-bold lowercase ml-14 tracking-widest">análise de queixas registradas</p>
+              <p className="text-[10px] opacity-40 font-bold lowercase ml-14 tracking-widest">análise de queixas registradas no banco</p>
             </div>
             
             <div className={`px-6 py-3 rounded-2xl border text-[10px] font-black uppercase italic tracking-widest ${
@@ -109,7 +115,7 @@ const AbaGeral = ({ dados, darkMode }) => {
                     <div className="flex justify-between items-end">
                       <div className="space-y-1">
                         <span className="text-[9px] font-black text-blue-500/60 lowercase tracking-[2px] block">
-                          sintomatologia
+                          frequência de queixa
                         </span>
                         <span className="text-sm font-black lowercase italic leading-none group-hover:text-blue-500 transition-colors">
                           {normalizar(nome)}
@@ -136,7 +142,7 @@ const AbaGeral = ({ dados, darkMode }) => {
               <div className="col-span-full py-24 flex flex-col items-center justify-center border-2 border-dashed border-slate-500/10 rounded-[50px]">
                 <Activity className="text-blue-500/20 mb-6 animate-pulse" size={60} />
                 <p className="text-[11px] font-black lowercase opacity-30 tracking-[6px] italic text-center">
-                  aguardando processamento de dados...
+                  aguardando sincronização de dados médicos...
                 </p>
               </div>
             )}
