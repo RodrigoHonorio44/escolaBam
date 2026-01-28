@@ -5,23 +5,41 @@ import {
   Users, CheckCircle2, Search, Calendar, 
   Activity, ShieldCheck, Clock, Truck,
   ChevronLeft, ChevronRight, AlertTriangle,
-  RotateCw, BarChart3, Filter, X, Printer
+  RotateCw, BarChart3, Filter, X, Printer, UserCircle,
+  FileText, ArrowRight, ClipboardList, Thermometer, MapPin, Stethoscope, Building2, User, UserCheck
 } from 'lucide-react';
 
-const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
+// Sub-componentes do Modal Lateral
+const VitalCard = ({ icon, label, value }) => (
+  <div className="bg-white p-4 rounded-3xl flex flex-col items-center gap-2 border border-slate-200 shadow-sm text-center">
+    <div className="p-2 bg-slate-50 rounded-xl shadow-inner">{icon}</div>
+    <p className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{label}</p>
+    <p className="text-[12px] font-black text-slate-900 uppercase italic leading-none">{value}</p>
+  </div>
+);
+
+const DetailSection = ({ title, children }) => (
+  <div className="bg-white rounded-[35px] border border-slate-200 p-8 shadow-sm h-full flex flex-col">
+    <h4 className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-2 tracking-widest mb-6">
+      <div className="w-1.5 h-4 bg-blue-600 rounded-full"></div> {title}
+    </h4>
+    {children}
+  </div>
+);
+
+const HomeEnfermeiro = ({ user, setActiveTab, onAbrirPastaDigital, darkMode, visaoMensal, setVisaoMensal }) => {
   const [metricas, setMetricas] = useState({ 
     atendidoshoje: 0, 
     atendidosMes: 0,
-    totalPacientes: 0,
+    totalAlunos: 0,
+    totalFuncionarios: 0,
     tempoMedio: 0,
     tempoMedioMes: 0,
     pendentes: 0 
   });
   
-  const [exibirMensalAtend, setExibirMensalAtend] = useState(false);
-  const [exibirMensalTempo, setExibirMensalTempo] = useState(false);
   const [mostrarRelatorio, setMostrarRelatorio] = useState(false);
-
+  const [atendimentoSelecionado, setAtendimentoSelecionado] = useState(null); 
   const [filtroDataInicio, setFiltroDataInicio] = useState("");
   const [filtroDataFim, setFiltroDataFim] = useState("");
   const [resultadoRelatorio, setResultadoRelatorio] = useState(null);
@@ -33,9 +51,10 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
 
   const formatarParaTela = (texto) => {
     if (!texto) return "";
-    const palavras = texto.toString().toLowerCase().split(' ');
+    const palavras = texto.toString().toLowerCase().trim().split(/\s+/);
     return palavras.map(p => {
-      if (p === 'r' || p === 's' || p.length === 1) return p.toUpperCase();
+      if (p === 'r' || p === 's') return p.toUpperCase();
+      if (p.length <= 1) return p.toUpperCase();
       return p.charAt(0).toUpperCase() + p.slice(1);
     }).join(' ');
   };
@@ -85,7 +104,6 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
     const escolaUser = (user?.escola || "").toLowerCase().trim();
     const agora = new Date();
     const hojeLocal = agora.toLocaleDateString('en-CA'); 
-    const amanhaLocal = new Date(agora.getTime() + 86400000).toLocaleDateString('en-CA');
     const mesAtualPrefix = hojeLocal.substring(0, 7);
 
     const unsubAtendimentos = onSnapshot(collection(db, "atendimentos_enfermagem"), (snapshot) => {
@@ -93,16 +111,12 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
       let pendentesCount = 0, totalMes = 0;
       
       const todosOsDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
       const daEscola = todosOsDocs.filter(atend => {
         const escDoc = (atend.escola || "").toLowerCase().trim();
         return escDoc === escolaUser || escolaUser === "admin" || escolaUser === "";
       });
 
-      const filtradosHoje = daEscola.filter(atend => {
-        const dataDoc = (atend.data || "").trim();
-        return dataDoc === hojeLocal || dataDoc === amanhaLocal;
-      });
+      const filtradosHoje = daEscola.filter(atend => (atend.data || "").trim() === hojeLocal);
 
       daEscola.forEach(atend => {
         const dataDoc = (atend.data || "").trim();
@@ -113,15 +127,12 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
           const [h2, m2] = atend.horarioSaida.split(':').map(Number);
           const diff = (h2 * 60 + m2) - (h1 * 60 + m1);
           if (diff > 0) {
-            if (dataDoc === hojeLocal || dataDoc === amanhaLocal) { totalMinHoje += diff; countHoje++; }
+            if (dataDoc === hojeLocal) { totalMinHoje += diff; countHoje++; }
             if (dataDoc.startsWith(mesAtualPrefix)) { totalMinMes += diff; countMes++; }
           }
         }
-
         if (dataDoc.startsWith(mesAtualPrefix)) totalMes++;
-
-        if ((dataDoc === hojeLocal || dataDoc === amanhaLocal) && 
-            (status === "pendente" || status === "aberto" || status === "")) { 
+        if (dataDoc === hojeLocal && (status === "pendente" || status === "aberto" || status === "")) { 
           pendentesCount++; 
         }
       });
@@ -136,18 +147,25 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
       }));
 
       setTodosAtendimentosHoje(filtradosHoje.sort((a, b) => (b.horario || "").localeCompare(a.horario || "")));
-      setPaginaAtual(1); // Resetar para a primeira página quando houver novos dados
     });
 
-    const unsubPacientes = onSnapshot(collection(db, "alunos"), (snapshot) => {
-      const total = snapshot.docs.filter(doc => {
-        const esc = (doc.data().escola || "").toLowerCase().trim();
+    const unsubPastas = onSnapshot(collection(db, "pastas_digitais"), (snapshot) => {
+      const docsEscola = snapshot.docs.map(doc => doc.data()).filter(p => {
+        const esc = (p.escola || "").toLowerCase().trim();
         return esc === escolaUser || escolaUser === "admin";
-      }).length;
-      setMetricas(prev => ({ ...prev, totalPacientes: total }));
+      });
+
+      const alunos = docsEscola.filter(p => (p.tipoPerfil || "").toLowerCase().trim() === "aluno").length;
+      const funcionarios = docsEscola.filter(p => (p.tipoPerfil || "").toLowerCase().trim() === "funcionario").length;
+
+      setMetricas(prev => ({ 
+        ...prev, 
+        totalAlunos: alunos, 
+        totalFuncionarios: funcionarios 
+      }));
     });
 
-    return () => { unsubAtendimentos(); unsubPacientes(); };
+    return () => { unsubAtendimentos(); unsubPastas(); };
   }, [user]);
 
   const totalPaginas = Math.ceil(todosAtendimentosHoje.length / itensPorPagina);
@@ -156,31 +174,6 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-10">
       
-      {/* CSS DE IMPRESSÃO - REFINADO */}
-      <style>{`
-        @media print {
-          .print\\:hidden, nav, aside, button, .menu-lateral { display: none !important; }
-          .print\\:block { display: block !important; }
-          body { background: white !important; padding: 0 !important; color: black !important; }
-          .relatorio-container { border: none !important; box-shadow: none !important; width: 100% !important; margin: 0 !important; }
-          
-          .grid-relatorio-print {
-            display: flex !important;
-            justify-content: space-around !important;
-            text-align: center !important;
-            margin-bottom: 40px !important;
-          }
-
-          table { width: 100% !important; border-collapse: collapse !important; }
-          th { border-bottom: 2px solid #333 !important; color: #000 !important; font-size: 10px !important; padding: 12px !important; text-transform: uppercase !important; }
-          td { border-bottom: 1px solid #eee !important; padding: 12px !important; font-size: 11px !important; color: #000 !important; }
-          
-          .kpi-value-print { font-size: 60px !important; font-weight: 1000 !important; font-style: italic !important; color: #000 !important; }
-          .kpi-label-print { font-size: 10px !important; font-weight: 900 !important; text-transform: uppercase !important; color: #666 !important; }
-          .paciente-nome-print { font-weight: 900 !important; font-style: italic !important; text-transform: uppercase !important; }
-        }
-      `}</style>
-
       {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-500/10 pb-8 print:hidden">
         <div>
@@ -188,7 +181,7 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
             Olá, <span className="text-blue-600">{formatarParaTela(user?.nome)}</span>
           </h1>
           <div className="flex flex-wrap items-center gap-4 mt-4">
-            <div className="flex items-center gap-2 text-slate-400 text-xs font-bold italic uppercase">
+            <div className="flex items-center gap-2 text-slate-400 text-[10px] font-black italic uppercase tracking-widest">
               <ShieldCheck size={14} className="text-blue-500" />
               {user?.escola} <span className="opacity-30 mx-1">|</span> {cnum}
             </div>
@@ -203,172 +196,314 @@ const HomeEnfermeiro = ({ user, onAbrirPastaDigital, darkMode }) => {
         </div>
       </div>
 
-      {/* PAINEL DE RELATÓRIO */}
+      {/* CARD INTELIGENTE DE FILTRO (Condicional) */}
       {mostrarRelatorio && (
-          <div className={`relatorio-container p-8 rounded-[40px] border animate-in slide-in-from-top-4 duration-500 ${darkMode ? "bg-white/5 border-white/20 text-white" : "bg-slate-50 border-slate-200 shadow-xl"}`}>
-            
-            <div className="hidden print:flex items-center justify-between mb-10">
-               <div>
-                 <h2 className="text-lg font-black uppercase italic tracking-tighter">Rodhon System | Gestão de Enfermagem</h2>
-                 <p className="text-[9px] font-bold text-slate-400 uppercase">Unidade: {user?.escola}</p>
-               </div>
-               <div className="text-right">
-                 <p className="text-[9px] font-black uppercase text-slate-400">Dashboard de Atendimento</p>
-                 <p className="text-[8px] font-bold text-slate-300">Emissão: {new Date().toLocaleDateString('pt-BR')} {new Date().toLocaleTimeString('pt-BR')}</p>
-               </div>
+        <div className={`p-8 rounded-[45px] border-2 border-blue-500/20 animate-in slide-in-from-top duration-500 ${darkMode ? "bg-white/5" : "bg-blue-50/50"}`}>
+          <div className="flex flex-col md:flex-row items-end gap-6">
+            <div className="flex-1 space-y-2">
+              <label className="text-[10px] font-black text-blue-600 uppercase italic ml-4 tracking-widest">Início do Período</label>
+              <input 
+                type="date" 
+                value={filtroDataInicio}
+                onChange={(e) => setFiltroDataInicio(e.target.value)}
+                className={`w-full border-none rounded-2xl p-4 text-sm font-bold shadow-sm focus:ring-2 ring-blue-500 outline-none ${darkMode ? "bg-slate-800 text-white" : "bg-white text-slate-900"}`}
+              />
             </div>
-
-            <div className="flex items-center justify-between mb-6 print:hidden">
-              <h3 className="text-[10px] font-[1000] uppercase tracking-widest italic text-blue-500">Consulta de Dados Operacionais</h3>
-              <button onClick={() => setMostrarRelatorio(false)} className="text-slate-400 hover:text-red-500"><X size={18}/></button>
+            <div className="flex-1 space-y-2">
+              <label className="text-[10px] font-black text-blue-600 uppercase italic ml-4 tracking-widest">Fim do Período</label>
+              <input 
+                type="date" 
+                value={filtroDataFim}
+                onChange={(e) => setFiltroDataFim(e.target.value)}
+                className={`w-full border-none rounded-2xl p-4 text-sm font-bold shadow-sm focus:ring-2 ring-blue-500 outline-none ${darkMode ? "bg-slate-800 text-white" : "bg-white text-slate-900"}`}
+              />
             </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end print:hidden">
-               <div className="space-y-1">
-                 <label className="text-[9px] font-black uppercase ml-2 opacity-50">Início</label>
-                 <input type="date" className={`w-full p-3 rounded-2xl border text-xs font-bold ${darkMode ? "bg-black/20 border-white/10 text-white" : "bg-white border-slate-200"}`} value={filtroDataInicio} onChange={(e) => setFiltroDataInicio(e.target.value)} />
-               </div>
-               <div className="space-y-1">
-                 <label className="text-[9px] font-black uppercase ml-2 opacity-50">Fim</label>
-                 <input type="date" className={`w-full p-3 rounded-2xl border text-xs font-bold ${darkMode ? "bg-black/20 border-white/10 text-white" : "bg-white border-slate-200"}`} value={filtroDataFim} onChange={(e) => setFiltroDataFim(e.target.value)} />
-               </div>
-               <button onClick={gerarRelatorioGeral} className="p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[10px] font-black uppercase italic flex items-center justify-center gap-2 transition-all active:scale-95 shadow-lg shadow-blue-500/20">
-                 {carregandoRelatorio ? <RotateCw size={14} className="animate-spin" /> : <Filter size={14} />} Gerar Indicadores
-               </button>
-            </div>
-
-            {resultadoRelatorio && (
-              <div className="mt-8 space-y-10 animate-in fade-in slide-in-from-bottom-2">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 grid-relatorio-print">
-                  <div className="p-8 rounded-[30px] bg-blue-600 print:bg-transparent text-white flex flex-col items-center justify-center border border-blue-500 print:border-none">
-                    <h4 className="text-7xl font-[1000] italic leading-none kpi-value-print">{resultadoRelatorio.total}</h4>
-                    <span className="text-[10px] uppercase font-black opacity-80 mt-2 kpi-label-print">Atendimentos no Período</span>
-                  </div>
-                  <div className="p-8 rounded-[30px] bg-slate-800 print:bg-transparent text-white flex flex-col items-center justify-center border border-slate-700 print:border-none">
-                    <h4 className="text-7xl font-[1000] italic leading-none kpi-value-print">{resultadoRelatorio.tempoMedio}<span className="text-2xl ml-1">min</span></h4>
-                    <span className="text-[10px] uppercase font-black opacity-80 mt-2 kpi-label-print">Tempo Médio</span>
-                  </div>
-                </div>
-
-                <div className="overflow-hidden rounded-[30px] border border-slate-500/10 bg-white/5 print:border-none">
-                   <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-blue-600/10 print:bg-slate-50 text-[9px] font-black uppercase text-blue-500 print:text-slate-900">
-                          <th className="p-4">Data/Hora</th>
-                          <th className="p-4">Nome do Paciente</th>
-                          <th className="p-4">Motivo</th>
-                        </tr>
-                      </thead>
-                      <tbody className={darkMode ? "text-white" : "text-slate-800"}>
-                        {resultadoRelatorio.lista.map((atend) => (
-                          <tr key={atend.id} className="border-t border-slate-500/5 print:border-slate-100 text-[11px] hover:bg-blue-500/5">
-                            <td className="p-4 font-bold opacity-70">
-                              {new Date(atend.data).toLocaleDateString('pt-BR')} | {atend.horario}
-                            </td>
-                            <td className="p-4 paciente-nome-print">{formatarParaTela(atend.nomePaciente)}</td>
-                            <td className="p-4 font-bold uppercase opacity-60">{atend.motivoAtendimento || "Consulta"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                   </table>
-                </div>
-
-                <button onClick={() => window.print()} className="print:hidden w-full p-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl text-[11px] font-[1000] uppercase italic flex items-center justify-center gap-3 transition-all shadow-xl shadow-emerald-500/20 active:scale-95">
-                  <Printer size={18} /> Finalizar e Imprimir Relatório Operacional
-                </button>
-              </div>
-            )}
+            <button 
+              onClick={gerarRelatorioGeral}
+              disabled={carregandoRelatorio}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-4 rounded-2xl font-[1000] uppercase italic text-xs transition-all shadow-lg shadow-blue-500/20 flex items-center gap-3 disabled:opacity-50 h-[52px]"
+            >
+              {carregandoRelatorio ? <RotateCw className="animate-spin" size={18}/> : <Filter size={18}/>}
+              {carregandoRelatorio ? "Processando" : "Consultar"}
+            </button>
           </div>
+
+          {/* RESULTADOS DA CONSULTA INTELIGENTE */}
+          {resultadoRelatorio && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10 animate-in fade-in zoom-in duration-300">
+              <div className={`${darkMode ? "bg-white/5 border-white/10" : "bg-white border-blue-100"} p-6 rounded-[35px] shadow-sm border`}>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Total Período</p>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{resultadoRelatorio.total}</span>
+                  <span className="text-[10px] font-black text-blue-600 uppercase">Ações</span>
+                </div>
+              </div>
+              
+              <div className={`${darkMode ? "bg-white/5 border-white/10" : "bg-white border-blue-100"} p-6 rounded-[35px] shadow-sm border`}>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Média de Tempo</p>
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{resultadoRelatorio.tempoMedio}</span>
+                  <span className="text-[10px] font-black text-orange-500 uppercase">Minutos</span>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => window.print()}
+                className="bg-slate-900 p-6 rounded-[35px] shadow-lg flex items-center justify-center gap-4 group hover:bg-blue-600 transition-all text-white"
+              >
+                <Printer className="group-hover:scale-110 transition-transform" size={24} />
+                <div className="text-left">
+                  <p className="font-black italic uppercase text-sm leading-none">Exportar PDF</p>
+                  <p className="text-white/40 font-bold uppercase text-[8px] tracking-tighter">Gerar relatório de auditoria</p>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* CARDS KPIS DASHBOARD */}
+      {/* CARDS KPIS - ATUALIZADOS COM TOGGLE */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 print:hidden">
-        <div onClick={() => setExibirMensalTempo(!exibirMensalTempo)} className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 cursor-pointer transition-all ${darkMode ? "bg-white/5 border-white/10 hover:bg-white/20" : "bg-white border-slate-100 shadow-sm hover:shadow-md"}`}>
-          <div className="flex justify-between items-start"><Clock className="text-orange-500" size={32} /><RotateCw size={12} className="text-slate-400" /></div>
+        
+        {/* CARD TEMPO MÉDIO (TOQUE PARA MUDAR) */}
+        <div 
+          onClick={() => setVisaoMensal(!visaoMensal)}
+          className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer group ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}
+        >
+          <div className="flex justify-between items-start">
+            <Clock className="text-orange-500" size={32} />
+            <span className={`text-[7px] font-black px-2 py-1 rounded-full uppercase italic tracking-tighter transition-colors ${visaoMensal ? 'bg-blue-600 text-white' : 'bg-slate-500/10 text-slate-400'}`}>
+              {visaoMensal ? "Visão Mensal" : "Visão Diária"}
+            </span>
+          </div>
           <div>
-            <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{exibirMensalTempo ? metricas.tempoMedioMes : metricas.tempoMedio} min</span>
-            <p className="text-[10px] font-black text-slate-500 uppercase">{exibirMensalTempo ? "Média no Mês" : "Média Hoje"}</p>
+            <span className={`text-5xl font-[1000] italic leading-none ${darkMode ? "text-white" : "text-slate-900"}`}>
+              {visaoMensal ? metricas.tempoMedioMes : metricas.tempoMedio}
+            </span>
+            <span className="text-xs font-black ml-1 text-slate-400 italic">MIN</span>
+            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">
+              Média {visaoMensal ? "do Mês" : "Hoje"}
+            </p>
           </div>
         </div>
         
-        <div className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all ${metricas.pendentes > 0 ? "bg-orange-500/10 border-orange-500" : (darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm")}`}>
+        {/* CARD PENDENTES */}
+        <div className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
           <Activity className={metricas.pendentes > 0 ? "text-orange-500 animate-pulse" : "text-slate-400"} size={32} />
           <div>
-            <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{metricas.pendentes}</span>
-            <p className="text-[10px] font-black text-slate-500 uppercase">Pendentes</p>
+            <span className={`text-5xl font-[1000] italic leading-none ${darkMode ? "text-white" : "text-slate-900"}`}>{metricas.pendentes}</span>
+            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">Pendentes</p>
           </div>
         </div>
 
-        <div onClick={() => setExibirMensalAtend(!exibirMensalAtend)} className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 cursor-pointer transition-all ${darkMode ? "bg-white/5 border-white/10 hover:bg-white/20" : "bg-white border-slate-100 shadow-sm hover:shadow-md"}`}>
-          <div className="flex justify-between items-start"><CheckCircle2 className={exibirMensalAtend ? "text-blue-500" : "text-emerald-500"} size={32} /><RotateCw size={12} className="text-slate-400" /></div>
+        {/* CARD TOTAL ATENDIDOS (TOQUE PARA MUDAR) */}
+        <div 
+          onClick={() => setVisaoMensal(!visaoMensal)}
+          className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] active:scale-95 cursor-pointer group ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}
+        >
+          <div className="flex justify-between items-start">
+            <CheckCircle2 className="text-emerald-500" size={32} />
+            <span className={`text-[7px] font-black px-2 py-1 rounded-full uppercase italic tracking-tighter transition-colors ${visaoMensal ? 'bg-blue-600 text-white' : 'bg-slate-500/10 text-slate-400'}`}>
+              {visaoMensal ? "Visão Mensal" : "Visão Diária"}
+            </span>
+          </div>
           <div>
-            <span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{exibirMensalAtend ? metricas.atendidosMes : metricas.atendidoshoje}</span>
-            <p className="text-[10px] font-black text-slate-500 uppercase">{exibirMensalAtend ? "Total no Mês" : "Total Hoje"}</p>
+            <span className={`text-5xl font-[1000] italic leading-none ${darkMode ? "text-white" : "text-slate-900"}`}>
+              {visaoMensal ? metricas.atendidosMes : metricas.atendidoshoje}
+            </span>
+            <p className="text-[10px] font-black text-slate-400 uppercase mt-1 tracking-widest">
+              Total {visaoMensal ? "do Mês" : "Hoje"}
+            </p>
           </div>
         </div>
 
-        <div className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
+        {/* CARD POPULAÇÃO */}
+        <div className={`p-8 rounded-[40px] border flex flex-col justify-between h-48 transition-all hover:scale-[1.02] ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
           <Users className="text-blue-500" size={32} />
-          <div><span className={`text-4xl font-[1000] italic ${darkMode ? "text-white" : "text-slate-900"}`}>{metricas.totalPacientes}</span><p className="text-[10px] font-black text-slate-500 uppercase">Alunos/Funcionários</p></div>
+          <div>
+            <span className={`text-4xl font-[1000] italic leading-none ${darkMode ? "text-white" : "text-slate-900"}`}>
+              {metricas.totalAlunos}<span className="text-xl mx-1 text-slate-400">/</span>{metricas.totalFuncionarios}
+            </span>
+            <p className="text-[10px] font-black text-slate-400 uppercase mt-2 tracking-widest leading-tight">Alunos / Funcionários</p>
+          </div>
         </div>
       </div>
 
-      {/* FLUXO DO DIA COM PAGINAÇÃO REFORÇADA */}
+      {/* FLUXO DO DIA */}
       <div className={`rounded-[40px] border print:hidden transition-all ${darkMode ? "bg-white/5 border-white/10" : "bg-white border-slate-100 shadow-sm"}`}>
         <div className="p-6 border-b border-slate-500/5 flex items-center justify-between">
-          <h4 className="text-[10px] font-[1000] uppercase text-slate-500 italic tracking-widest flex items-center gap-2">Fluxo Operacional Diário</h4>
+          <h4 className="text-[10px] font-[1000] uppercase text-slate-500 italic tracking-[0.2em] flex items-center gap-2">Fluxo Operacional Diário</h4>
           {totalPaginas > 1 && (
-            <div className="flex items-center gap-3 bg-slate-500/5 p-1 px-3 rounded-full">
-              <button 
-                onClick={() => setPaginaAtual(p => Math.max(1, p - 1))} 
-                disabled={paginaAtual === 1} 
-                className="p-1.5 hover:bg-blue-600 hover:text-white rounded-full disabled:opacity-10 transition-all active:scale-75"
-              >
-                <ChevronLeft size={16} />
-              </button>
-              <span className="text-[10px] font-black text-blue-600 tabular-nums">{paginaAtual} de {totalPaginas}</span>
-              <button 
-                onClick={() => setPaginaAtual(p => Math.min(totalPaginas, p + 1))} 
-                disabled={paginaAtual === totalPaginas} 
-                className="p-1.5 hover:bg-blue-600 hover:text-white rounded-full disabled:opacity-10 transition-all active:scale-75"
-              >
-                <ChevronRight size={16} />
-              </button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setPaginaAtual(p => Math.max(1, p - 1))} className="p-1 hover:text-blue-500 transition-colors"><ChevronLeft size={18}/></button>
+              <span className="text-[10px] font-black italic">{paginaAtual} / {totalPaginas}</span>
+              <button onClick={() => setPaginaAtual(p => Math.min(totalPaginas, p + 1))} className="p-1 hover:text-blue-500 transition-colors"><ChevronRight size={18}/></button>
             </div>
           )}
         </div>
         <div className="p-4">
           {atendimentosPaginados.length > 0 ? atendimentosPaginados.map(atend => {
             const isPendente = (atend.statusAtendimento || "").toLowerCase() !== "finalizado";
+            const perfil = (atend.perfilPaciente || "").toLowerCase().trim();
+            const isAluno = perfil === "aluno";
+            
             return (
               <div key={atend.id} className={`p-4 flex items-center justify-between border-b border-slate-500/5 last:border-0 transition-all rounded-3xl group mb-1 ${isPendente ? "bg-orange-500/5 hover:bg-orange-500/10" : "hover:bg-blue-500/5"}`}>
                 <div className="flex items-center gap-4">
-                  <span className={`text-[10px] font-black p-2.5 rounded-xl transition-all ${isPendente ? 'bg-orange-500 text-white animate-pulse shadow-lg shadow-orange-500/20' : 'bg-blue-500/10 text-blue-600'}`}>
-                    {atend.horario}
-                  </span>
-                  <div>
+                  <div className="text-center min-w-[70px]">
+                    <span className={`text-[11px] font-black p-2.5 rounded-2xl block transition-all italic ${isPendente ? 'bg-orange-500 text-white animate-pulse' : 'bg-blue-500/10 text-blue-600'}`}>
+                      {atend.horario}
+                    </span>
+                    <p className="text-[8px] font-black text-slate-400 mt-1 uppercase italic">HOJE</p>
+                  </div>
+                  <div className="cursor-pointer" onClick={() => setAtendimentoSelecionado(atend)}>
                     <div className="flex items-center gap-2">
-                      <p className={`text-sm font-black uppercase italic tracking-tight ${darkMode ? "text-white" : "text-slate-800"}`}>{formatarParaTela(atend.nomePaciente)}</p>
-                      {isPendente && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-500 text-[8px] font-black text-white uppercase animate-bounce">
-                          <AlertTriangle size={8} /> Pendente
-                        </span>
-                      )}
+                      <p className={`text-base font-[1000] uppercase italic tracking-tighter ${darkMode ? "text-white" : "text-slate-800"}`}>
+                        {formatarParaTela(atend.nomePaciente)}
+                      </p>
+                      <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase flex items-center gap-1 ${isAluno ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                        {atend.perfilPaciente || "Paciente"}
+                      </span>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase">{atend.motivoAtendimento || "Consulta de Enfermagem"}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                       <p className="text-[10px] text-slate-400 font-bold uppercase italic tracking-tight">{atend.motivoAtendimento || "Consulta de Enfermagem"}</p>
+                       {atend.cargo && <span className="text-[8px] text-blue-500 font-black uppercase italic">• {atend.cargo}</span>}
+                    </div>
                   </div>
                 </div>
                 <button 
-                  onClick={() => onAbrirPastaDigital(atend)} 
-                  className={`p-3.5 rounded-2xl transition-all ${isPendente ? "bg-orange-500 text-white shadow-lg shadow-orange-500/30 active:scale-90" : "text-slate-400 hover:bg-blue-600 hover:text-white active:scale-90"}`}
+                  onClick={() => setAtendimentoSelecionado(atend)} 
+                  className={`p-3.5 rounded-2xl transition-all shadow-sm ${isPendente ? "bg-orange-500 text-white hover:bg-orange-600" : "bg-slate-500/5 text-slate-400 hover:bg-blue-600 hover:text-white"}`}
                 >
-                  <Search size={18} />
+                  <Search size={20} />
                 </button>
               </div>
             );
           }) : <div className="py-20 text-center text-[10px] font-black uppercase text-slate-300 italic tracking-[0.3em]">Aguardando registros...</div>}
         </div>
       </div>
+
+      {/* MODAL LATERAL "BAM" */}
+      {atendimentoSelecionado && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-end bg-slate-900/80 backdrop-blur-md p-4 animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-3xl h-[95vh] rounded-[45px] shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-right duration-500">
+            
+            {(() => {
+              const statusTexto = (atendimentoSelecionado.statusAtendimento || "").toLowerCase();
+              const estaAberto = statusTexto.includes("aberto") || statusTexto.includes("aguardando") || statusTexto === "";
+              const queixaDisplay = atendimentoSelecionado.motivoAtendimento || atendimentoSelecionado.queixaPrincipal || "NÃO INFORMADA";
+              
+              return (
+                <>
+                {/* HEADER DO MODAL */}
+                <div className={`p-10 text-white flex justify-between items-start relative overflow-hidden transition-colors ${estaAberto ? 'bg-orange-600' : 'bg-slate-900'}`}>
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`${estaAberto ? 'bg-orange-800' : 'bg-blue-600'} text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter`}>
+                        {estaAberto ? 'ATENDIMENTO EM ABERTO' : 'DOCUMENTO BAM'}
+                      </span>
+                      <span className="text-[9px] font-black text-white/60 uppercase">
+                        {atendimentoSelecionado.data} às {atendimentoSelecionado.horario}
+                      </span>
+                    </div>
+                    <h3 className="text-3xl font-black italic uppercase tracking-tighter leading-none">
+                      {atendimentoSelecionado.baenf || 'S/N'}
+                    </h3>
+                    <p className="text-white/80 text-xs font-black uppercase italic mt-2 flex items-center gap-1">
+                      <UserCheck size={14}/> {formatarParaTela(atendimentoSelecionado.nomePaciente)}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setAtendimentoSelecionado(null)} 
+                    className="relative z-10 p-3 bg-white/10 hover:bg-rose-600 rounded-2xl transition-all shadow-lg"
+                  >
+                    <X size={24}/>
+                  </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-10 space-y-8 bg-slate-50/30">
+                  {estaAberto && (
+                    <div className="bg-orange-50 border-2 border-orange-200 p-6 rounded-[30px] flex items-center gap-4 animate-pulse">
+                      <AlertTriangle className="text-orange-600" size={32} />
+                      <div>
+                        <p className="text-orange-900 font-black uppercase italic text-sm leading-none">Aguardando Desfecho</p>
+                        <p className="text-orange-700 text-[10px] font-bold uppercase mt-1">Este atendimento ainda não foi finalizado no sistema.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <VitalCard icon={<Thermometer size={18} className="text-rose-500"/>} label="TEMPERATURA" value={`${atendimentoSelecionado.temperatura || '--'}°C`} />
+                    <VitalCard icon={<Activity size={18} className="text-blue-500"/>} label="PRESSÃO" value={atendimentoSelecionado.pressaoArterial || '--'} />
+                    <VitalCard icon={<MapPin size={18} className="text-green-500"/>} label="DESTINO" value={atendimentoSelecionado.destinoHospital || (estaAberto ? 'EM ANÁLISE' : 'ALTA')} />
+                    <VitalCard icon={<Clock size={18} className="text-orange-500"/>} label="DURAÇÃO" value={atendimentoSelecionado.tempoDuracao || '--'} />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <DetailSection title="Avaliação Clínica">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Motivo / Queixa Principal</p>
+                          <p className="text-sm font-black text-slate-900 uppercase italic leading-tight">{queixaDisplay}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Evolução de Enfermagem</p>
+                          <div className="p-5 bg-white rounded-3xl text-[11px] text-slate-600 font-bold uppercase leading-relaxed border border-slate-200 shadow-sm min-h-[100px]">
+                            {atendimentoSelecionado.descricaoAtendimento || "Nenhuma observação registrada."}
+                          </div>
+                        </div>
+                      </div>
+                    </DetailSection>
+
+                    <DetailSection title="Conduta e Tratamento">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Procedimentos Realizados</p>
+                          <div className="p-5 bg-blue-50/50 rounded-3xl border border-blue-100 text-[11px] text-blue-900 font-black uppercase italic min-h-[80px]">
+                            {atendimentoSelecionado.procedimentos || "Nenhum procedimento registrado."}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Ações Disponíveis</p>
+                          <button 
+                            onClick={() => {
+                              onAbrirPastaDigital(atendimentoSelecionado);
+                              setAtendimentoSelecionado(null);
+                            }}
+                            className="w-full p-4 bg-slate-900 text-white rounded-2xl text-[10px] font-[1000] uppercase italic hover:bg-blue-600 transition-all flex items-center justify-center gap-2"
+                          >
+                            <FileText size={14}/> Acessar Pasta Digital
+                          </button>
+                        </div>
+                      </div>
+                    </DetailSection>
+                  </div>
+
+                  <div className="bg-white rounded-[35px] border border-slate-200 p-8 shadow-sm mb-10">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><Stethoscope size={12}/> Profissional</p>
+                        <p className="text-xs font-black text-slate-900 uppercase italic">{atendimentoSelecionado.profissionalNome || 'Não Identificado'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><Building2 size={12}/> Unidade</p>
+                        <p className="text-xs font-black text-slate-900 uppercase italic">{atendimentoSelecionado.escola || 'Não informada'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1 mb-2"><User size={12}/> Registro</p>
+                        <span className={`text-[10px] font-black px-4 py-1.5 rounded-full ${estaAberto ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {estaAberto ? 'PENDENTE' : 'FINALIZADO'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                </>
+              );
+            })()}
+          </div>
+        </div>
+      )}
       
       <div className="text-center text-[9px] font-black text-slate-300 uppercase tracking-[0.5em] pb-4 print:hidden">
         rodhon intelligence — painel operacional 2026

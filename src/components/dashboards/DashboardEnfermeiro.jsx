@@ -5,8 +5,7 @@ import { signOut } from "firebase/auth";
 import { 
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
   ChevronDown, LogOut, FolderSearch, Lock,
-  Settings, Bell, FileBarChart, Menu, ChevronLeft, 
-  Sun, Moon, LifeBuoy, ShieldAlert, BarChart3, Contact
+  Menu, ChevronLeft, Sun, Moon, LifeBuoy, ShieldAlert, BarChart3, Contact
 } from "lucide-react";
 
 // Importações de páginas
@@ -59,6 +58,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const [menuAberto, setMenuAberto] = useState(null); 
   const [isExpanded, setIsExpanded] = useState(true);
   const [darkMode, setDarkMode] = useState(false); 
+  const [visaoMensal, setVisaoMensal] = useState(false); // Novo: Estado global da visão dos cards
   const [dadosParaEdicao, setDadosParaEdicao] = useState(null);
   const unsubscribeRef = useRef(null);
 
@@ -108,11 +108,10 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     sidebarActive: darkMode ? "bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.4)]" : "bg-blue-50 text-blue-600",
     border: darkMode ? "border-slate-800" : "border-slate-200",
     headerBg: darkMode ? "bg-[#020617]" : "bg-white",
-    contentBg: "bg-slate-50" // Fundo do conteúdo agora é sempre claro
+    contentBg: "bg-slate-50"
   };
 
   const renderContent = () => {
-    // Props forçadas para Modo Claro nos componentes internos
     const forcedLightProps = { 
         user, 
         darkMode: false, 
@@ -120,7 +119,16 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     };
 
     switch (activeTab) {
-      case "home": return <HomeEnfermeiro {...forcedLightProps} setActiveTab={setActiveTab} isLiberado={isLiberado} />;
+      case "home": 
+        return (
+          <HomeEnfermeiro 
+            {...forcedLightProps} 
+            setActiveTab={setActiveTab} 
+            isLiberado={isLiberado}
+            visaoMensal={visaoMensal} 
+            setVisaoMensal={setVisaoMensal} 
+          />
+        );
       case "atendimento": return <AtendimentoEnfermagem {...forcedLightProps} />;
       case "contato": return <ContatoAluno {...forcedLightProps} />;
       case "pasta_digital": 
@@ -129,7 +137,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
             {...forcedLightProps}
             onNovoAtendimento={handleEdicaoDaPasta} 
             onAbrirQuestionario={handleAbrirQuestionarioPelaPasta}
-            alunoParaReabrir={forcedLightProps.alunoParaReabrir} 
           />
         );
       case "pacientes":
@@ -140,7 +147,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       case "historico": return <HistoricoAtendimentos {...forcedLightProps} />;
       case "auditoria": return <RelatorioMedicoPro {...forcedLightProps} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
-      default: return <HomeEnfermeiro {...forcedLightProps} setActiveTab={setActiveTab} isLiberado={isLiberado} />;
+      default: return <HomeEnfermeiro {...forcedLightProps} setActiveTab={setActiveTab} isLiberado={isLiberado} visaoMensal={visaoMensal} setVisaoMensal={setVisaoMensal} />;
     }
   };
 
@@ -168,7 +175,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     <div className={`fixed inset-0 z-[999] flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${theme.contentBg}`}>
       { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />}
 
-      {/* MINI BAR ESQUERDA (Responde ao Dark Mode) */}
+      {/* MINI BAR ESQUERDA */}
       <div className={`w-16 flex flex-col items-center py-8 gap-8 border-r shrink-0 z-50 transition-colors duration-500 ${darkMode ? "bg-[#020617] border-slate-800" : "bg-slate-100 border-slate-200"}`}>
           <div className="text-blue-500"><Stethoscope size={24} /></div>
           <button onClick={() => setDarkMode(!darkMode)} className={`p-2 rounded-xl transition-all ${darkMode ? "text-yellow-400 bg-white/5 hover:bg-white/10" : "text-slate-600 hover:bg-slate-200"}`}>
@@ -179,7 +186,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           </button>
       </div>
 
-      {/* SIDEBAR PRINCIPAL (Responde ao Dark Mode) */}
+      {/* SIDEBAR PRINCIPAL */}
       <aside className={`${isExpanded ? "w-64" : "w-0 overflow-hidden"} ${theme.sidebarBg} flex flex-col shrink-0 transition-all duration-300 relative border-r ${theme.border} shadow-2xl`}>
         <button onClick={() => setIsExpanded(!isExpanded)} className={`absolute -right-3 top-24 rounded-full p-1 border z-50 ${darkMode ? "bg-[#020617] border-slate-700 text-slate-400" : "bg-white border-slate-200 text-slate-600"}`}>
           <ChevronLeft size={16} className={`${!isExpanded && "rotate-180"}`} />
@@ -249,7 +256,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
-        {/* HEADER (Responde ao Dark Mode) */}
         <header className={`h-20 border-b flex items-center justify-between px-8 shrink-0 transition-colors duration-500 ${theme.headerBg} ${theme.border}`}>
           <div className="flex items-center gap-4">
               {!isExpanded && (
@@ -266,7 +272,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           </div>
         </header>
 
-        {/* CONTEÚDO (Sempre com fundo Claro para as páginas) */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 w-full animate-in fade-in duration-500 bg-slate-50">
             {renderContent()}
         </main>
