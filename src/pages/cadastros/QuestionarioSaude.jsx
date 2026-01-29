@@ -44,6 +44,19 @@ const QuestionarioSaude = ({ onSucesso }) => {
       .map(([key]) => key)
       .join(', ') || 'nenhuma informada';
 
+    const auxilioLocomocao = Object.entries(formData.mobilidadeAuxilio || {})
+      .filter(([_, value]) => value === true)
+      .map(([key]) => {
+        const labels = {
+          cadeirante: 'Cadeira de Rodas',
+          muletas: 'Muletas/Andador',
+          ortese: 'Órteses/Próteses',
+          limitada: 'Locomoção Limitada'
+        };
+        return labels[key] || key;
+      })
+      .join(', ') || 'não informado';
+
     const tratamentos = Object.entries(formData.tratamentoEspecializado || {})
       .filter(([key, value]) => value === true && key !== 'possui')
       .map(([key]) => key === 'terapiaOcupacional' ? 't.o' : key)
@@ -94,9 +107,11 @@ const QuestionarioSaude = ({ onSucesso }) => {
             <div class="grid">
               <div><span class="label">pcd / esp.:</span> <div class="value">${formData.pcdStatus?.possui === 'sim' ? (formData.pcdStatus.detalhes || formData.pcdStatus.qual) : 'não'}</div></div>
               <div><span class="label">alergias:</span> <div class="value">${formData.alergias?.possui === 'sim' ? (formData.alergias.detalhes || formData.alergias.qual) : 'não'}</div></div>
-              <div><span class="label">restrição alimentar:</span> <div class="value">${formData.restricaoAlimentar?.possui === 'sim' ? (formData.restricaoAlimentar.detalhes || formData.restricaoAlimentar.qual) : 'não'}</div></div>
+              <div><span class="label">cardíaco:</span> <div class="value">${formData.doencasCardiacas?.possui === 'sim' ? (formData.doencasCardiacas.detalhes || formData.doencasCardiacas.qual) : 'não'}</div></div>
+              <div><span class="label">cirurgias:</span> <div class="value">${formData.cirurgias?.possui === 'sim' ? (formData.cirurgias.detalhes || formData.cirurgias.qual) : 'não'}</div></div>
               <div><span class="label">diabetes:</span> <div class="value">${formData.diabetes?.possui === 'sim' ? formData.diabetes.tipo : 'não'}</div></div>
               <div><span class="label">medicação:</span> <div class="value">${formData.medicacaoContinua?.possui === 'sim' ? (formData.medicacaoContinua.detalhes || formData.medicacaoContinua.qual) : 'não'}</div></div>
+              <div style="grid-column: span 2;"><span class="label">outras doenças:</span> <div class="value">${formData.historicoDoencas?.possui === 'sim' ? (formData.historicoDoencas.detalhes || formData.historicoDoencas.qual) : 'não'}</div></div>
               <div><span class="label">violência/abuso:</span> <div class="value">${formData.historicoViolencia?.possui === 'sim' ? formData.historicoViolencia.detalhes : 'não'}</div></div>
             </div>
           </div>
@@ -104,8 +119,9 @@ const QuestionarioSaude = ({ onSucesso }) => {
           <div class="section">
             <div class="section-title">3. Desenvolvimento e Mobilidade</div>
             <div class="grid">
-              <div style="grid-column: span 2;"><span class="label">dificuldades mapeadas:</span> <div class="value">${dificuldadesAtivas}</div></div>
-              <div style="grid-column: span 3;"><span class="label">tratamentos:</span> <div class="value">${tratamentos} ${formData.tratamentoEspecializado?.outro ? '| ' + formData.tratamentoEspecializado.outro : ''}</div></div>
+              <div style="grid-column: span 1;"><span class="label">dificuldades:</span> <div class="value">${dificuldadesAtivas}</div></div>
+              <div style="grid-column: span 2;"><span class="label">auxílios de locomoção:</span> <div class="value">${auxilioLocomocao}</div></div>
+              <div style="grid-column: span 3; margin-top: 5px;"><span class="label">tratamentos:</span> <div class="value">${tratamentos} ${formData.tratamentoEspecializado?.outro ? '| ' + formData.tratamentoEspecializado.outro : ''}</div></div>
             </div>
           </div>
 
@@ -262,6 +278,12 @@ const QuestionarioSaude = ({ onSucesso }) => {
                   )}
                 </div>
                 <RadioGroup label="Desmaio ou Convulsão?" value={formData.desmaioConvulsao} onChange={(v) => handleChange('desmaioConvulsao', v)} />
+                
+                {/* CAMPOS ADICIONADOS PARA SINCRONIZAR COM FIREBASE */}
+                <ToggleInput label="Doenças Cardíacas?" value={formData.doencasCardiacas} onChange={(v) => handleChange('doencasCardiacas', v)} />
+                <ToggleInput label="Cirurgias?" value={formData.cirurgias} onChange={(v) => handleChange('cirurgias', v)} />
+                <ToggleInput label="Histórico Doenças?" value={formData.historicoDoencas} onChange={(v) => handleChange('historicoDoencas', v)} />
+                
                 <ToggleInput label="Alergias" value={formData.alergias} onChange={(v) => handleChange('alergias', v)} />
                 <ToggleInput label="Restrição Alimentar?" value={formData.restricaoAlimentar} onChange={(v) => handleChange('restricaoAlimentar', v)} />
                 <ToggleInput label="Medicação Contínua" value={formData.medicacaoContinua} onChange={(v) => handleChange('medicacaoContinua', v)} />
@@ -308,6 +330,31 @@ const QuestionarioSaude = ({ onSucesso }) => {
                     </button>
                   ))}
                 </div>
+
+                {formData.dificuldades?.andar && (
+                  <div className="p-4 bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-100 animate-in zoom-in-95">
+                    <span className="text-[9px] font-black text-blue-600 uppercase mb-3 block italic">Auxílio de Locomoção:</span>
+                    <div className="grid grid-cols-1 gap-2">
+                      {[
+                        { id: 'cadeirante', label: 'Cadeirante (Cadeira de Rodas)' },
+                        { id: 'muletas', label: 'Uso de Muletas/Andador' },
+                        { id: 'ortese', label: 'Uso de Órteses/Próteses' },
+                        { id: 'limitada', label: 'Locomoção Limitada' }
+                      ].map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleChange(`mobilidadeAuxilio.${item.id}`, !formData.mobilidadeAuxilio?.[item.id])}
+                          className={`px-4 py-2 rounded-xl text-[9px] font-bold text-left transition-all flex justify-between items-center ${formData.mobilidadeAuxilio?.[item.id] ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border border-slate-100'}`}
+                        >
+                          {item.label}
+                          {formData.mobilidadeAuxilio?.[item.id] && <CheckCircle2 size={12} />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 <RadioGroup label="Caminhar Dificuldade?" value={formData.caminharDificuldade} onChange={(v) => handleChange('caminharDificuldade', v)} />
               </div>
             </SectionCard>
@@ -335,8 +382,8 @@ const QuestionarioSaude = ({ onSucesso }) => {
                 <InputBlock label="Última Consulta Dentista">
                   <div className="grid grid-cols-2 gap-2">
                     {['1 mês', '3 meses', '6 meses', '1 ano'].map(periodo => (
-                      <button key={periodo} type="button" onClick={() => handleChange('dentistaUltimaConsulta', periodo)}
-                        className={`py-2 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${formData.dentistaUltimaConsulta === periodo ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-400'}`}>
+                      <button key={periodo} type="button" onClick={() => handleChange('dentistaUltimaConsulta', periodo.toLowerCase())}
+                        className={`py-2 rounded-xl text-[9px] font-black uppercase border-2 transition-all ${formData.dentistaUltimaConsulta === periodo.toLowerCase() ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-100 bg-white text-slate-400'}`}>
                         {periodo}
                       </button>
                     ))}

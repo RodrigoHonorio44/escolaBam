@@ -1,145 +1,112 @@
-import { useMemo } from 'react';
+import { useMemo } from "react";
 
-const useAuditoria = (atendimentosRaw, alunosRaw, periodo) => {
+const useAuditoria = (
+  atendimentosRaw = [],
+  alunosRaw = [],
+  questionariosRaw = [],
+  periodo
+) => {
   return useMemo(() => {
-    // Garantia de que temos arrays para trabalhar
-    const alunos = Array.isArray(alunosRaw) ? alunosRaw : Object.values(alunosRaw || {});
-    const atendimentos = Array.isArray(atendimentosRaw) ? atendimentosRaw : Object.values(atendimentosRaw || {});
-
-    // Se não houver alunos, evitamos processamento desnecessário, mas retornamos estrutura básica
-    if (alunos.length === 0 && atendimentos.length === 0) {
-      return { 
-        estatisticas: { totalAtendimentos: 0, totalFebre: 0, rankingQueixas: [], rankingAlunos: [] },
-        gruposSaude: { alergias: [], acessibilidade: [], cronicos: [], restricaoAlimentar: [] },
-        atendimentos: [],
-        nutricional: [] 
-      };
-    }
-
-    // --- HELPERS DE FORMATAÇÃO ---
-    const formatarRS = (str) => {
-      if (!str || str === 'n/i') return 'não informado';
-      return str.toString().toLowerCase().split(' ')
-        .map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-    };
-
-    const normalizar = (val) => val?.toString().toLowerCase().trim() || "";
+    // 🔧 1. NORMALIZAÇÃO DE BASES
+    const atendimentos = Array.isArray(atendimentosRaw) ? atendimentosRaw : [];
     
-    const checar = (valor) => {
-      if (valor === undefined || valor === null) return false;
-      const v = normalizar(valor);
-      return v === 'sim' || v === 'true' || valor === true;
-    };
-
-    // --- FILTRAGEM DE ATENDIMENTOS (Blindada contra strings ISO completas) ---
-    const atendimentosFiltrados = atendimentos.filter(a => {
-      if (!a.data) return false;
-      // Garante que a data do atendimento seja comparada apenas YYYY-MM-DD
-      const dataSimples = a.data.includes('T') ? a.data.split('T')[0] : a.data;
-      return dataSimples >= periodo.inicio && dataSimples <= periodo.fim;
+    // Unificação por ID para evitar duplicados entre 'alunos' e 'questionarios'
+    const mapaSaude = {};
+    [...alunosRaw, ...questionariosRaw].forEach(p => {
+      // Tenta mapear todos os IDs possíveis que vimos nas suas coleções
+      const id = p.pacienteId || p.id || p.nomeBusca || p.alunoNome || p.nome;
+      if (!id) return;
+      mapaSaude[id] = { ...mapaSaude[id], ...p };
     });
+    const baseSaude = Object.values(mapaSaude);
 
-    // --- RANKING DE QUEIXAS (DINÂMICO) ---
-    const contagemQueixas = atendimentosFiltrados.reduce((acc, a) => {
-      const motivo = normalizar(a.motivoAtendimento || "outros");
-      acc[motivo] = (acc[motivo] || 0) + 1;
-      return acc;
-    }, {});
+    // 🔧 2. HELPERS (Lowercase e Parser de Data)
+    const normalizar = (v) => String(v || "").toLowerCase().trim();
 
-    const rankingQueixas = Object.entries(contagemQueixas)
-      .map(([label, value]) => ({ 
-        label: formatarRS(label), 
-        value 
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
-
-    // --- RANKING DE ALUNOS (Para AbaRecidiva) ---
-    const contagemAlunos = atendimentosFiltrados.reduce((acc, a) => {
-      const nome = a.alunoNome || a.nome || a.nomePaciente;
-      if (nome) {
-        const n = normalizar(nome);
-        acc[n] = (acc[n] || 0) + 1;
+    const toDateString = (data) => {
+      if (!data) return null;
+      // Trata Timestamp do Firebase (objeto com seconds)
+      if (typeof data === 'object' && data.seconds) {
+        return new Date(data.seconds * 1000).toISOString().split('T')[0];
       }
-      return acc;
-    }, {});
-
-    const rankingAlunos = Object.entries(contagemAlunos).sort((a, b) => b[1] - a[1]);
-
-    // --- GRUPOS DE SAÚDE (Mantendo as antigas e incluindo as novas propriedades) ---
-    const gruposSaude = {
-      alergias: alunos.filter(p => 
-        checar(p.alunoPossuiAlergia) || 
-        checar(p.alertaSaude?.possuiAlergia) ||
-        checar(p.alergias?.possui) || // Nova estrutura
-        checar(p.temAlergia)
-      ),
-      acessibilidade: alunos.filter(p => 
-        checar(p.alertaSaude?.isPCD) || 
-        checar(p.pcdStatus?.possui) ||  // Nova estrutura
-        checar(p.diagnosticoNeuro?.detalhes) || // Nova estrutura
-        checar(p.pcd)
-      ),
-      cronicos: alunos.filter(p => 
-        checar(p.alertaSaude?.possuiDiabetes) || 
-        checar(p.diabetes?.possui) || // Nova estrutura
-        checar(p.asma?.possui) ||     // Nova estrutura
-        (p.alertaSaude?.medicacaoContinua && p.alertaSaude.medicacaoContinua !== "não") ||
-        checar(p.asma) || 
-        checar(p.epilepsia)
-      ),
-      restricaoAlimentar: alunos.filter(p => 
-        checar(p.restricoesAlimentares?.possui) || // Nova estrutura
-        checar(p.restricoesAlimentares)
-      )
+      // Trata strings YYYY-MM-DD
+      if (typeof data === "string") {
+        const regex = /^\d{4}-\d{2}-\d{2}/;
+        const match = data.match(regex);
+        return match ? match[0] : null;
+      }
+      return null;
     };
 
-    // --- DADOS NUTRICIONAIS (IMC) ---
-    const nutricional = alunos
-      .filter(p => parseFloat(p.peso || p.alertaSaude?.pesoAtual || 0) > 0)
-      .map(p => {
-        const peso = parseFloat(p.peso || p.alertaSaude?.pesoAtual || 0);
-        let altura = parseFloat(p.altura || p.alertaSaude?.alturaAtual || 1); 
-        if (altura > 3) altura = altura / 100;
+    const checar = (campo) => {
+      if (!campo) return false;
+      if (typeof campo === "object") {
+        return normalizar(campo.possui) === "sim" || campo.possui === true;
+      }
+      const v = normalizar(campo);
+      return v === "sim" || v === "true" || campo === true;
+    };
 
-        const imcCalculado = (peso / (altura * altura)).toFixed(2);
-        const imcFinal = parseFloat(p.imc || imcCalculado);
-        
-        // Determina status para facilitar exibição
-        let status = "normal";
-        if (imcFinal < 18.5) status = "baixo peso";
-        if (imcFinal >= 30) status = "obesidade";
+    // 📅 3. FILTRO DE PERÍODO (Afeta apenas a contagem de atendimentos)
+    const atendimentosFiltrados = !periodo?.inicio || !periodo?.fim
+      ? atendimentos
+      : atendimentos.filter((a) => {
+          // Busca data nos campos identificados nas suas coleções
+          const dataReg = toDateString(a.data) || toDateString(a.createdAt);
+          return dataReg && dataReg >= periodo.inicio && dataReg <= periodo.fim;
+        });
 
-        return {
-          nome: formatarRS(p.nome || p.nomeBusca || p.alunoNome),
-          turma: normalizar(p.turma),
-          peso,
-          altura,
-          imc: imcFinal,
-          status
-        };
-      });
+    // 🚨 4. GRUPOS DE SAÚDE (Busca na base completa, ignorando data)
+    // Isso garante que os cards de Alergia/PCD não fiquem zerados
+    const gruposSaude = {
+      alergias: baseSaude.filter(p => 
+        checar(p.alergias) || checar(p.qualAlergia) || checar(p.alunoPossuiAlergia) || checar(p.possuiAlergia)
+      ),
 
-    const alertasNutricionais = nutricional.filter(n => n.status !== "normal");
+      acessibilidade: baseSaude.filter(p => 
+        checar(p.pcdStatus) || p.pcd === true || p.isPCD === true || p.pcdStatus?.possui === "sim"
+      ),
 
+      neurodiversidade: baseSaude.filter(p => 
+        checar(p.diagnosticoNeuro) || (p.diagnosticoNeuro?.possui === "sim")
+      ),
+
+      cronicos: baseSaude.filter(p => 
+        checar(p.diabetes) || checar(p.asma) || 
+        checar(p.medicacaoContinua) || checar(p.doencasCardiacas)
+      ),
+
+      restricaoAlimentar: baseSaude.filter(p => 
+        checar(p.restricaoAlimentar) || checar(p.restricoesAlimentares)
+      ),
+      
+      vulnerabilidade: baseSaude.filter(p => checar(p.historicoViolencia))
+    };
+
+    // 🧠 5. RETORNO PARA O DASHBOARD
     return {
       estatisticas: {
         totalAtendimentos: atendimentosFiltrados.length,
+        rankingQueixas: Object.values(
+          atendimentosFiltrados.reduce((acc, a) => {
+            const q = normalizar(a.motivoAtendimento || a.motivo || "outros");
+            acc[q] = { label: q, value: (acc[q]?.value || 0) + 1 };
+            return acc;
+          }, {})
+        ).sort((a, b) => b.value - a.value),
+        
+        alertasCriticos: gruposSaude.alergias.length + gruposSaude.restricaoAlimentar.length,
+        pcdNeuro: gruposSaude.acessibilidade.length + gruposSaude.neurodiversidade.length,
+        doencasCronicas: gruposSaude.cronicos.length,
         totalFebre: atendimentosFiltrados.filter(a => {
-          // Blindagem para não quebrar se a temperatura for string ou undefined
-          const tStr = String(a.temperatura || "0").replace(',', '.');
-          const t = parseFloat(tStr);
+          const t = parseFloat(String(a.temperatura || "0").replace(",", "."));
           return t >= 37.5;
         }).length,
-        rankingQueixas,
-        rankingAlunos,
-        alertasNutricionais // Usado pela AbaNutricional
       },
       gruposSaude,
       atendimentos: atendimentosFiltrados,
-      nutricional
     };
-  }, [atendimentosRaw, alunosRaw, periodo]);
+  }, [atendimentosRaw, alunosRaw, questionariosRaw, periodo]);
 };
 
 export default useAuditoria;

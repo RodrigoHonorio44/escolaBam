@@ -24,26 +24,40 @@ export const useQuestionarioSaude = (onSucesso) => {
     return val.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   };
 
+  const formatarTelefone = (valor) => {
+    const tel = (valor || "").replace(/\D/g, "").slice(0, 11);
+    if (tel.length > 10) {
+      return tel.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    } else if (tel.length > 6) {
+      return tel.replace(/^(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+    } else if (tel.length > 2) {
+      return tel.replace(/^(\d{2})(\d)/, "($1) $2");
+    } else if (tel.length > 0) {
+      return tel.replace(/^(\d)/, "($1");
+    }
+    return tel;
+  };
+
   const estadoInicial = useMemo(() => ({
     alunoNome: '',
     dataNascimento: '',
     turma: '',
-    etnia: '', // <-- ADICIONADO
-    sexo: '',  // <-- ADICIONADO
+    etnia: '',
+    sexo: '',
     peso: '',
     altura: '',
     historicoDoencas: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     alergias: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     medicacaoContinua: { possui: 'não', detalhes: '', motivo: '', qual: '' },
-    cirurgias: { possui: 'não', detalhes: '' },
+    cirurgias: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     diabetes: { possui: 'não', tipo: '' }, 
     asma: { possui: 'não', detalhes: '', motivo: '', qual: '' },
-    doencasCardiacas: { possui: 'não', detalhes: '' },
+    doencasCardiacas: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     epilepsia: { possui: 'não' },
     desmaioConvulsao: 'não',
-    problemaColuna: { possui: 'não', detalhes: '' },
-    restricoesAlimentares: { possui: 'não', detalhes: '' },
-    necessidadesEspeciais: { possui: 'não', detalhes: '' },
+    problemaColuna: { possui: 'não', detalhes: '', motivo: '', qual: '' },
+    restricoesAlimentares: { possui: 'não', detalhes: '', motivo: '', qual: '' },
+    necessidadesEspeciais: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     pcdStatus: { possui: 'não', detalhes: '', motivo: '', qual: '' },
     diagnosticoNeuro: { possui: 'não', detalhes: '', motivo: '', qual: '' }, 
     atrasoDesenvolvimento: { possui: 'não', detalhes: '', motivo: '', qual: '' },
@@ -81,12 +95,6 @@ export const useQuestionarioSaude = (onSucesso) => {
     document.addEventListener('mousedown', clickFora);
     return () => document.removeEventListener('mousedown', clickFora);
   }, []);
-
-  const formatarTelefone = (valor) => {
-    const tel = (valor || "").replace(/\D/g, "");
-    if (tel.length <= 11) return tel.replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d)(\d{4})$/, "$1-$2");
-    return valor;
-  };
 
   const limparFormulario = () => {
     setFormData(estadoInicial);
@@ -130,7 +138,6 @@ export const useQuestionarioSaude = (onSucesso) => {
     const toastId = toast.loading("sincronizando dados...");
     
     try {
-      // Busca o último atendimento de enfermagem para pegar etnia/sexo/peso atualizados
       const qAtend = query(
         collection(db, "atendimentos_enfermagem"),
         where("pacienteId", "==", paciente.id),
@@ -150,34 +157,37 @@ export const useQuestionarioSaude = (onSucesso) => {
       const dAlu = alunoSnap.exists() ? alunoSnap.data() : {};
       const dAtend = !atendSnap.empty ? atendSnap.docs[0].data() : {};
 
+      // Helper para mapear objetos de saúde com fallbacks
+      const mapHealthField = (field, fallbackPossui = 'não', fallbackDet = '') => ({
+        possui: dQuest[field]?.possui || fallbackPossui,
+        detalhes: dQuest[field]?.detalhes || dQuest[field]?.qual || dQuest[field]?.motivo || fallbackDet,
+        motivo: dQuest[field]?.motivo || dQuest[field]?.detalhes || fallbackDet,
+        qual: dQuest[field]?.qual || dQuest[field]?.detalhes || fallbackDet
+      });
+
       setFormData(prev => ({
         ...estadoInicial,
         ...dQuest,
         pacienteId: paciente.id,
-        // Cruzamento de dados incluindo Atendimentos e Pasta Digital
         alunoNome: formatarNomeRS(dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || paciente.nome || ''),
-        etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || '', // <-- BUSCA ETNIA
-        sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || '',   // <-- BUSCA SEXO
+        etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || '',
+        sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || '',
         dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || '',
         turma: dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || '',
         peso: dQuest.peso || dAtend.peso || dPasta.peso || '',
         altura: dQuest.altura || dAtend.altura || dPasta.altura || '',
         atestadoAtividadeFisica: dQuest.atestadoAtividadeFisica || dPasta.atestadoAtividadeFisica || 'pendente',
         
-        pcdStatus: {
-          possui: dQuest.pcdStatus?.possui || dAtend.isPCD === true ? 'sim' : (dPasta.pcdStatus?.possui || 'não'),
-          detalhes: dQuest.pcdStatus?.detalhes || dQuest.pcdStatus?.qual || dPasta.pcdStatus?.detalhes || '',
-          motivo: dQuest.pcdStatus?.motivo || dQuest.pcdStatus?.detalhes || '',
-          qual: dQuest.pcdStatus?.qual || dQuest.pcdStatus?.detalhes || ''
-        },
+        pcdStatus: mapHealthField('pcdStatus', (dAtend.isPCD === true ? 'sim' : (dPasta.pcdStatus?.possui || 'não')), dPasta.pcdStatus?.detalhes),
+        alergias: mapHealthField('alergias', (dAtend.alunoPossuiAlergia || dPasta.alunoPossuiAlergia || 'não'), (dAtend.qualAlergia || dPasta.qualAlergia || '')),
         
-        alergias: {
-          possui: dQuest.alergias?.possui || dAtend.alunoPossuiAlergia || dPasta.alunoPossuiAlergia || 'não',
-          detalhes: dQuest.alergias?.detalhes || dAtend.qualAlergia || dPasta.qualAlergia || '',
-          motivo: dQuest.alergias?.motivo || dQuest.alergias?.detalhes || '',
-          qual: dQuest.alergias?.qual || dQuest.alergias?.detalhes || ''
-        },
-        
+        // Novos mapeamentos detalhados para garantir que nada se perca
+        historicoDoencas: mapHealthField('historicoDoencas'),
+        doencasCardiacas: mapHealthField('doencasCardiacas'),
+        cirurgias: mapHealthField('cirurgias'),
+        problemaColuna: mapHealthField('problemaColuna'),
+        medicacaoContinua: mapHealthField('medicacaoContinua', 'não', dAtend.medicacaoEmUso || ''),
+
         contatos: dQuest.contatos || [
           { 
             nome: formatarNomeRS(dPasta.responsavel || dAlu.responsavel || ''), 
@@ -229,9 +239,23 @@ export const useQuestionarioSaude = (onSucesso) => {
     }));
   };
 
+  const validarCampos = () => {
+    if (!formData.pacienteId) return "selecione um aluno primeiro.";
+    if (!formData.alunoNome) return "o nome do aluno é obrigatório.";
+    if (!formData.dataNascimento) return "data de nascimento é obrigatória.";
+    if (!formData.turma) return "selecione a turma.";
+    
+    const tel = (formData.contatos[0].telefone || "").replace(/\D/g, "");
+    if (tel.length < 10) return "o telefone principal deve ter no mínimo 10 dígitos.";
+    
+    return null;
+  };
+
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!formData.pacienteId) return toast.error("selecione um aluno primeiro.");
+    
+    const erro = validarCampos();
+    if (erro) return toast.error(erro);
     
     setLoading(true);
     const toastId = toast.loading("sincronizando prontuário...");
@@ -239,6 +263,7 @@ export const useQuestionarioSaude = (onSucesso) => {
     try {
       const batch = writeBatch(db);
 
+      // Regra: Salvar tudo em lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? normalizeParaBanco(value) : value
       );
@@ -262,7 +287,7 @@ export const useQuestionarioSaude = (onSucesso) => {
 
       batch.set(doc(db, "pastas_digitais", formData.pacienteId), {
         nomeBusca: payload.alunoNome, 
-        etnia: payload.etnia, // Salva na pasta para facilitar futuros acessos
+        etnia: payload.etnia,
         sexo: payload.sexo,
         alertaSaude: resumoSaude,
         alunoPossuiAlergia: payload.alergias.possui,
@@ -291,7 +316,7 @@ export const useQuestionarioSaude = (onSucesso) => {
       }, { merge: true });
 
       await batch.commit();
-      toast.success("sincronizado com sucesso!", { id: toastId });
+      toast.success("dados sincronizados com sucesso!", { id: toastId });
       if (onSucesso) onSucesso();
     } catch (error) { 
       console.error(error);

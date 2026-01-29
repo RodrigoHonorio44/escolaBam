@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { db, auth } from "../../firebase/firebaseConfig"; 
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, onSnapshot, collection, getDocs } from "firebase/firestore";
 import { signOut } from "firebase/auth";
 import { 
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
@@ -58,10 +58,16 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const [menuAberto, setMenuAberto] = useState(null); 
   const [isExpanded, setIsExpanded] = useState(true);
   const [darkMode, setDarkMode] = useState(false); 
-  const [visaoMensal, setVisaoMensal] = useState(false); // Novo: Estado global da visão dos cards
+  const [visaoMensal, setVisaoMensal] = useState(false);
   const [dadosParaEdicao, setDadosParaEdicao] = useState(null);
+
+  // Estados de Dados Globais (Sincronismo para Auditoria)
+  const [atendimentosRaw, setAtendimentosRaw] = useState([]);
+  const [alunosRaw, setAlunosRaw] = useState([]);
+
   const unsubscribeRef = useRef(null);
 
+  // Monitoramento do Perfil do Usuário
   useEffect(() => {
     const userId = initialUser?.uid || initialUser?.id;
     if (!userId) return;
@@ -70,6 +76,27 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     });
     return () => unsubscribeRef.current?.();
   }, [initialUser]);
+
+  // Pré-carregamento de dados para Auditoria Intelligence
+  useEffect(() => {
+    const fetchGlobalData = async () => {
+      try {
+        const [snapAtend, snapPastas] = await Promise.all([
+          getDocs(collection(db, "atendimentos_enfermagem")),
+          getDocs(collection(db, "pastas_digitais"))
+        ]);
+
+        const listaAtend = snapAtend.docs.map(d => ({ id: d.id, ...d.data() }));
+        const listaAlunos = snapPastas.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        setAtendimentosRaw(listaAtend);
+        setAlunosRaw(listaAlunos);
+      } catch (err) {
+        console.error("Erro no sincronismo global:", err);
+      }
+    };
+    fetchGlobalData();
+  }, []);
 
   const handleLogoutClick = async () => {
     try {
@@ -145,7 +172,14 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
         if (cadastroMode === "saude_escolar") return <QuestionarioSaude {...forcedLightProps} dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab("pasta_digital")} onSucesso={handleSucessoQuestionario} />;
         return <FormCadastroAluno {...forcedLightProps} />;
       case "historico": return <HistoricoAtendimentos {...forcedLightProps} />;
-      case "auditoria": return <RelatorioMedicoPro {...forcedLightProps} />;
+      case "auditoria": 
+        return (
+          <RelatorioMedicoPro 
+            {...forcedLightProps} 
+            atendimentosRaw={atendimentosRaw} 
+            alunosRaw={alunosRaw} 
+          />
+        );
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
       default: return <HomeEnfermeiro {...forcedLightProps} setActiveTab={setActiveTab} isLiberado={isLiberado} visaoMensal={visaoMensal} setVisaoMensal={setVisaoMensal} />;
     }
@@ -260,7 +294,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           <div className="flex items-center gap-4">
               {!isExpanded && (
                 <button onClick={() => setIsExpanded(true)} className={`p-2 rounded-lg ${darkMode ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600"}`}>
-                   <Menu size={18} />
+                    <Menu size={18} />
                 </button>
               )}
               <h1 className={`text-sm font-black uppercase tracking-widest italic ${darkMode ? "text-white" : "text-slate-800"}`}>
