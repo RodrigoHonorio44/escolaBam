@@ -255,7 +255,7 @@ const Login = () => {
             <div className="text-center">
               <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30"><MessageSquare size={28} /></div>
               <h3 className="text-2xl font-black text-slate-900 uppercase italic">Suporte</h3>
-              <p className="text-slate-500 text-sm mt-2 mb-8">Olá Rodrigo! Como podemos ajudar hoje?</p>
+              <p className="text-slate-500 text-sm mt-2 mb-8">Central de Suporte Intelligence: Como podemos otimizar sua gestão hoje?</p>
               <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:scale-[1.02] transition-transform">WhatsApp</a>
             </div>
           </div>
