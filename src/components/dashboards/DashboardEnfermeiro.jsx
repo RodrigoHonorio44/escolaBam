@@ -70,7 +70,8 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const unsubscribePerfil = useRef(null);
 
   const cargoLower = user?.role?.toLowerCase() || "";
-  const isDiretoria = ["diretora", "diretor", "administrativo"].includes(cargoLower);
+  const isDiretoria = ["diretora", "diretor", "administrativo", "admin", "root"].includes(cargoLower);
+  const isAdminOuRoot = ["admin", "root"].includes(cargoLower);
 
   useEffect(() => {
     const doisDiasAtras = new Date();
@@ -142,19 +143,21 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     } catch (error) { console.error("Erro ao sair:", error); }
   };
 
-  // ✅ LOGICA DE BLOQUEIO REFINADA
+  // ✅ LOGICA DE BLOQUEIO ATUALIZADA: ADMIN E ROOT TÊM PASSE LIVRE TOTAL
   const isLiberado = (itemKey) => {
-    // Bloqueio Total
+    if (isAdminOuRoot) return true; // Ignora qualquer trava para admin/root
+
+    // Bloqueio Total para outros cargos
     if (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') return false;
     
     const valorModulo = user?.modulosSidebar?.[itemKey];
 
-    // Se o item for a auditoria, exigimos que seja explicitamente TRUE
+    // Auditoria Pro: exige true explícito para outros cargos
     if (itemKey === 'auditoria_pro') {
         return valorModulo === true;
     }
 
-    // Para outros módulos, se não existir (undefined), liberamos. Se for false, bloqueamos.
+    // Outros módulos: liberado se não houver trava (false)
     return valorModulo !== false;
   };
 
@@ -237,7 +240,10 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
   return (
     <div className={`fixed inset-0 z-[999] flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${theme.contentBg}`}>
-      { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />}
+      {/* SÓ MOSTRA BLOQUEIO SE NÃO FOR ADMIN/ROOT */}
+      { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && !isAdminOuRoot && (
+          <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />
+      )}
 
       <div className={`w-16 flex flex-col items-center py-8 gap-8 border-r shrink-0 z-50 transition-colors duration-500 ${darkMode ? "bg-[#020617] border-slate-800" : "bg-slate-100 border-slate-200"}`}>
           <div className="text-blue-500"><Stethoscope size={24} /></div>
