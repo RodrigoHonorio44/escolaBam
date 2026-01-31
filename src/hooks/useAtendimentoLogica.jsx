@@ -13,6 +13,22 @@ export const useAtendimentoLogica = (user) => {
   const { buscarSugestoes, sugestoes, puxarDadosCompletos, buscando } = usePacienteSinc();
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
+  // --- MAPEAMENTO DE SURTOS R S (Para lógica interna) ---
+  const GRUPOS_RISCO = {
+    "gastrointestinal": ["dor abdominal", "náusea/vômito", "diarreia", "enjoo"],
+    "respiratório": ["febre", "sintomas gripais", "dor de garganta", "tosse"],
+    "infestação": ["coceira intensa", "pediculose", "lesões de pele"],
+    "ansiedade": ["crise de ansiedade", "falta de ar"]
+  };
+
+  const identificarGrupoRisco = (queixa) => {
+    if (!queixa) return "nenhum";
+    const queixaLower = queixa.toLowerCase().trim();
+    return Object.keys(GRUPOS_RISCO).find(grupo => 
+      GRUPOS_RISCO[grupo].includes(queixaLower)
+    ) || "nenhum";
+  };
+
   const [configUI, setConfigUI] = useState({
     tipoAtendimento: 'local', 
     perfilPaciente: 'aluno',
@@ -55,6 +71,7 @@ export const useAtendimentoLogica = (user) => {
     altura: '',
     imc: '',
     motivoAtendimento: '',
+    grupoRisco: 'nenhum', // NOVO CAMPO
     procedimentos: '',
     medicacao: '',
     observacoes: '',
@@ -75,19 +92,21 @@ export const useAtendimentoLogica = (user) => {
     }
   }, [formData.nomePaciente, buscarSugestoes]);
 
+  // UPDATE FIELD COM DETECÇÃO DE SURTO
   const updateField = useCallback((campo, valor) => {
     setFormData(prev => {
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
-      const novoEstado = { ...prev, [campo]: valorFormatado };
+      let novoEstado = { ...prev, [campo]: valorFormatado };
       
+      // Se mudar o motivo, atualiza o grupo de risco automaticamente
+      if (campo === 'motivoAtendimento') {
+        novoEstado.grupoRisco = identificarGrupoRisco(valorFormatado);
+      }
+
       if (campo === 'peso' || campo === 'altura') {
         const p = parseFloat(String(novoEstado.peso).replace(',', '.'));
         const a = parseFloat(String(novoEstado.altura).replace(',', '.'));
-        if (p > 0 && a > 0.5) { 
-          novoEstado.imc = parseFloat((p / (a * a)).toFixed(2));
-        } else {
-          novoEstado.imc = 0; 
-        }
+        novoEstado.imc = (p > 0 && a > 0.5) ? parseFloat((p / (a * a)).toFixed(2)) : 0;
       }
       return novoEstado;
     });
@@ -166,7 +185,6 @@ export const useAtendimentoLogica = (user) => {
       const eFuncionario = configUI.perfilPaciente === 'funcionario';
       const colecaoBase = eFuncionario ? "funcionarios" : "alunos";
 
-      // Normaliza para lowercase (Caio Giromba Style)
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
@@ -174,7 +192,6 @@ export const useAtendimentoLogica = (user) => {
       const idPasta = gerarIdPadrao(payload.nomePaciente, formData.dataNascimento);
       const eRemocao = configUI.tipoAtendimento === 'remocao';
 
-      // 1. Objeto Final do Atendimento
       const finalDataAtendimento = {
         ...payload,
         dataNascimento: formData.dataNascimento, 
@@ -193,14 +210,9 @@ export const useAtendimentoLogica = (user) => {
         createdAt: serverTimestamp()
       };
 
-      // Limpeza lógica: Remove cargo de aluno e turma de funcionário no Atendimento
-      if (eFuncionario) {
-        delete finalDataAtendimento.turma;
-      } else {
-        delete finalDataAtendimento.cargo;
-      }
+      if (eFuncionario) { delete finalDataAtendimento.turma; } 
+      else { delete finalDataAtendimento.cargo; }
 
-      // 2. Objeto para Pasta Digital
       const finalDataPasta = {
         id: idPasta,
         nomeBusca: finalDataAtendimento.nomePaciente,
@@ -213,31 +225,21 @@ export const useAtendimentoLogica = (user) => {
         tipoPerfil: finalDataAtendimento.perfilPaciente,
         alunoPossuiAlergia: finalDataAtendimento.alunoPossuiAlergia,
         qualAlergia: finalDataAtendimento.qualAlergia,
-        ultimaAtualizacao: serverTimestamp()
+        ultimaAtualizacao: serverTimestamp(),
+        ...(eFuncionario ? { cargo: finalDataAtendimento.cargo } : { turma: finalDataAtendimento.turma })
       };
 
-      // Adiciona apenas o campo relevante na Pasta Digital
-      if (eFuncionario) {
-        finalDataPasta.cargo = finalDataAtendimento.cargo;
-      } else {
-        finalDataPasta.turma = finalDataAtendimento.turma;
-      }
-
-      // EXCUÇÃO DO BATCH
-      // A. Atendimento
       batch.set(doc(db, "atendimentos_enfermagem", finalDataAtendimento.baenf), finalDataAtendimento);
-
-      // B. Coleção Específica (Alunos/Funcionários)
-      const dataEspecifica = {
+      
+      const dataColecaoSimples = {
         nome: finalDataAtendimento.nomePaciente,
         dataNascimento: finalDataAtendimento.dataNascimento,
         sexo: finalDataAtendimento.sexo,
         ultimaAtualizacao: serverTimestamp(),
         ...(eFuncionario ? { cargo: finalDataAtendimento.cargo } : { turma: finalDataAtendimento.turma })
       };
-      batch.set(doc(db, colecaoBase, idPasta), dataEspecifica, { merge: true });
-
-      // C. Pasta Digital
+      
+      batch.set(doc(db, colecaoBase, idPasta), dataColecaoSimples, { merge: true });
       batch.set(doc(db, "pastas_digitais", idPasta), finalDataPasta, { merge: true });
 
       await batch.commit();

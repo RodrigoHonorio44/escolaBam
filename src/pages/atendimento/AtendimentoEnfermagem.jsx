@@ -17,6 +17,24 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
 
   const [erroNome, setErroNome] = useState(false);
 
+  // --- MAPEAMENTO DE SURTOS R S ---
+  const GRUPOS_RISCO = {
+    "gastrointestinal": ["dor abdominal", "náusea/vômito", "diarreia", "enjoo"],
+    "respiratório": ["febre", "sintomas gripais", "dor de garganta", "tosse"],
+    "infestação": ["coceira intensa", "pediculose", "lesões de pele"],
+    "ansiedade": ["crise de ansiedade", "falta de ar"]
+  };
+
+  const identificarGrupoRisco = (queixa) => {
+    if (!queixa) return null;
+    const queixaLower = queixa.toLowerCase();
+    return Object.keys(GRUPOS_RISCO).find(grupo => 
+      GRUPOS_RISCO[grupo].includes(queixaLower)
+    );
+  };
+
+  const grupoDetectado = identificarGrupoRisco(formData.motivoAtendimento);
+
   // --- FUNÇÕES DE FORMATAÇÃO VISUAL ---
   const formatarCapitalize = (texto) => {
     if (!texto) return "";
@@ -69,10 +87,14 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     }
   };
 
+  // --- QUEIXAS ATUALIZADAS PARA O SELECT ---
   const queixasComuns = [
-    "febre", "dor de cabeça", "dor abdominal", "náusea/vômito", 
-    "pequeno curativo", "trauma/queda", "crise de ansiedade", 
-    "sintomas gripais", "hipertensão", "hipoglicemia","cólica menstrual","enxaqueca", "outros"
+    "febre", "sintomas gripais", "dor de garganta", "tosse",
+    "dor abdominal", "náusea/vômito", "diarreia", "enjoo",
+    "coceira intensa", "pediculose", "lesões de pele",
+    "crise de ansiedade", "falta de ar", "dor de cabeça", 
+    "pequeno curativo", "trauma/queda", "hipertensão", 
+    "hipoglicemia", "cólica menstrual", "enxaqueca", "outros"
   ];
 
   const opcoesEncaminhamentoAluno = [
@@ -123,7 +145,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
           </div>
         </div>
 
-        {/* Seletores Perfil/Atendimento - CORRIGIDO */}
+        {/* Seletores Perfil/Atendimento */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto font-sans">
           <div className="bg-slate-100 p-2 rounded-[25px] flex shadow-inner">
             <button type="button" onClick={() => setConfigUI({...configUI, perfilPaciente: 'aluno'})} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all tracking-widest ${configUI.perfilPaciente === 'aluno' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-400'}`}>
@@ -195,7 +217,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
 
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest block">idade *</label>
-              <input type="number" required readOnly={!configUI.naoSabeDataNasc} placeholder={configUI.naoSabeDataNasc ? "manual" : "auto"} className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold outline-none tabular-nums ${!configUI.naoSabeDataNasc ? 'bg-slate-100 text-blue-600' : 'bg-orange-50 text-orange-700 ring-2 ring-orange-200'}`} value={formData.idade} onChange={(e) => updateField('idade', e.target.value)} />
+              <input type="number" required readOnly={!configUI.naoSabeDataNasc} placeholder={configUI.naoSabeDataNasc ? "manual" : "auto"} className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold tabular-nums ${!configUI.naoSabeDataNasc ? 'bg-slate-100 text-blue-600' : 'bg-orange-50 text-orange-700 ring-2 ring-orange-200'}`} value={formData.idade} onChange={(e) => updateField('idade', e.target.value)} />
             </div>
 
             <div className="space-y-2">
@@ -315,11 +337,31 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">motivo principal *</label>
-                  <select required className="w-full bg-blue-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.motivoAtendimento} onChange={(e) => updateField('motivoAtendimento', e.target.value.toLowerCase())}>
+                  <select 
+                    required 
+                    className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase transition-all ${grupoDetectado ? 'bg-amber-50 ring-2 ring-amber-500/20' : 'bg-blue-50'}`} 
+                    value={formData.motivoAtendimento} 
+                    onChange={(e) => {
+                      const val = e.target.value.toLowerCase();
+                      updateField('motivoAtendimento', val);
+                      updateField('grupoRisco', identificarGrupoRisco(val) || 'nenhum');
+                    }}
+                  >
                     <option value="">selecione...</option>
                     {queixasComuns.map(q => <option key={q} value={q.toLowerCase()}>{q.toLowerCase()}</option>)}
                   </select>
+
+                  {/* ALERTA DE SURTO R S */}
+                  {grupoDetectado && (
+                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-500 rounded-xl mt-2 animate-pulse shadow-md">
+                      <AlertTriangle size={14} className="text-white" />
+                      <span className="text-[9px] font-black text-white uppercase italic tracking-tighter">
+                        atenção: risco de surto {grupoDetectado}!
+                      </span>
+                    </div>
+                  )}
                 </div>
+                
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">procedimentos *</label>
                   <input 

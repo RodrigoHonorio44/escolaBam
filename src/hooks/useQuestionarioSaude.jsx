@@ -39,9 +39,12 @@ export const useQuestionarioSaude = (onSucesso) => {
   };
 
   const estadoInicial = useMemo(() => ({
+    tipoEntidade: 'aluno', // 'aluno' ou 'funcionario'
     alunoNome: '',
     dataNascimento: '',
     turma: '',
+    cargo: '', 
+    setor: '',
     etnia: '',
     sexo: '',
     peso: '',
@@ -145,19 +148,24 @@ export const useQuestionarioSaude = (onSucesso) => {
         limit(1)
       );
 
-      const [questSnap, pastaSnap, alunoSnap, atendSnap] = await Promise.all([
+      // Inteligência: Tenta buscar também na coleção de funcionários
+      const [questSnap, pastaSnap, alunoSnap, atendSnap, funcSnap] = await Promise.all([
         getDoc(doc(db, "questionarios_saude", paciente.id)),
         getDoc(doc(db, "pastas_digitais", paciente.id)),
         getDoc(doc(db, "alunos", paciente.id)),
-        getDocs(qAtend)
+        getDocs(qAtend),
+        getDoc(doc(db, "funcionarios", paciente.id))
       ]);
 
       const dQuest = questSnap.exists() ? questSnap.data() : {};
       const dPasta = pastaSnap.exists() ? pastaSnap.data() : {};
       const dAlu = alunoSnap.exists() ? alunoSnap.data() : {};
       const dAtend = !atendSnap.empty ? atendSnap.docs[0].data() : {};
+      const dFunc = funcSnap.exists() ? funcSnap.data() : {};
 
-      // Helper para mapear objetos de saúde com fallbacks
+      // Inteligência: Identifica se é funcionário
+      const ehFuncionario = funcSnap.exists() || dPasta.cargo || dPasta.tipo === 'funcionario';
+
       const mapHealthField = (field, fallbackPossui = 'não', fallbackDet = '') => ({
         possui: dQuest[field]?.possui || fallbackPossui,
         detalhes: dQuest[field]?.detalhes || dQuest[field]?.qual || dQuest[field]?.motivo || fallbackDet,
@@ -169,11 +177,14 @@ export const useQuestionarioSaude = (onSucesso) => {
         ...estadoInicial,
         ...dQuest,
         pacienteId: paciente.id,
-        alunoNome: formatarNomeRS(dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || paciente.nome || ''),
-        etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || '',
-        sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || '',
-        dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || '',
-        turma: dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || '',
+        tipoEntidade: ehFuncionario ? 'funcionario' : 'aluno',
+        alunoNome: formatarNomeRS(dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || dFunc.nome || paciente.nome || ''),
+        cargo: dFunc.cargo || dPasta.cargo || dQuest.cargo || '',
+        setor: dFunc.setor || dPasta.setor || dQuest.setor || '',
+        etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || dFunc.etnia || '',
+        sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || dFunc.sexo || '',
+        dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || dFunc.dataNascimento || '',
+        turma: ehFuncionario ? 'funcionario' : (dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || ''),
         peso: dQuest.peso || dAtend.peso || dPasta.peso || '',
         altura: dQuest.altura || dAtend.altura || dPasta.altura || '',
         atestadoAtividadeFisica: dQuest.atestadoAtividadeFisica || dPasta.atestadoAtividadeFisica || 'pendente',
@@ -181,7 +192,6 @@ export const useQuestionarioSaude = (onSucesso) => {
         pcdStatus: mapHealthField('pcdStatus', (dAtend.isPCD === true ? 'sim' : (dPasta.pcdStatus?.possui || 'não')), dPasta.pcdStatus?.detalhes),
         alergias: mapHealthField('alergias', (dAtend.alunoPossuiAlergia || dPasta.alunoPossuiAlergia || 'não'), (dAtend.qualAlergia || dPasta.qualAlergia || '')),
         
-        // Novos mapeamentos detalhados para garantir que nada se perca
         historicoDoencas: mapHealthField('historicoDoencas'),
         doencasCardiacas: mapHealthField('doencasCardiacas'),
         cirurgias: mapHealthField('cirurgias'),
@@ -190,14 +200,14 @@ export const useQuestionarioSaude = (onSucesso) => {
 
         contatos: dQuest.contatos || [
           { 
-            nome: formatarNomeRS(dPasta.responsavel || dAlu.responsavel || ''), 
-            telefone: formatarTelefone(dPasta.contato || dAlu.contato || '') 
+            nome: formatarNomeRS(ehFuncionario ? (dFunc.nome || dPasta.nomeBusca) : (dPasta.responsavel || dAlu.responsavel || '')), 
+            telefone: formatarTelefone(ehFuncionario ? (dFunc.telefone || dPasta.contato) : (dPasta.contato || dAlu.contato || '')) 
           },
           { nome: '', telefone: '' }
         ]
       }));
       
-      toast.success("perfil recuperado!", { id: toastId });
+      toast.success(ehFuncionario ? "perfil funcionário!" : "perfil aluno!", { id: toastId });
     } catch (error) { 
       console.error(error);
       toast.error("erro ao cruzar dados.", { id: toastId }); 
@@ -240,10 +250,12 @@ export const useQuestionarioSaude = (onSucesso) => {
   };
 
   const validarCampos = () => {
-    if (!formData.pacienteId) return "selecione um aluno primeiro.";
-    if (!formData.alunoNome) return "o nome do aluno é obrigatório.";
+    if (!formData.pacienteId) return "selecione uma pessoa primeiro.";
+    if (!formData.alunoNome) return "o nome é obrigatório.";
     if (!formData.dataNascimento) return "data de nascimento é obrigatória.";
-    if (!formData.turma) return "selecione a turma.";
+    
+    // Inteligência: Só exige turma se for aluno
+    if (formData.tipoEntidade === 'aluno' && !formData.turma) return "selecione a turma.";
     
     const tel = (formData.contatos[0].telefone || "").replace(/\D/g, "");
     if (tel.length < 10) return "o telefone principal deve ter no mínimo 10 dígitos.";
@@ -263,7 +275,6 @@ export const useQuestionarioSaude = (onSucesso) => {
     try {
       const batch = writeBatch(db);
 
-      // Regra: Salvar tudo em lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? normalizeParaBanco(value) : value
       );
@@ -271,56 +282,29 @@ export const useQuestionarioSaude = (onSucesso) => {
       payload.updatedAt = serverTimestamp();
       payload.statusFicha = 'concluída';
 
-      const resumoSaude = {
-        possuiAlergia: payload.alergias.possui,
-        detalheAlergia: payload.alergias.detalhes,
-        pesoAtual: payload.peso,
-        alturaAtual: payload.altura,
-        possuiDiabetes: payload.diabetes.possui,
-        medicacaoContinua: payload.medicacaoContinua.detalhes,
-        isPCD: payload.pcdStatus.possui === 'sim',
-        atestadoFisico: payload.atestadoAtividadeFisica,
-        lastHealthUpdate: serverTimestamp()
-      };
-
       batch.set(doc(db, "questionarios_saude", formData.pacienteId), payload, { merge: true });
 
       batch.set(doc(db, "pastas_digitais", formData.pacienteId), {
         nomeBusca: payload.alunoNome, 
-        etnia: payload.etnia,
-        sexo: payload.sexo,
-        alertaSaude: resumoSaude,
-        alunoPossuiAlergia: payload.alergias.possui,
-        qualAlergia: payload.alergias.detalhes || 'nenhuma informada',
-        peso: payload.peso,
-        altura: payload.altura,
-        atestadoAtividadeFisica: payload.atestadoAtividadeFisica,
-        pcdStatus: payload.pcdStatus,
+        tipoEntidade: payload.tipoEntidade,
         temQuestionarioSaude: true,
         statusSaude: 'preenchido',
-        questionarioSaudeStatus: 'concluido',
-        dataQuestionarioSaude: serverTimestamp(),
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
-      batch.set(doc(db, "alunos", formData.pacienteId), {
+      // Atualiza coleção de origem dependendo do tipo
+      const colecaoDestino = formData.tipoEntidade === 'funcionario' ? "funcionarios" : "alunos";
+      batch.set(doc(db, colecaoDestino, formData.pacienteId), {
         nome: payload.alunoNome,
-        etnia: payload.etnia,
-        sexo: payload.sexo,
-        dataNascimento: payload.dataNascimento,
-        turma: payload.turma,
-        responsavel: payload.contatos[0].nome,
-        contato: payload.contatos[0].telefone,
-        pcd: payload.pcdStatus.possui === 'sim',
         ultimaAtualizacao: serverTimestamp()
       }, { merge: true });
 
       await batch.commit();
-      toast.success("dados sincronizados com sucesso!", { id: toastId });
+      toast.success("dados sincronizados!", { id: toastId });
       if (onSucesso) onSucesso();
     } catch (error) { 
       console.error(error);
-      toast.error("erro ao salvar prontuário.", { id: toastId }); 
+      toast.error("erro ao salvar.", { id: toastId }); 
     } finally { 
       setLoading(false); 
     }

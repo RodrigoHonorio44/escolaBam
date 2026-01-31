@@ -2,48 +2,27 @@ import React from 'react';
 import { Activity, AlertTriangle, HeartPulse, TrendingUp, Brain } from 'lucide-react';
 
 const AbaGeral = ({ dados, darkMode }) => {
-  // Padronização estrita: tudo em lowercase para consistência
+  // Padronização estrita: tudo em lowercase para consistência r s
   const normalizar = (str) => str?.toString().toLowerCase().trim() || "";
 
-  // Extração segura de dados vindos do useAuditoria
+  // Extração segura de dados
   const totalAtendimentos = dados?.estatisticas?.totalAtendimentos || 0;
   const rankingSeguro = Array.isArray(dados?.estatisticas?.rankingQueixas) 
     ? dados.estatisticas.rankingQueixas 
     : [];
 
-  // Cálculos dinâmicos baseados na estrutura unificada do hook
-  // Agora incluindo o tratamento de lowercase para os contadores visuais
+  // Cálculos para os cards
   const totalAlergias = dados?.gruposSaude?.alergias?.length || 0;
+  const totalRestricoes = dados?.gruposSaude?.restricaoAlimentar?.length || 0;
   const totalCronicos = dados?.gruposSaude?.cronicos?.length || 0;
   const totalPCD = dados?.gruposSaude?.acessibilidade?.length || 0;
   const totalNeuro = dados?.gruposSaude?.neurodiversidade?.length || 0;
-  const totalRestricoes = dados?.gruposSaude?.restricaoAlimentar?.length || 0;
 
   const stats = [
-    { 
-      label: "total atendimentos", 
-      value: totalAtendimentos, 
-      icon: <Activity />, 
-      color: "blue" 
-    },
-    { 
-      label: "alertas críticos", 
-      value: totalAlergias + totalRestricoes, 
-      icon: <AlertTriangle />, 
-      color: "orange" 
-    },
-    { 
-      label: "doenças crônicas", 
-      value: totalCronicos, 
-      icon: <TrendingUp />, 
-      color: "rose" 
-    },
-    { 
-      label: "pcd / neurodiversos", 
-      value: totalPCD + totalNeuro, 
-      icon: <Brain />, 
-      color: "emerald" 
-    },
+    { label: "total atendimentos", value: totalAtendimentos, icon: <Activity />, color: "blue" },
+    { label: "alertas críticos", value: totalAlergias + totalRestricoes, icon: <AlertTriangle />, color: "orange" },
+    { label: "doenças crônicas", value: totalCronicos, icon: <TrendingUp />, color: "rose" },
+    { label: "pcd / neurodiversos", value: totalPCD + totalNeuro, icon: <Brain />, color: "emerald" },
   ];
 
   const estilos = {
@@ -64,7 +43,7 @@ const AbaGeral = ({ dados, darkMode }) => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-6 duration-700 space-y-8">
       
-      {/* GRID DE IMPACTO - MÉTRICAS POPULACIONAIS */}
+      {/* GRID DE IMPACTO */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((item, idx) => (
           <div key={idx} className={`group p-8 rounded-[40px] border transition-all duration-500 hover:translate-y-[-10px] ${estilos.card}`}>
@@ -81,9 +60,8 @@ const AbaGeral = ({ dados, darkMode }) => {
         ))}
       </div>
 
-      {/* PAINEL EPIDEMIOLÓGICO - RANKING DE QUEIXAS */}
+      {/* PAINEL EPIDEMIOLÓGICO */}
       <div className={`p-10 rounded-[50px] border relative overflow-hidden ${estilos.card}`}>
-        {/* Marca d'água decorativa */}
         <div className="absolute -top-12 -right-12 p-8 opacity-[0.02] pointer-events-none rotate-12 scale-150">
           <Activity size={300} />
         </div>
@@ -101,7 +79,6 @@ const AbaGeral = ({ dados, darkMode }) => {
                 distribuição de queixas clínicas normalizadas (r s)
               </p>
             </div>
-            
             <div className={`px-8 py-4 rounded-2xl border text-[11px] font-black uppercase italic tracking-widest shadow-sm ${
               darkMode ? 'bg-blue-500/5 border-white/10 text-blue-400' : 'bg-blue-50 border-blue-100 text-blue-600'
             }`}>
@@ -113,14 +90,11 @@ const AbaGeral = ({ dados, darkMode }) => {
             {rankingSeguro.length > 0 ? (
               rankingSeguro.map((queixa, idx) => {
                 const porcentagem = totalAtendimentos > 0 ? (queixa.value / totalAtendimentos) * 100 : 0;
-                
                 return (
                   <div key={idx} className="group space-y-5">
                     <div className="flex justify-between items-end">
                       <div className="space-y-2">
-                        <span className="text-[9px] font-black text-blue-500/50 lowercase tracking-[3px] block">
-                          frequência identificada
-                        </span>
+                        <span className="text-[9px] font-black text-blue-500/50 lowercase tracking-[3px] block">frequência identificada</span>
                         <span className="text-lg font-black lowercase italic leading-none group-hover:text-blue-500 transition-colors tracking-tight">
                           {normalizar(queixa.label)}
                         </span>
@@ -130,13 +104,11 @@ const AbaGeral = ({ dados, darkMode }) => {
                         <span className="text-[11px] font-black opacity-20">[{porcentagem.toFixed(1)}%]</span>
                       </div>
                     </div>
-                    
-                    {/* Barra de Progresso Estilizada */}
                     <div className={`h-4 w-full rounded-full p-[3px] border transition-all duration-500 ${
                       darkMode ? 'bg-black/40 border-white/10 shadow-[inset_0_2px_10px_rgba(0,0,0,0.5)]' : 'bg-slate-100 border-slate-200 shadow-inner'
                     }`}>
                       <div 
-                        className="h-full rounded-full bg-gradient-to-r from-blue-900 via-blue-500 to-cyan-400 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(37,99,235,0.4)] group-hover:brightness-125 group-hover:scale-[1.01]"
+                        className="h-full rounded-full bg-gradient-to-r from-blue-900 via-blue-500 to-cyan-400 transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(37,99,235,0.4)]"
                         style={{ width: `${porcentagem}%` }}
                       ></div>
                     </div>

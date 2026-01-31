@@ -57,7 +57,6 @@ const useAuditoria = (
         });
 
     // 🚨 4. GRUPOS DE SAÚDE (Busca na base completa, ignorando data)
-    // Isso garante que os cards de Alergia/PCD não fiquem zerados
     const gruposSaude = {
       alergias: baseSaude.filter(p => 
         checar(p.alergias) || checar(p.qualAlergia) || checar(p.alunoPossuiAlergia) || checar(p.possuiAlergia)
@@ -66,6 +65,16 @@ const useAuditoria = (
       acessibilidade: baseSaude.filter(p => 
         checar(p.pcdStatus) || p.pcd === true || p.isPCD === true || p.pcdStatus?.possui === "sim"
       ),
+
+      // ♿ MAPEAMENTO DE MOBILIDADE (Baseado no seu log do Caio Giromba)
+      mobilidade: baseSaude.filter(p => {
+        const caminhaSim = normalizar(p.caminharDificuldade) === "sim";
+        const cadeiranteFlag = p.mobilidadeAuxilio?.cadeirante === true;
+        const andarDificuldade = p.dificuldades?.andar === true;
+        const membrosDificuldade = p.dificuldades?.movimentarMembros === true;
+        
+        return caminhaSim || cadeiranteFlag || andarDificuldade || membrosDificuldade || checar(p.mobilidadeReduzida);
+      }),
 
       neurodiversidade: baseSaude.filter(p => 
         checar(p.diagnosticoNeuro) || (p.diagnosticoNeuro?.possui === "sim")
@@ -97,6 +106,7 @@ const useAuditoria = (
         
         alertasCriticos: gruposSaude.alergias.length + gruposSaude.restricaoAlimentar.length,
         pcdNeuro: gruposSaude.acessibilidade.length + gruposSaude.neurodiversidade.length,
+        totalMobilidade: gruposSaude.mobilidade.length, // Adicionado aqui
         doencasCronicas: gruposSaude.cronicos.length,
         totalFebre: atendimentosFiltrados.filter(a => {
           const t = parseFloat(String(a.temperatura || "0").replace(",", "."));

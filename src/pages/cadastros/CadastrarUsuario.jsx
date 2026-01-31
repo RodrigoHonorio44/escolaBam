@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { cadastrarUsuarioService } from '../../services/authService';
-import { db } from '../../firebase/firebaseConfig'; // Importamos o db
-import { Timestamp } from 'firebase/firestore'; // Importamos o Timestamp oficial
+import { db } from '../../firebase/firebaseConfig'; 
+import { Timestamp } from 'firebase/firestore'; 
 import toast, { Toaster } from 'react-hot-toast'; 
 import { 
   UserPlus, CheckCircle2, 
-  Loader2, ShieldCheck, Stethoscope, Gem, Hash, Lock, Calendar
+  Loader2, ShieldCheck, Stethoscope, Gem, Hash, Lock, Calendar, UserCog
 } from 'lucide-react';
 
 const CadastrarUsuario = () => {
@@ -63,26 +63,20 @@ const CadastrarUsuario = () => {
 
     setLoading(true);
     try {
-      // --- CÁLCULO DE EXPIRAÇÃO BLINDADO ---
       const dataHoje = new Date();
       const dataExpira = new Date();
       dataExpira.setDate(dataHoje.getDate() + parseInt(formData.prazo));
 
       const dadosParaCadastro = {
-        nome: nomeLimpo,
-        email: formData.email.trim(),
+        nome: nomeLimpo.toLowerCase(), // Normalizando para lowercase conforme solicitado
+        email: formData.email.trim().toLowerCase(),
         password: formData.senha,
         role: formData.role,
-        registroProfissional: formData.registroProfissional.toUpperCase(),
+        registroProfissional: formData.registroProfissional.toUpperCase() || "N/A",
         escolaId: "E. M. Anísio Teixeira",
-        
-        // Convertendo para Timestamps Oficiais do Firebase
         dataExpiracao: Timestamp.fromDate(dataExpira), 
         dataCadastro: Timestamp.fromDate(dataHoje),
-        
-        // Mantemos o createdAt como string ISO apenas para log se desejar
         createdAt: dataHoje.toISOString(),
-        
         modulosSidebar: modulos, 
         primeiroAcesso: true, 
         status: 'ativo',
@@ -105,15 +99,17 @@ const CadastrarUsuario = () => {
     }
   };
 
+  // Verifica se o cargo exige registro profissional obrigatório
+  const isHealthRole = ['enfermeiro', 'tecnico_enfermagem', 'medico'].includes(formData.role);
+
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 font-sans animate-in fade-in duration-500">
       <Toaster position="top-right" /> 
       
-      {/* Cabeçalho */}
       <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-slate-800 tracking-tighter italic uppercase flex items-center gap-3">
-            <Stethoscope size={40} className="text-blue-600" /> Gestão de Acessos
+            <UserCog size={40} className="text-blue-600" /> Gestão de Acessos
           </h1>
           <p className="text-slate-500 font-bold uppercase text-[10px] tracking-widest mt-2">Controle de Licenças e Módulos Profissionais</p>
         </div>
@@ -124,7 +120,6 @@ const CadastrarUsuario = () => {
       </div>
 
       <form onSubmit={handleCadastro} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Coluna Dados */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white p-10 rounded-[45px] shadow-sm border border-slate-100">
             <h2 className="text-xl font-black mb-10 flex items-center gap-3 text-slate-800 uppercase italic">
@@ -142,18 +137,27 @@ const CadastrarUsuario = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Função / Cargo</label>
                 <select className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 cursor-pointer transition-all"
                   value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})}>
-                  <option value="enfermeiro">Enfermeiro(a)</option>
-                  <option value="tecnico_enfermagem">Técnico(a) Enfermagem</option>
-                  <option value="medico">Médico(a)</option>
+                  <optgroup label="Saúde">
+                    <option value="enfermeiro">Enfermeiro(a)</option>
+                    <option value="tecnico_enfermagem">Técnico(a) Enfermagem</option>
+                    <option value="medico">Médico(a)</option>
+                  </optgroup>
+                  <optgroup label="Administrativo">
+                    <option value="diretora">Diretora</option>
+                    <option value="diretor">Diretor</option>
+                    <option value="administrativo">Administrativo</option>
+                  </optgroup>
                 </select>
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Registro (COREN/CRM)</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">
+                  {isHealthRole ? "Registro (COREN/CRM)" : "Identificação (Opcional)"}
+                </label>
                 <div className="relative">
                   <Hash size={16} className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input required className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 uppercase transition-all" 
-                    placeholder="000000-UF" value={formData.registroProfissional} onChange={e => setFormData({...formData, registroProfissional: e.target.value})} />
+                  <input required={isHealthRole} className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 uppercase transition-all" 
+                    placeholder={isHealthRole ? "000000-UF" : "MATRÍCULA OU RG"} value={formData.registroProfissional} onChange={e => setFormData({...formData, registroProfissional: e.target.value})} />
                 </div>
               </div>
 
@@ -174,7 +178,6 @@ const CadastrarUsuario = () => {
           </div>
         </div>
 
-        {/* Coluna Sidebar/Prazo */}
         <div className="space-y-6">
           <div className="bg-slate-900 p-10 rounded-[45px] shadow-2xl text-white border border-white/5 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
@@ -183,7 +186,6 @@ const CadastrarUsuario = () => {
               <ShieldCheck size={24} /> Configurações
             </h2>
 
-            {/* SELETOR DE PRAZO */}
             <div className="mb-8 relative z-10">
               <label className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 mb-3 block flex items-center gap-2">
                 <Calendar size={14} /> Validade da Licença

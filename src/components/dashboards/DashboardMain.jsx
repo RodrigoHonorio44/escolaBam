@@ -8,35 +8,27 @@ import DashboardEnfermeiro from './DashboardEnfermeiro';
 const DashboardMain = () => {
   const { user, loading } = useAuth();
   
-  // 🔍 ESTADOS PARA ARMAZENAR OS DADOS BRUTOS
   const [atendimentos, setAtendimentos] = useState([]);
   const [alunos, setAlunos] = useState([]);
   const [questionarios, setQuestionarios] = useState([]);
 
-  // 📡 BUSCA GLOBAL DE DADOS (Para Auditoria)
   useEffect(() => {
     if (!user) return;
 
-    console.log("📡 Iniciando Sincronização Global para Auditoria...");
+    console.log("📡 Iniciando Sincronização Global...");
 
-    // 1. Busca Atendimentos
     const unsubAtend = onSnapshot(collection(db, "atendimentos_enfermagem"), (snap) => {
       const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log("✅ Atendimentos sincronizados:", docs.length);
       setAtendimentos(docs);
     });
 
-    // 2. Busca Alunos (Pastas Digitais)
     const unsubAlunos = onSnapshot(collection(db, "pastas_digitais"), (snap) => {
       const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log("✅ Alunos sincronizados:", docs.length);
       setAlunos(docs);
     });
 
-    // 3. Busca Questionários
     const unsubQuest = onSnapshot(collection(db, "questionarios_saude"), (snap) => {
       const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      console.log("✅ Questionários sincronizados:", docs.length);
       setQuestionarios(docs);
     });
 
@@ -45,24 +37,28 @@ const DashboardMain = () => {
 
   if (loading) return null;
 
+  // Normalização do cargo para evitar erros de digitação
   const cargoUser = user?.role?.toLowerCase().trim() || '';
 
-  const isEquipeSaude = 
+  // 1. Definição do Grupo que entra no Dashboard do Enfermeiro
+  // Inclui Saúde + Diretoria + Administrativo Escolar
+  const vaiParaDashboardEnfermeiro = 
     cargoUser.includes('enfermeir') || 
     cargoUser.includes('tecnico') || 
     cargoUser.includes('tecnica') || 
     cargoUser.includes('medic') || 
-    cargoUser.includes('auxiliar de enfermagem');
-
-  const isAdministrativo = 
-    cargoUser === 'root' || 
-    cargoUser === 'admin' || 
     cargoUser === 'diretor' || 
-    cargoUser === 'diretora';
+    cargoUser === 'diretora' || 
+    cargoUser === 'administrativo';
 
-  // --- RENDERIZAÇÃO COM PASSAGEM DE DADOS ---
+  // 2. Definição do Grupo que entra no Dashboard Administrativo (ROOT)
+  const vaiParaDashboardAdmin = 
+    cargoUser === 'root' || 
+    cargoUser === 'admin';
 
-  if (isEquipeSaude) {
+  // --- RENDERIZAÇÃO ---
+
+  if (vaiParaDashboardEnfermeiro) {
     return (
       <DashboardEnfermeiro 
         user={user} 
@@ -73,7 +69,7 @@ const DashboardMain = () => {
     );
   }
 
-  if (isAdministrativo) {
+  if (vaiParaDashboardAdmin) {
     return (
       <Dashboard 
         user={user} 
@@ -84,11 +80,14 @@ const DashboardMain = () => {
     );
   }
 
-  // Fallback (Acesso Restrito...)
+  // Fallback para cargos não mapeados
   return (
      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-center p-10 font-sans">
-       {/* ... seu código de acesso restrito ... */}
-       <p className="text-blue-600 font-black text-lg uppercase italic">{user?.role || 'NÃO DEFINIDO'}</p>
+        <div className="bg-white p-12 rounded-[50px] shadow-xl border border-slate-200 max-w-md">
+            <h2 className="text-2xl font-black uppercase italic text-slate-800 mb-4">Acesso Restrito</h2>
+            <p className="text-slate-500 text-sm mb-6">Seu cargo não possui uma interface definida. Contate o administrador.</p>
+            <p className="text-blue-600 font-black text-lg uppercase italic border-t pt-4">{cargoUser || 'NÃO DEFINIDO'}</p>
+        </div>
      </div>
   );
 };

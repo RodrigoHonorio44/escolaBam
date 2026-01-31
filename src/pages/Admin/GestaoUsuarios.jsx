@@ -78,8 +78,9 @@ const GestaoUsuarios = () => {
         currentSessionId: usuarioAlvo?.currentSessionId || ""
       };
       
-      // Limpeza de campos legados se necessário
+      // Limpeza de campos legados para manter o banco limpo
       if (modulo === 'relatorios') { updates['modulosSidebar.triagem'] = deleteField(); }
+      if (modulo === 'auditoria_pro') { updates['modulosSidebar.auditoria'] = deleteField(); }
       
       await updateDoc(doc(db, "usuarios", userId), updates);
       toast.success(`Módulo atualizado`);
@@ -105,8 +106,9 @@ const GestaoUsuarios = () => {
         "modulosSidebar.pacientes": liberado,
         "modulosSidebar.relatorios": liberado,
         "modulosSidebar.saude_escolar": liberado,
-        "modulosSidebar.espelho": liberado, // Contato do Aluno
-        "modulosSidebar.auditoria": liberado, // Auditoria de Saúde
+        "modulosSidebar.espelho": liberado, 
+        "modulosSidebar.auditoria_pro": liberado, // ✅ Atualizado para bater com o Dashboard
+        "modulosSidebar.auditoria": deleteField(), // ✅ Remove a chave antiga
         "modulosSidebar.triagem": deleteField() 
       });
       
@@ -194,7 +196,15 @@ const GestaoUsuarios = () => {
                       <ModuloBtn label="Saúde" icon={<HeartPulse size={14} />} ativo={u.modulosSidebar?.saude_escolar} onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} />
                       <ModuloBtn label="Pasta" icon={<FolderSearch size={14} />} ativo={u.modulosSidebar?.pasta_digital} onClick={() => toggleModulo(u.id, 'pasta_digital', u.modulosSidebar?.pasta_digital)} />
                       <ModuloBtn label="Cads" icon={<UserRound size={14} />} ativo={u.modulosSidebar?.pacientes} onClick={() => toggleModulo(u.id, 'pacientes', u.modulosSidebar?.pacientes)} />
-                      <ModuloBtn label="Auditoria" icon={<BarChart3 size={14} />} ativo={u.modulosSidebar?.auditoria} onClick={() => toggleModulo(u.id, 'auditoria', u.modulosSidebar?.auditoria)} />
+                      
+                      {/* ✅ Mapeado para auditoria_pro para destravar no Dashboard */}
+                      <ModuloBtn 
+                        label="Auditoria" 
+                        icon={<BarChart3 size={14} />} 
+                        ativo={u.modulosSidebar?.auditoria_pro} 
+                        onClick={() => toggleModulo(u.id, 'auditoria_pro', u.modulosSidebar?.auditoria_pro)} 
+                      />
+                      
                       <ModuloBtn label="BAENF" icon={<ClipboardList size={14} />} ativo={u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem} onClick={() => toggleModulo(u.id, 'relatorios', u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem)} />
                     </div>
                   </td>
