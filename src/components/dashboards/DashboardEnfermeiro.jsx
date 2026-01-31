@@ -65,6 +65,8 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const [atendimentosRaw, setAtendimentosRaw] = useState([]);
   const [alunosRaw, setAlunosRaw] = useState([]);
   const [alertasSurto, setAlertasSurto] = useState([]);
+  // ✅ Estado para ocultar alertas temporariamente nesta sessão
+  const [alertasOcultos, setAlertasOcultos] = useState([]);
 
   const isMounted = useRef(true);
   const unsubscribePerfil = useRef(null);
@@ -143,21 +145,11 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     } catch (error) { console.error("Erro ao sair:", error); }
   };
 
-  // ✅ LOGICA DE BLOQUEIO ATUALIZADA: ADMIN E ROOT TÊM PASSE LIVRE TOTAL
   const isLiberado = (itemKey) => {
-    if (isAdminOuRoot) return true; // Ignora qualquer trava para admin/root
-
-    // Bloqueio Total para outros cargos
+    if (isAdminOuRoot) return true;
     if (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') return false;
-    
     const valorModulo = user?.modulosSidebar?.[itemKey];
-
-    // Auditoria Pro: exige true explícito para outros cargos
-    if (itemKey === 'auditoria_pro') {
-        return valorModulo === true;
-    }
-
-    // Outros módulos: liberado se não houver trava (false)
+    if (itemKey === 'auditoria_pro') return valorModulo === true;
     return valorModulo !== false;
   };
 
@@ -240,7 +232,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
   return (
     <div className={`fixed inset-0 z-[999] flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${theme.contentBg}`}>
-      {/* SÓ MOSTRA BLOQUEIO SE NÃO FOR ADMIN/ROOT */}
       { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && !isAdminOuRoot && (
           <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />
       )}
@@ -340,9 +331,14 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
           </div>
         </header>
 
-        {alertasSurto.length > 0 && (
+        {/* ✅ ALERTA ATUALIZADO COM BOTÃO "ESTOU CIENTE" */}
+        {alertasSurto
+          .filter(alerta => !alertasOcultos.includes(alerta.grupo))
+          .length > 0 && (
           <div className="px-8 pt-4 space-y-2">
-            {alertasSurto.map((alerta, idx) => (
+            {alertasSurto
+              .filter(alerta => !alertasOcultos.includes(alerta.grupo))
+              .map((alerta, idx) => (
               <div key={idx} className="flex items-center justify-between bg-amber-500 text-white px-6 py-3 rounded-2xl shadow-lg animate-bounce-subtle">
                 <div className="flex items-center gap-3">
                   <AlertTriangle size={20} className="animate-pulse" />
@@ -351,12 +347,24 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
                     <p className="text-[12px] font-bold italic uppercase">Detectamos {alerta.total} casos de {alerta.grupo} em 48h.</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => isLiberado('auditoria_pro') && setActiveTab("auditoria")} 
-                  className={`bg-white/20 hover:bg-white/40 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!isLiberado('auditoria_pro') && "opacity-20 cursor-not-allowed"}`}
-                >
-                  Ver Detalhes
-                </button>
+                
+                <div className="flex items-center gap-2">
+                  {/* Botão Estou Ciente - Oculta o alerta nesta sessão */}
+                  <button 
+                    onClick={() => setAlertasOcultos([...alertasOcultos, alerta.grupo])}
+                    className="bg-black/20 hover:bg-black/40 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all flex items-center gap-2"
+                  >
+                    <X size={12} /> Estou Ciente
+                  </button>
+
+                  {/* Botão Ver Detalhes - Só funciona se tiver acesso à auditoria */}
+                  <button 
+                    onClick={() => isLiberado('auditoria_pro') && setActiveTab("auditoria")} 
+                    className={`bg-white/20 hover:bg-white/40 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!isLiberado('auditoria_pro') && "opacity-20 cursor-not-allowed"}`}
+                  >
+                    Ver Detalhes
+                  </button>
+                </div>
               </div>
             ))}
           </div>
