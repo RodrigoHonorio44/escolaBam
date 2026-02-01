@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { db } from '../firebase/firebaseConfig';
-import { collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { Search, Loader2, ArrowLeft, LayoutDashboard, Scale, Repeat, FileText, ShieldAlert, History, Users } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
+import { Search, Loader2, ArrowLeft, LayoutDashboard, Scale, Repeat, FileText } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
 import useAuditoria from '../hooks/useAuditoria'; 
@@ -14,8 +14,6 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode, user, atendimentosRaw = [], al
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('geral');
   const [questionariosRaw, setQuestionariosRaw] = useState([]);
-  const [tratativasExistentes, setTratativasExistentes] = useState([]);
-  const [enviandoTratativa, setEnviandoTratativa] = useState(false);
   
   const [dadosLocais, setDadosLocais] = useState({ 
     atendimentos: [], 
@@ -27,74 +25,30 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode, user, atendimentosRaw = [], al
     fim: new Date().toISOString().split('T')[0]
   });
 
-  // 1. Hook de Auditoria (Mantido como original)
-  const { estatisticas, gruposSaude, atendimentos } = useAuditoria(
+  // 1. Hook de Auditoria
+  const { estatisticas, gruposSaude } = useAuditoria(
     dadosLocais.atendimentos,
     dadosLocais.alunos,
     questionariosRaw,
     periodo
   );
 
-  // 2. Lógica de Surtos com Correção de "Não Identificado"
-  const surtosProcessados = useMemo(() => {
-    if (!estatisticas?.porGrupo) return {};
-    const resultado = {};
-
-    Object.entries(estatisticas.porGrupo).forEach(([grupo, info]) => {
-      if (info.total >= 3 && grupo.toLowerCase() !== 'nenhum') {
-        const pacientes = dadosLocais.atendimentos.filter(a => {
-          const termo = grupo.toLowerCase();
-          const motivo = (a.motivoAtendimento || a.sintoma || "").toLowerCase();
-          const gRisco = (a.grupoRisco || a.grupoSaude || "").toLowerCase();
-          const noPeriodo = a.data >= periodo.inicio && a.data <= periodo.fim;
-          return (motivo.includes(termo) || gRisco.includes(termo)) && noPeriodo;
-        }).map(a => ({
-          // Tenta todas as variações de nomes do banco para evitar "Não Identificado"
-          nome: (a.nomePaciente || a.nome || a.alunoNome || "aluno não identificado").toLowerCase(),
-          turma: (a.turma || "n/d").toLowerCase(),
-          data: a.data,
-          sintoma: (a.motivoAtendimento || a.sintoma || "").toLowerCase()
-        }));
-        resultado[grupo] = { ...info, pacientes };
-      }
-    });
-    return resultado;
-  }, [estatisticas, dadosLocais.atendimentos, periodo]);
-
-  // 3. Carregamento com Limpeza de Duplicados
+  // 2. Carregamento de Dados
   const carregarDadosDoBanco = useCallback(async () => {
     setLoading(true);
     try {
-      const [snapAtend, snapPastas, snapQuest, snapTrat] = await Promise.all([
+      const [snapAtend, snapPastas, snapQuest] = await Promise.all([
         getDocs(collection(db, "atendimentos_enfermagem")),
         getDocs(collection(db, "pastas_digitais")),
-        getDocs(collection(db, "questionarios_saude")),
-        getDocs(collection(db, "tratativas_auditoria"))
+        getDocs(collection(db, "questionarios_saude"))
       ]);
 
-      // Normalização de Atendimentos
-      const listaA = snapAtend.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      // Normalização de Alunos (Pastas Digitais) - EVITA DUPLICAÇÃO NA ABA NUTRICIONAL
-      const mapaAlunosUnicos = new Map();
-      snapPastas.docs.forEach(doc => {
-        const data = doc.data();
-        const chave = (data.nomePaciente || data.nome || doc.id).toLowerCase().trim();
-        if (!mapaAlunosUnicos.has(chave)) {
-          mapaAlunosUnicos.set(chave, { id: doc.id, ...data });
-        }
+      setDadosLocais({ 
+        atendimentos: snapAtend.docs.map(doc => ({ id: doc.id, ...doc.data() })), 
+        alunos: snapPastas.docs.map(doc => ({ id: doc.id, ...doc.data() })) 
       });
-
-      const listaP = Array.from(mapaAlunosUnicos.values());
-      const listaQ = snapQuest.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const listaT = snapTrat.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-                       .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-
-      setDadosLocais({ atendimentos: listaA, alunos: listaP });
-      setQuestionariosRaw(listaQ);
-      setTratativasExistentes(listaT);
+      setQuestionariosRaw(snapQuest.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       
-      toast.success("BANCO SINCRONIZADO");
     } catch (error) {
       toast.error("FALHA NA SINCRONIZAÇÃO");
     } finally {
@@ -106,26 +60,6 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode, user, atendimentosRaw = [], al
     carregarDadosDoBanco();
   }, [carregarDadosDoBanco]);
 
-  const handleSalvarTratativa = async (e, grupo) => {
-    e.preventDefault();
-    setEnviandoTratativa(true);
-    const formData = new FormData(e.target);
-    try {
-      await addDoc(collection(db, "tratativas_auditoria"), {
-        grupo: grupo.toLowerCase(),
-        medida: formData.get('medida').toLowerCase(),
-        observacao: formData.get('observacao').toLowerCase(),
-        usuarioNome: 'r s',
-        periodoInicio: periodo.inicio,
-        periodoFim: periodo.fim,
-        createdAt: serverTimestamp()
-      });
-      toast.success("AÇÃO REGISTRADA");
-      carregarDadosDoBanco();
-    } catch (err) { toast.error("ERRO AO SALVAR"); }
-    finally { setEnviandoTratativa(false); }
-  };
-
   const theme = {
     bg: darkMode ? 'bg-[#050B18]' : 'bg-slate-50',
     card: darkMode ? 'bg-[#0A1629] border-white/5' : 'bg-white border-slate-200 shadow-sm',
@@ -136,7 +70,6 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode, user, atendimentosRaw = [], al
     <div className={`min-h-screen p-4 md:p-8 ${theme.bg} ${theme.text}`}>
       <Toaster position="top-right" />
 
-      {/* HEADER */}
       <div className="max-w-7xl mx-auto mb-8 flex flex-col md:flex-row justify-between gap-6">
         <div>
           <button onClick={onVoltar} className="flex items-center gap-2 text-blue-500 font-black text-[10px] uppercase mb-4">
@@ -155,11 +88,9 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode, user, atendimentosRaw = [], al
         </div>
       </div>
 
-      {/* NAVEGAÇÃO */}
       <div className="max-w-7xl mx-auto mb-10">
         <div className={`flex flex-wrap gap-2 p-2 rounded-[30px] border ${theme.card}`}>
           <TabButton active={activeTab === 'geral'} onClick={() => setActiveTab('geral')} icon={<LayoutDashboard size={16}/>} label="Geral" />
-          <TabButton active={activeTab === 'tratativa'} onClick={() => setActiveTab('tratativa')} icon={<ShieldAlert size={16}/>} label="Tratativas" />
           <TabButton active={activeTab === 'fichas'} onClick={() => setActiveTab('fichas')} icon={<FileText size={16}/>} label="Fichas Médicas" />
           <TabButton active={activeTab === 'nutricional'} onClick={() => setActiveTab('nutricional')} icon={<Scale size={16}/>} label="Nutricional" />
           <TabButton active={activeTab === 'reincidencia'} onClick={() => setActiveTab('reincidencia')} icon={<Repeat size={16}/>} label="Reincidência" />
@@ -170,59 +101,11 @@ const RelatorioMedicoPro = ({ onVoltar, darkMode, user, atendimentosRaw = [], al
         {loading ? (
           <div className="py-20 text-center opacity-40">
             <Loader2 className="animate-spin mx-auto text-blue-600 mb-4" size={40} />
-            <p className="text-[10px] font-black uppercase">Sincronizando Inteligência...</p>
+            <p className="text-[10px] font-black uppercase">Sincronizando...</p>
           </div>
         ) : (
           <div className="animate-in fade-in duration-500">   
             {activeTab === 'geral' && <AbaGeral dados={{ estatisticas, gruposSaude }} darkMode={darkMode} />}
-            
-            {activeTab === 'tratativa' && (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                  {Object.entries(surtosProcessados).map(([grupo, dados]) => (
-                    <div key={grupo} className={`p-8 rounded-[40px] border-2 border-rose-500/20 ${theme.card}`}>
-                      <div className="flex justify-between items-start mb-6">
-                        <h4 className="text-3xl font-black uppercase italic text-rose-500">{grupo}</h4>
-                        <span className="text-xl font-black bg-rose-500 text-white px-5 py-2 rounded-2xl">{dados.total} casos</span>
-                      </div>
-                      
-                      <div className="mb-6 space-y-2">
-                        {dados.pacientes.map((p, idx) => (
-                          <div key={idx} className="flex justify-between p-3 rounded-xl bg-white/5 border border-white/5 text-[10px] font-bold uppercase italic">
-                            <span>{p.nome}</span>
-                            <span className="opacity-40">{p.data}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <form onSubmit={(e) => handleSalvarTratativa(e, grupo)} className="space-y-4">
-                        <select name="medida" required className={`w-full p-4 rounded-2xl text-[10px] font-black uppercase ${darkMode ? 'bg-white/5' : 'bg-slate-100'}`}>
-                          <option value="">selecione a medida técnica...</option>
-                          <option value="notificacao aos responsaveis">notificação aos responsáveis</option>
-                          <option value="isolamento de turma">isolamento de turma</option>
-                          <option value="reforco de higienizacao">reforço de higienização</option>
-                        </select>
-                        <textarea name="observacao" required placeholder="Relatório de conduta técnica..." className={`w-full p-4 rounded-2xl text-[10px] font-bold min-h-[100px] ${darkMode ? 'bg-white/5' : 'bg-slate-100'}`} />
-                        <button disabled={enviandoTratativa} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl">
-                          {enviandoTratativa ? 'GRAVANDO...' : 'REGISTRAR TRATATIVA'}
-                        </button>
-                      </form>
-                    </div>
-                  ))}
-                </div>
-                <div className="space-y-4">
-                  <h3 className="text-[10px] font-black uppercase opacity-50 flex items-center gap-2"><History size={14}/> histórico de ações</h3>
-                  {tratativasExistentes.map((t, i) => (
-                    <div key={i} className={`p-5 rounded-3xl border ${theme.card}`}>
-                      <p className="text-[10px] font-black uppercase text-blue-500">{t.grupo}</p>
-                      <p className="text-[10px] opacity-70 italic mt-1">"{t.observacao}"</p>
-                      <p className="text-[8px] font-black mt-4 opacity-30 uppercase">Validação: {t.usuarioNome}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {activeTab === 'fichas' && <AbaFichasMedicas grupos={gruposSaude} darkMode={darkMode} />}
             {activeTab === 'nutricional' && <AbaNutricional pastas={dadosLocais.alunos} darkMode={darkMode} />}
             {activeTab === 'reincidencia' && <AbaRecidiva dados={estatisticas} darkMode={darkMode} />}

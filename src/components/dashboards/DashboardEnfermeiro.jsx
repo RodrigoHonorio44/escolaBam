@@ -5,8 +5,7 @@ import { signOut } from "firebase/auth";
 import { 
   LayoutDashboard, UserPlus, ClipboardList, Stethoscope,
   ChevronDown, LogOut, FolderSearch, Lock,
-  Menu, ChevronLeft, Sun, Moon, LifeBuoy, ShieldAlert, BarChart3, Contact,
-  AlertTriangle, X 
+  Menu, ChevronLeft, Sun, Moon, LifeBuoy, ShieldAlert, BarChart3, Contact
 } from "lucide-react";
 
 // Importações de páginas
@@ -64,9 +63,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
   const [atendimentosRaw, setAtendimentosRaw] = useState([]);
   const [alunosRaw, setAlunosRaw] = useState([]);
-  const [alertasSurto, setAlertasSurto] = useState([]);
-  // ✅ Estado para ocultar alertas temporariamente nesta sessão
-  const [alertasOcultos, setAlertasOcultos] = useState([]);
 
   const isMounted = useRef(true);
   const unsubscribePerfil = useRef(null);
@@ -75,31 +71,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
   const isDiretoria = ["diretora", "diretor", "administrativo", "admin", "root"].includes(cargoLower);
   const isAdminOuRoot = ["admin", "root"].includes(cargoLower);
 
-  useEffect(() => {
-    const doisDiasAtras = new Date();
-    doisDiasAtras.setHours(doisDiasAtras.getHours() - 48);
-
-    const unsubscribeSurtos = onSnapshot(collection(db, "atendimentos_enfermagem"), (snapshot) => {
-      const docs = snapshot.docs.map(d => d.data());
-      const contagem = {};
-
-      docs.forEach(atend => {
-        const dataAtend = atend.createdAt?.toDate ? atend.createdAt.toDate() : new Date(atend.data);
-        if (atend.grupoRisco && atend.grupoRisco !== 'nenhum' && dataAtend > doisDiasAtras) {
-          contagem[atend.grupoRisco] = (contagem[atend.grupoRisco] || 0) + 1;
-        }
-      });
-
-      const novosAlertas = Object.entries(contagem)
-        .filter(([grupo, total]) => total >= 3)
-        .map(([grupo, total]) => ({ grupo, total }));
-
-      setAlertasSurto(novosAlertas);
-    });
-
-    return () => unsubscribeSurtos();
-  }, []);
-
+  // --- 1. SINCRONISMO DE PERFIL E DADOS ---
   useEffect(() => {
     isMounted.current = true;
     const userId = initialUser?.uid || initialUser?.id;
@@ -138,7 +110,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
   const handleLogoutClick = async () => {
     try {
-      if (unsubscribePerfil.current) unsubscribePerfil.current();
       if (onLogout) await onLogout();
       await signOut(auth);
       window.location.replace("/login");
@@ -151,23 +122,6 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
     const valorModulo = user?.modulosSidebar?.[itemKey];
     if (itemKey === 'auditoria_pro') return valorModulo === true;
     return valorModulo !== false;
-  };
-
-  const handleEdicaoDaPasta = (payload) => {
-    setDadosParaEdicao(payload.dados);
-    setCadastroMode(payload.tipo.toLowerCase()); 
-    setActiveTab("pacientes"); 
-  };
-
-  const handleAbrirQuestionarioPelaPasta = (payload) => {
-    setDadosParaEdicao(payload.dados); 
-    setCadastroMode("saude_escolar");
-    setActiveTab("pacientes");
-  };
-
-  const handleSucessoQuestionario = (aluno) => {
-    setDadosParaEdicao(aluno); 
-    setActiveTab("pasta_digital");
   };
 
   const theme = {
@@ -192,28 +146,18 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
       case "atendimento": return <AtendimentoEnfermagem {...forcedLightProps} />;
       case "contato": return <ContatoAluno {...forcedLightProps} />;
       case "pasta_digital": 
-        return <PastaDigital {...forcedLightProps} onNovoAtendimento={handleEdicaoDaPasta} onAbrirQuestionario={handleAbrirQuestionarioPelaPasta} />;
+        return <PastaDigital {...forcedLightProps} onNovoAtendimento={(p) => { setDadosParaEdicao(p.dados); setCadastroMode(p.tipo.toLowerCase()); setActiveTab("pacientes"); }} onAbrirQuestionario={(p) => { setDadosParaEdicao(p.dados); setCadastroMode("saude_escolar"); setActiveTab("pacientes"); }} />;
       case "pacientes":
         if (cadastroMode === "aluno") return <FormCadastroAluno {...forcedLightProps} dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
         if (cadastroMode === "funcionario") return <FormCadastroFuncionario {...forcedLightProps} dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab(dadosParaEdicao ? "pasta_digital" : "home")} />;
-        if (cadastroMode === "saude_escolar") return <QuestionarioSaude {...forcedLightProps} dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab("pasta_digital")} onSucesso={handleSucessoQuestionario} />;
+        if (cadastroMode === "saude_escolar") return <QuestionarioSaude {...forcedLightProps} dadosEdicao={dadosParaEdicao} onVoltar={() => setActiveTab("pasta_digital")} onSucesso={(a) => { setDadosParaEdicao(a); setActiveTab("pasta_digital"); }} />;
         return <FormCadastroAluno {...forcedLightProps} />;
       case "historico": return <HistoricoAtendimentos {...forcedLightProps} />;
       case "auditoria": 
-        if (!isLiberado('auditoria_pro')) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full p-12 text-center animate-in fade-in duration-500">
-               <div className="w-20 h-20 bg-rose-500/10 text-rose-500 rounded-full flex items-center justify-center mb-6">
-                  <Lock size={32} />
-               </div>
-               <h2 className={`text-xl font-black uppercase italic tracking-tighter ${darkMode ? "text-white" : "text-slate-900"}`}>Acesso Negado</h2>
-               <p className="text-sm text-slate-500 max-w-xs mt-2 font-medium">Este módulo de auditoria não está incluso em seu plano atual.</p>
-            </div>
-          );
-        }
+        if (!isLiberado('auditoria_pro')) return <div className="p-20 text-center font-black opacity-20 uppercase">Acesso Negado</div>;
         return <RelatorioMedicoPro {...forcedLightProps} atendimentosRaw={atendimentosRaw} alunosRaw={alunosRaw} />;
       case "suporte": return <TelaSuporte darkMode={darkMode} />;
-      default: return <HomeEnfermeiro {...forcedLightProps} setActiveTab={setActiveTab} isLiberado={isLiberado} visaoMensal={visaoMensal} setVisaoMensal={setVisaoMensal} />;
+      default: return <HomeEnfermeiro {...forcedLightProps} setActiveTab={setActiveTab} isLiberado={isLiberado} />;
     }
   };
 
@@ -232,9 +176,7 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
   return (
     <div className={`fixed inset-0 z-[999] flex h-screen w-screen overflow-hidden font-sans transition-colors duration-500 ${theme.contentBg}`}>
-      { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && !isAdminOuRoot && (
-          <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} />
-      )}
+      { (user?.status === 'bloqueado' || user?.statusLicenca === 'bloqueada') && !isAdminOuRoot && <TelaBloqueioLicenca darkMode={darkMode} onLogout={handleLogoutClick} /> }
 
       <div className={`w-16 flex flex-col items-center py-8 gap-8 border-r shrink-0 z-50 transition-colors duration-500 ${darkMode ? "bg-[#020617] border-slate-800" : "bg-slate-100 border-slate-200"}`}>
           <div className="text-blue-500"><Stethoscope size={24} /></div>
@@ -297,14 +239,12 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
         <div className={`p-6 border-t ${theme.border} ${darkMode ? "bg-black/40" : "bg-slate-50"}`}>
           <div className="flex items-center gap-3 mb-6 px-2">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs uppercase shadow-lg ${isDiretoria ? "bg-amber-500 shadow-amber-500/30" : "bg-blue-600 shadow-blue-600/30"}`}>
-              {user?.nome?.substring(0, 2) || "US"}
+            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-white text-xs uppercase shadow-lg ${isDiretoria ? "bg-amber-500" : "bg-blue-600"}`}>
+              {user?.nome?.substring(0, 2) || "RS"}
             </div>
             <div className="flex flex-col overflow-hidden uppercase font-black italic">
               <span className={`text-[10px] truncate ${darkMode ? "text-white" : "text-slate-900"}`}>{user?.nome || "Usuário"}</span>
-              <span className="text-blue-500 text-[7px] tracking-widest">
-                {isDiretoria ? user?.role : "Enfermagem"}
-              </span>
+              <span className="text-blue-500 text-[7px] tracking-widest">{isDiretoria ? user?.role : "Enfermagem"}</span>
             </div>
           </div>
           <button onClick={handleLogoutClick} className="flex items-center gap-3 text-red-500/80 hover:text-red-500 px-2 transition-all group">
@@ -316,72 +256,18 @@ const DashboardEnfermeiro = ({ user: initialUser, onLogout }) => {
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
         <header className={`h-20 border-b flex items-center justify-between px-8 shrink-0 transition-colors duration-500 ${theme.headerBg} ${theme.border}`}>
-          <div className="flex items-center gap-4">
-              {!isExpanded && (
-                <button onClick={() => setIsExpanded(true)} className={`p-2 rounded-lg ${darkMode ? "bg-white/5 text-slate-400" : "bg-slate-100 text-slate-600"}`}>
-                    <Menu size={18} />
-                </button>
-              )}
-              <h1 className={`text-sm font-black uppercase tracking-widest italic ${darkMode ? "text-white" : "text-slate-800"}`}>
-                 {activeTab === "suporte" ? "Suporte Técnico" : menuItems.find(i => i.id === activeTab)?.label}
-              </h1>
-          </div>
+          <h1 className={`text-sm font-black uppercase tracking-widest italic ${darkMode ? "text-white" : "text-slate-800"}`}>
+             {activeTab === "suporte" ? "Suporte Técnico" : menuItems.find(i => i.id === activeTab)?.label}
+          </h1>
           <div className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border ${darkMode ? "bg-blue-500/10 text-blue-400 border-blue-500/20" : "bg-blue-50 text-blue-600 border-blue-100"}`}>
               Unidade: {user?.escolaId || 'Sede'}
           </div>
         </header>
 
-        {/* ✅ ALERTA ATUALIZADO COM BOTÃO "ESTOU CIENTE" */}
-        {alertasSurto
-          .filter(alerta => !alertasOcultos.includes(alerta.grupo))
-          .length > 0 && (
-          <div className="px-8 pt-4 space-y-2">
-            {alertasSurto
-              .filter(alerta => !alertasOcultos.includes(alerta.grupo))
-              .map((alerta, idx) => (
-              <div key={idx} className="flex items-center justify-between bg-amber-500 text-white px-6 py-3 rounded-2xl shadow-lg animate-bounce-subtle">
-                <div className="flex items-center gap-3">
-                  <AlertTriangle size={20} className="animate-pulse" />
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-tighter">Alerta de Surto!</p>
-                    <p className="text-[12px] font-bold italic uppercase">Detectamos {alerta.total} casos de {alerta.grupo} em 48h.</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  {/* Botão Estou Ciente - Oculta o alerta nesta sessão */}
-                  <button 
-                    onClick={() => setAlertasOcultos([...alertasOcultos, alerta.grupo])}
-                    className="bg-black/20 hover:bg-black/40 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all flex items-center gap-2"
-                  >
-                    <X size={12} /> Estou Ciente
-                  </button>
-
-                  {/* Botão Ver Detalhes - Só funciona se tiver acesso à auditoria */}
-                  <button 
-                    onClick={() => isLiberado('auditoria_pro') && setActiveTab("auditoria")} 
-                    className={`bg-white/20 hover:bg-white/40 px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!isLiberado('auditoria_pro') && "opacity-20 cursor-not-allowed"}`}
-                  >
-                    Ver Detalhes
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
         <main className="flex-1 overflow-y-auto p-4 md:p-8 w-full animate-in fade-in duration-500 bg-slate-50">
             {renderContent()}
         </main>
       </div>
-
-      <style>{`
-        @keyframes bounce-subtle {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-3px); }
-        }
-        .animate-bounce-subtle { animation: bounce-subtle 2s infinite ease-in-out; }
-      `}</style>
     </div>
   );
 };
