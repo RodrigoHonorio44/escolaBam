@@ -5,7 +5,8 @@ import { Timestamp } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast'; 
 import { 
   UserPlus, CheckCircle2, 
-  Loader2, ShieldCheck, Stethoscope, Gem, Hash, Lock, Calendar, UserCog
+  Loader2, ShieldCheck, Stethoscope, Gem, Hash, Lock, Calendar, UserCog,
+  Accessibility // ✅ Ícone para Saúde Inclusiva
 } from 'lucide-react';
 
 const CadastrarUsuario = () => {
@@ -25,7 +26,8 @@ const CadastrarUsuario = () => {
     atendimento: true,     
     pasta_digital: true,   
     pacientes: true,       
-    relatorios: true,      
+    relatorios: true,       
+    saude_inclusiva: true, // ✅ Novo módulo habilitado por padrão
     dashboard_admin: false 
   });
 
@@ -35,6 +37,7 @@ const CadastrarUsuario = () => {
     pasta_digital: "Pasta Digital",
     pacientes: "Cadastros (Alunos/Ficha)",
     relatorios: "BAENF Antigos",
+    saude_inclusiva: "Saúde Inclusiva", // ✅ Label adicionado
     dashboard_admin: "Relatório Geral"
   };
 
@@ -42,12 +45,12 @@ const CadastrarUsuario = () => {
     if (plano === 'basico') {
       setModulos({ 
         dashboard: true, atendimento: true, pasta_digital: true, 
-        pacientes: true, relatorios: false, dashboard_admin: false 
+        pacientes: true, relatorios: false, saude_inclusiva: true, dashboard_admin: false 
       });
     } else if (plano === 'premium') {
       setModulos({ 
         dashboard: true, atendimento: true, pasta_digital: true, 
-        pacientes: true, relatorios: true, dashboard_admin: true 
+        pacientes: true, relatorios: true, saude_inclusiva: true, dashboard_admin: true 
       });
     }
     toast(`Configuração ${plano} aplicada`, { icon: '⚙️' });
@@ -68,7 +71,7 @@ const CadastrarUsuario = () => {
       dataExpira.setDate(dataHoje.getDate() + parseInt(formData.prazo));
 
       const dadosParaCadastro = {
-        nome: nomeLimpo.toLowerCase(), // Normalizando para lowercase conforme solicitado
+        nome: nomeLimpo.toLowerCase(), 
         email: formData.email.trim().toLowerCase(),
         password: formData.senha,
         role: formData.role,
@@ -99,7 +102,6 @@ const CadastrarUsuario = () => {
     }
   };
 
-  // Verifica se o cargo exige registro profissional obrigatório
   const isHealthRole = ['enfermeiro', 'tecnico_enfermagem', 'medico'].includes(formData.role);
 
   return (
@@ -204,6 +206,8 @@ const CadastrarUsuario = () => {
               {Object.keys(modulos).map(m => (
                 <label key={m} className={`flex items-center justify-between p-4 rounded-[22px] cursor-pointer transition-all border ${modulos[m] ? 'bg-blue-600/20 border-blue-500/40 text-white' : 'bg-slate-800/20 border-transparent text-slate-600'}`}>
                   <div className="flex items-center gap-3">
+                    {/* Exibindo ícone específico para Saúde Inclusiva se for o caso */}
+                    {m === 'saude_inclusiva' ? <Accessibility size={16} className={modulos[m] ? 'text-blue-400' : 'text-slate-700'} /> : null}
                     <span className="text-[10px] font-black uppercase tracking-widest">{moduloLabels[m]}</span>
                   </div>
                   <input type="checkbox" className="hidden" checked={modulos[m]} onChange={() => setModulos({...modulos, [m]: !modulos[m]})} />

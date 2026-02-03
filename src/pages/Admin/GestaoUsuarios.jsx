@@ -5,7 +5,8 @@ import { collection, onSnapshot, doc, updateDoc, deleteDoc, query, where, delete
 import { 
   Users, Trash2, CheckCircle, XCircle, Search, 
   LayoutDashboard, UserRound, Stethoscope, ClipboardList, Lock, FolderSearch,
-  LogOut, HeartPulse, BarChart3, KeyRound, Contact
+  LogOut, HeartPulse, BarChart3, KeyRound, Contact,
+  Accessibility // ✅ Ícone adicionado
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -107,8 +108,9 @@ const GestaoUsuarios = () => {
         "modulosSidebar.relatorios": liberado,
         "modulosSidebar.saude_escolar": liberado,
         "modulosSidebar.espelho": liberado, 
-        "modulosSidebar.auditoria_pro": liberado, // ✅ Atualizado para bater com o Dashboard
-        "modulosSidebar.auditoria": deleteField(), // ✅ Remove a chave antiga
+        "modulosSidebar.auditoria_pro": liberado, 
+        "modulosSidebar.saude_inclusiva": liberado, // ✅ Novo módulo adicionado ao alternar status
+        "modulosSidebar.auditoria": deleteField(), 
         "modulosSidebar.triagem": deleteField() 
       });
       
@@ -189,15 +191,23 @@ const GestaoUsuarios = () => {
                   </td>
 
                   <td className="p-6 text-center">
-                    <div className="flex justify-center gap-1.5 flex-wrap max-w-[400px] mx-auto">
+                    <div className="flex justify-center gap-1.5 flex-wrap max-w-[450px] mx-auto">
                       <ModuloBtn label="Dash" icon={<LayoutDashboard size={14} />} ativo={u.modulosSidebar?.dashboard} onClick={() => toggleModulo(u.id, 'dashboard', u.modulosSidebar?.dashboard)} />
                       <ModuloBtn label="Atend" icon={<Stethoscope size={14} />} ativo={u.modulosSidebar?.atendimento} onClick={() => toggleModulo(u.id, 'atendimento', u.modulosSidebar?.atendimento)} />
+                      
+                      {/* ✅ NOVO MÓDULO SAÚDE INCLUSIVA ADICIONADO AQUI */}
+                      <ModuloBtn 
+                        label="Inclusiva" 
+                        icon={<Accessibility size={14} />} 
+                        ativo={u.modulosSidebar?.saude_inclusiva} 
+                        onClick={() => toggleModulo(u.id, 'saude_inclusiva', u.modulosSidebar?.saude_inclusiva)} 
+                      />
+
                       <ModuloBtn label="Contato" icon={<Contact size={14} />} ativo={u.modulosSidebar?.espelho} onClick={() => toggleModulo(u.id, 'espelho', u.modulosSidebar?.espelho)} />
                       <ModuloBtn label="Saúde" icon={<HeartPulse size={14} />} ativo={u.modulosSidebar?.saude_escolar} onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} />
                       <ModuloBtn label="Pasta" icon={<FolderSearch size={14} />} ativo={u.modulosSidebar?.pasta_digital} onClick={() => toggleModulo(u.id, 'pasta_digital', u.modulosSidebar?.pasta_digital)} />
                       <ModuloBtn label="Cads" icon={<UserRound size={14} />} ativo={u.modulosSidebar?.pacientes} onClick={() => toggleModulo(u.id, 'pacientes', u.modulosSidebar?.pacientes)} />
                       
-                      {/* ✅ Mapeado para auditoria_pro para destravar no Dashboard */}
                       <ModuloBtn 
                         label="Auditoria" 
                         icon={<BarChart3 size={14} />} 
