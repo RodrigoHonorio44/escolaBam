@@ -1,138 +1,149 @@
-import React, { useEffect, useState, useMemo, useRef } from 'react';
-import { db } from '../../firebase/firebaseConfig';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { Brain, Search, Activity, Users, Zap, Wheelchair } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { db, auth } from '../../firebase/firebaseConfig'; 
+import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { Brain, Search, Users, Zap, Printer, Phone, ChevronDown, Accessibility, Loader2 } from 'lucide-react';
 
-const DashboardSaudeInclusiva = () => {
+const DashboardSaudeInclusiva = ({ setDadosParaEdicao, setActiveTab }) => {
   const [alunosEspeciais, setAlunosEspeciais] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filtro, setFiltro] = useState("");
-  
-  const inputRef = useRef(null);
+  const [abaAtiva, setAbaAtiva] = useState("todos");
+  const [cardAberto, setCardAberto] = useState(null);
 
   useEffect(() => {
     const buscarAlunosEspeciais = async () => {
+      // Importante: Só executa se o usuário estiver logado para evitar erro de permissão
+      if (!auth.currentUser) return;
+
+      setLoading(true);
       try {
-        // Buscando da coleção 'alunos' (ou 'pastas_digitais' se preferir centralizar)
-        const q = query(collection(db, "alunos"), where("isPCD", "==", "sim"), orderBy("nome", "asc"));
+        const q = query(collection(db, "pastas_digitais"), orderBy("nome", "asc"));
         const snap = await getDocs(q);
-        const lista = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        const lista = snap.docs
+          .map(doc => ({ id: doc.id, ...doc.data() }))
+          .filter(a => a.isPCD?.toLowerCase() === "sim");
+
         setAlunosEspeciais(lista);
       } catch (error) {
-        console.error("Erro Firebase:", error);
+        console.error("Erro ao carregar PCDs:", error);
+        // Se o erro de permissão persistir aqui, remova o 'orderBy("nome", "asc")' 
+        // ou clique no link que aparecerá no console do navegador para criar o índice.
       } finally {
         setLoading(false);
       }
     };
+
     buscarAlunosEspeciais();
   }, []);
 
-  // 1. LÓGICA DOS CARDS DE CONTAGEM (ESTATÍSTICAS)
-  const stats = useMemo(() => {
-    const contar = (termo) => alunosEspeciais.filter(a => 
-      a.tipoNecessidade?.toLowerCase().includes(termo.toLowerCase())
-    ).length;
+  const dadosFiltrados = useMemo(() => {
+    let base = alunosEspeciais;
+    if (abaAtiva === "tea") {
+      base = base.filter(a => a.tipoNecessidade?.toLowerCase().includes("tea") || a.tipoNecessidade?.toLowerCase().includes("autismo"));
+    } else if (abaAtiva === "tdah") {
+      base = base.filter(a => a.tipoNecessidade?.toLowerCase().includes("tdah"));
+    } else if (abaAtiva === "outros") {
+      base = base.filter(a => {
+        const n = a.tipoNecessidade?.toLowerCase() || "";
+        return !n.includes("tea") && !n.includes("autismo") && !n.includes("tdah");
+      });
+    }
+    if (filtro) {
+      base = base.filter(a => a.nome?.toLowerCase().includes(filtro.toLowerCase()));
+    }
+    return base;
+  }, [alunosEspeciais, abaAtiva, filtro]);
 
-    return [
-      { label: "Total PCD", qtd: alunosEspeciais.length, cor: "bg-slate-900", icon: <Users size={18} /> },
-      { label: "Autismo / TEA", qtd: contar("tea") + contar("autismo"), cor: "bg-blue-600", icon: <Brain size={18} /> },
-      { label: "TDAH", qtd: contar("tdah"), cor: "bg-purple-600", icon: <Zap size={18} /> },
-      { label: "Cadeirantes", qtd: contar("cadeira") + contar("física"), cor: "bg-emerald-600", icon: <Wheelchair size={18} /> },
-    ];
-  }, [alunosEspeciais]);
-
-  // 2. FILTRAGEM PARA A LISTA
-  const alunosFiltrados = useMemo(() => {
-    const termo = filtro.toLowerCase();
-    return alunosEspeciais.filter(aluno => 
-      aluno.nome?.toLowerCase().includes(termo) ||
-      aluno.tipoNecessidade?.toLowerCase().includes(termo)
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400">
+        <Loader2 className="animate-spin mb-4" size={40} />
+        <p className="font-black uppercase italic text-[10px] tracking-widest">Carregando Base PCD...</p>
+      </div>
     );
-  }, [alunosEspeciais, filtro]);
-
-  const handleBusca = (e) => {
-    const valor = e.target.value;
-    clearTimeout(window.buscaTimeout);
-    window.buscaTimeout = setTimeout(() => {
-      setFiltro(valor);
-    }, 300);
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6 font-sans">
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* CABEÇALHO E BUSCA */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <h1 className="text-3xl font-black text-slate-800 uppercase italic flex items-center gap-3">
-            <Brain className="text-purple-600" size={32} /> Saúde Inclusiva
-          </h1>
-
-          <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-            <input 
-              ref={inputRef}
-              type="text"
-              placeholder="BUSCAR NOME OU CONDIÇÃO..."
-              onChange={handleBusca}
-              autoFocus
-              className="pl-12 pr-6 py-4 bg-white border-none shadow-xl rounded-2xl w-full md:w-96 font-black text-[10px] outline-none focus:ring-2 ring-purple-500 transition-all uppercase italic"
-            />
-          </div>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter flex items-center gap-2">
+            <Brain size={28} className="text-purple-600" /> Saúde Inclusiva
+          </h2>
+          <p className="text-[10px] font-bold text-slate-400 uppercase italic">Monitoramento de Alunos Especiais</p>
         </div>
+        <button onClick={() => window.print()} className="no-print flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] shadow-lg hover:bg-purple-700 transition-all active:scale-95">
+          <Printer size={18} /> Imprimir Relatório
+        </button>
+      </div>
 
-        {/* CARDS DE CONTAGEM */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {stats.map((item, idx) => (
-            <div key={idx} className="bg-white p-6 rounded-[35px] shadow-sm border border-slate-100 flex flex-col gap-3">
-              <div className={`w-10 h-10 ${item.cor} text-white rounded-2xl flex items-center justify-center shadow-lg`}>
-                {item.icon}
-              </div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{item.label}</p>
-                <p className="text-3xl font-black text-slate-800 italic">{item.qtd}</p>
-              </div>
-            </div>
-          ))}
-        </div>
+      <div className="flex flex-wrap gap-2 no-print bg-white p-2 rounded-[25px] border border-slate-100 shadow-sm">
+        {[
+          { id: "todos", label: "Geral", icon: <Users size={14}/> },
+          { id: "tea", label: "TEA", icon: <Brain size={14}/> },
+          { id: "tdah", label: "TDAH", icon: <Zap size={14}/> },
+          { id: "outros", label: "Outros", icon: <Accessibility size={14}/> },
+        ].map(tab => (
+          <button key={tab.id} onClick={() => { setAbaAtiva(tab.id); setCardAberto(null); }} className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-[20px] text-[10px] font-black uppercase italic transition-all ${abaAtiva === tab.id ? "bg-purple-600 text-white shadow-md" : "text-slate-400 hover:bg-slate-50"}`}>
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
 
-        {/* LISTAGEM DE ALUNOS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {loading ? (
-            <div className="col-span-full flex justify-center py-20">
-              <Activity className="animate-spin text-purple-600" size={48} />
-            </div>
-          ) : (
-            alunosFiltrados.map((aluno) => (
-              <div key={aluno.id} className="bg-white rounded-[40px] p-8 shadow-md border border-slate-100 border-b-8 border-b-purple-500 hover:scale-[1.01] transition-transform">
-                <div className="flex justify-between items-start mb-4">
+      <div className="relative no-print">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
+        <input type="text" placeholder={`Buscar aluno em ${abaAtiva}...`} className="w-full pl-12 pr-6 py-4 bg-white border border-slate-100 rounded-3xl font-black text-[10px] uppercase italic shadow-sm outline-none focus:ring-2 ring-purple-500 transition-all" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
+      </div>
+
+      <div className="grid grid-cols-1 gap-3">
+        {dadosFiltrados.length > 0 ? (
+          dadosFiltrados.map(aluno => (
+            <div key={aluno.id} className="bg-white rounded-[30px] border border-slate-100 shadow-sm overflow-hidden">
+              <div onClick={() => setCardAberto(cardAberto === aluno.id ? null : aluno.id)} className="p-5 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-all">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center font-black text-sm border border-purple-100">
+                    {aluno.nome?.substring(0, 2).toUpperCase()}
+                  </div>
                   <div>
-                    <h3 className="font-black text-xl text-slate-800 uppercase italic leading-tight">{aluno.nome}</h3>
-                    <p className="text-[10px] text-slate-400 font-black uppercase mt-1">Turma: {aluno.turma || "Não informada"}</p>
-                  </div>
-                  <div className="bg-purple-50 text-purple-600 px-4 py-2 rounded-2xl text-[10px] font-black uppercase italic">
-                    CID: {aluno.numeroCid || "---"}
+                    <h3 className="font-black text-slate-800 uppercase italic text-sm capitalize">{aluno.nome}</h3>
+                    <p className="text-[9px] font-bold text-slate-400 uppercase">TURMA: {aluno.turma || '---'}</p>
                   </div>
                 </div>
-
-                <div className="bg-slate-50 p-4 rounded-3xl border border-slate-100 flex items-center gap-4">
-                   <div className="p-3 bg-white rounded-xl shadow-sm text-purple-600"><Brain size={20}/></div>
-                   <div>
-                     <p className="text-[8px] font-black text-slate-400 uppercase">Condição Principal</p>
-                     <p className="text-xs font-black text-slate-700 uppercase italic leading-none">{aluno.tipoNecessidade || "PCD"}</p>
-                   </div>
-                </div>
+                <ChevronDown size={20} className={`text-slate-300 transition-transform ${cardAberto === aluno.id ? "rotate-180" : ""}`} />
               </div>
-            ))
-          )}
-          
-          {!loading && alunosFiltrados.length === 0 && (
-            <div className="col-span-full text-center py-20 bg-white rounded-[40px] border-2 border-dashed border-slate-200">
-              <Brain size={48} className="mx-auto mb-4 text-slate-200" />
-              <p className="text-slate-400 font-black uppercase italic text-sm tracking-widest">Nenhum aluno localizado</p>
+              {cardAberto === aluno.id && (
+                <div className="px-6 pb-6 pt-2 border-t border-slate-50 animate-in slide-in-from-top-2 duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                    <div className="space-y-3">
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">Diagnóstico / Necessidade</p>
+                        <p className="text-[11px] font-black text-slate-800 uppercase italic">{aluno.tipoNecessidade || "PCD"}</p>
+                      </div>
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                        <p className="text-[8px] font-black text-slate-400 uppercase mb-1">CID Informado</p>
+                        <p className="text-[11px] font-black text-slate-800">{aluno.numeroCid || "Não registrado"}</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-between gap-3">
+                      <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 flex items-center gap-3">
+                        <Phone size={16} className="text-blue-600" />
+                        <p className="text-[11px] font-black text-blue-900">{aluno.contato1_telefone || "Sem telefone"}</p>
+                      </div>
+                      <button onClick={() => { setDadosParaEdicao(aluno); setActiveTab("pasta_digital"); }} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] italic shadow-lg hover:bg-blue-600 transition-all">
+                        Acessar Pasta Digital
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          ))
+        ) : (
+          <div className="text-center py-20 bg-slate-50 rounded-[40px] border-2 border-dashed border-slate-100">
+            <p className="text-slate-300 font-black uppercase italic text-xs">Nenhum aluno PCD encontrado nesta categoria.</p>
+          </div>
+        )}
       </div>
     </div>
   );
