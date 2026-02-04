@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../../firebase/firebaseConfig';
@@ -7,7 +7,7 @@ import {
 } from 'firebase/firestore';
 import { 
   UserPlus, Save, Loader2, AlertCircle, School, X, ArrowLeft,
-  Hash, CreditCard, Users, Stethoscope, Brain, Search, MapPin, Eraser, Pill, MessageSquare
+  Hash, CreditCard, Users, Stethoscope, Brain, Search, MapPin, Eraser, Pill, MessageSquare, Accessibility, Zap, PlusCircle, Accessibility as Wheelchair
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -25,11 +25,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
 
   const dadosIniciais = alunoParaEditar || dadosEdicao;
   
+  // Normalização para minúsculas conforme solicitado
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
   const defaultValues = {
     nome: '',
     matriculaInteligente: '',
+    cartaoSus: '',
     naoSabeEtnia: false,
     naoSabePeso: false,
     naoSabeAltura: false,
@@ -42,7 +44,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     peso: '',
     altura: '',
     isPCD: 'não',
-    tipoNecessidade: '',
+    tipoDeficiencia: '',
+    categoriasPCD: [], 
+    detalheTEA: '',
+    detalheTDAH: '',
+    detalheIntelectual: '',
+    detalheFisico: 'andante sem auxílio', 
+    outrosDiagnosticos: '', 
     numeroCid: '',
     tomaMedicao: 'não',
     detalhesMedicao: '',
@@ -70,14 +78,18 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   const naoSabeEndereco = watch("naoSabeEndereco");
   const watchTemAlergia = watch("temAlergia");
   const watchIsPCD = watch("isPCD");
+  const watchCategoriasPCD = watch("categoriasPCD") || [];
   const watchTomaMedicao = watch("tomaMedicao");
   const watchCep = watch("endereco_cep");
+  const watchDetalheFisico = watch("detalheFisico");
+  const watchTipoDeficiencia = watch("tipoDeficiencia");
 
   const limparFormulario = () => {
     reset(defaultValues);
     toast.success("formulário limpo!");
   };
 
+  // Busca de CEP
   useEffect(() => {
     const cepLimpo = watchCep?.replace(/\D/g, "");
     if (cepLimpo?.length === 8) {
@@ -100,6 +112,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     }
   }, [watchCep, setValue]);
 
+  // Carrega sugestões de nomes
   useEffect(() => {
     const carregarNomes = async () => {
       try {
@@ -112,12 +125,14 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     carregarNomes();
   }, []);
 
+  // Preenche dados para edição
   useEffect(() => {
     if (dadosIniciais) {
       reset({
         ...dadosIniciais,
         contato1_telefone: aplicarMascaraTelefone(dadosIniciais.contato1_telefone || ""),
         contato2_telefone: aplicarMascaraTelefone(dadosIniciais.contato2_telefone || ""),
+        categoriasPCD: Array.isArray(dadosIniciais.categoriasPCD) ? dadosIniciais.categoriasPCD : [],
       });
       setValue("naoSabeEtnia", !dadosIniciais.etnia);
       setValue("naoSabePeso", !dadosIniciais.peso);
@@ -127,6 +142,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     }
   }, [dadosIniciais, reset, setValue]);
 
+  // Lógica de Cruzamento de Dados (Busca Inteligente)
   const buscarAluno = async () => {
     const nomeAtual = watch("nome");
     const nomeBusca = paraBanco(nomeAtual);
@@ -177,7 +193,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         peso: dQuest.peso || dAtend.peso || dPasta.peso || "",
         altura: dQuest.altura || dAtend.altura || dPasta.altura || "",
         isPCD: dPasta.isPCD || dQuest.isPCD || 'não',
-        tipoNecessidade: dPasta.tipoNecessidade || dQuest.tipoNecessidade || "",
+        tipoDeficiencia: dPasta.tipoDeficiencia || "",
+        categoriasPCD: dPasta.categoriasPCD || [],
+        detalheTEA: dPasta.detalheTEA || "",
+        detalheTDAH: dPasta.detalheTDAH || dPasta.tipoNecessidade || "",
+        detalheIntelectual: dPasta.detalheIntelectual || "",
+        detalheFisico: dPasta.detalheFisico || "andante sem auxílio",
+        outrosDiagnosticos: dPasta.outrosDiagnosticos || "",
         numeroCid: dPasta.numeroCid || dQuest.numeroCid || "",
         tomaMedicao: dPasta.tomaMedicao || dQuest.tomaMedicao || 'não',
         detalhesMedicao: dPasta.detalhesMedicao || dQuest.detalhesMedicao || "",
@@ -203,6 +225,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     } finally { setBuscando(false); }
   };
 
+  // Cálculo de idade
   useEffect(() => {
     if (watchDataNasc) {
       const hoje = new Date();
@@ -235,8 +258,15 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         turma: paraBanco(data.turma),
         sexo: paraBanco(data.sexo),
         etnia: data.naoSabeEtnia ? "" : paraBanco(data.etnia),
-        tipoNecessidade: data.isPCD === 'sim' ? paraBanco(data.tipoNecessidade) : "",
+        
+        tipoDeficiencia: data.isPCD === 'sim' ? paraBanco(data.tipoDeficiencia) : "",
+        detalheTEA: data.isPCD === 'sim' ? paraBanco(data.detalheTEA) : "",
+        detalheTDAH: data.isPCD === 'sim' ? paraBanco(data.detalheTDAH) : "",
+        detalheIntelectual: data.isPCD === 'sim' ? paraBanco(data.detalheIntelectual) : "",
+        detalheFisico: paraBanco(data.detalheFisico), 
+        outrosDiagnosticos: data.isPCD === 'sim' ? paraBanco(data.outrosDiagnosticos) : "",
         numeroCid: data.isPCD === 'sim' ? paraBanco(data.numeroCid) : "",
+        
         tomaMedicao: paraBanco(data.tomaMedicao),
         detalhesMedicao: data.tomaMedicao === 'sim' ? paraBanco(data.detalhesMedicao) : "",
         endereco_rua: data.naoSabeEndereco ? "pendente" : paraBanco(data.endereco_rua),
@@ -277,16 +307,11 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
               {dadosIniciais ? 'Atualizar Pasta' : 'Cadastro de Aluno'}
             </h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">Salvamento em Minúsculas • Limpeza Automática</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">Salvamento em Minúsculas • Acessibilidade e Saúde</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button 
-            type="button" 
-            onClick={limparFormulario} 
-            title="Limpar todos os campos"
-            className="p-2 hover:bg-amber-50 text-amber-500 rounded-full transition-all"
-          >
+          <button type="button" onClick={limparFormulario} title="Limpar todos os campos" className="p-2 hover:bg-amber-50 text-amber-500 rounded-full transition-all">
             <Eraser size={26} />
           </button>
           <button type="button" onClick={() => modoPastaDigital ? (onClose ? onClose() : onVoltar()) : navigate('/dashboard')} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"><X size={28} /></button>
@@ -294,6 +319,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       </div>
       
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* IDENTIFICAÇÃO ESCOLAR */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-blue-50 rounded-[30px] border-2 border-blue-100 shadow-inner">
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-2"><Hash size={14}/> Numero E. Cidade</label>
@@ -311,6 +337,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
         </div>
 
+        {/* NOME E DATA */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
           <div className="relative group">
@@ -339,58 +366,151 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 rounded-2xl font-bold text-blue-700 outline-none" />
         </div>
 
-        {/* --- SEÇÃO PCD COM MEDICAÇÃO --- */}
-        <div className="md:col-span-2 p-6 bg-purple-50 rounded-[30px] border-2 border-purple-100 space-y-4 shadow-sm">
-          <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Stethoscope size={14}/> Condição PCD & Neurodiversidade</label>
+        {/* SEÇÃO PCD */}
+        <div className="md:col-span-2 p-6 bg-purple-50 rounded-[35px] border-2 border-purple-100 space-y-4 shadow-sm">
+          <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Stethoscope size={14}/> Condição PCD & Acessibilidade</label>
+          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <select {...register("isPCD")} className="w-full px-5 py-4 bg-white border-2 border-purple-100 rounded-2xl font-bold outline-none">
-              <option value="não">Não possui necessidades especiais</option>
-              <option value="sim">Sim, possui necessidades especiais</option>
+              <option value="não">não possui necessidades especiais</option>
+              <option value="sim">sim, possui necessidades especiais</option>
             </select>
             {watchIsPCD === 'sim' && (
-              <input {...register("numeroCid")} placeholder="Número do CID" className="w-full px-5 py-4 bg-white border-2 border-purple-200 rounded-2xl font-bold text-purple-700 focus:border-purple-600 outline-none" />
+              <div className="relative animate-in zoom-in-95">
+                <input {...register("numeroCid")} placeholder="CIDs (Ex: F84, G80)" className="w-full px-5 py-4 bg-white border-2 border-purple-300 rounded-2xl font-black text-purple-700 outline-none focus:border-purple-600" />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-black text-purple-400 italic">OBRIGATÓRIO</span>
+              </div>
             )}
           </div>
           
           {watchIsPCD === 'sim' && (
-            <>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1 flex items-center gap-2"><Brain size={12}/> Tipo de Necessidade Especial</label>
-                <select {...register("tipoNecessidade")} className="w-full px-5 py-4 bg-white border-2 border-purple-100 rounded-2xl font-bold outline-none focus:border-purple-600">
-                  <option value="">Selecione uma categoria...</option>
-                  <optgroup label="Deficiências">
-                    <option value="deficiência física">Deficiência Física</option>
-                    <option value="deficiência visual">Deficiência Visual</option>
-                    <option value="deficiência auditiva">Deficiência Auditiva</option>
-                    <option value="deficiência intelectual">Deficiência Intelectual</option>
-                  </optgroup>
-                  <optgroup label="Transtornos">
-                    <option value="tea">TEA (Autismo)</option>
-                    <option value="tdah">TDAH</option>
-                    <option value="tod">TOD</option>
-                  </optgroup>
-                </select>
+            <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
+              
+              {/* Categorias - Múltipla Escolha */}
+              <div className="space-y-3">
+                <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1 flex items-center gap-2"><Brain size={12}/> Categorias do Laudo (Múltipla Escolha)</label>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                  {[
+                    { id: 'tea', label: 'tea (autismo)', icon: <Brain size={16}/> },
+                    { id: 'tdah', label: 'tdah / tod', icon: <Zap size={16}/> },
+                    { id: 'intelectual', label: 'intelectual', icon: <Users size={16}/> },
+                    { id: 'fisica', label: 'física/motora', icon: <Accessibility size={16}/> },
+                    { id: 'pcd', label: 'pcd', icon: <Wheelchair size={16}/> }, 
+                  ].map((cat) => {
+                    const isSel = watchCategoriasPCD.includes(cat.id);
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => {
+                          const novos = isSel ? watchCategoriasPCD.filter(i => i !== cat.id) : [...watchCategoriasPCD, cat.id];
+                          setValue("categoriasPCD", novos);
+                        }}
+                        className={`flex flex-col items-center justify-center p-4 rounded-[20px] border-2 transition-all gap-2 h-[85px] ${
+                          isSel 
+                            ? "border-purple-600 bg-white text-purple-600 shadow-md scale-105" 
+                            : "border-transparent bg-purple-100/50 text-purple-300 hover:bg-purple-100"
+                        }`}
+                      >
+                        {cat.icon}
+                        <span className="font-black text-[8px] uppercase">{cat.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
+              {/* Lista específica do CARD PCD */}
+              {watchCategoriasPCD.includes('pcd') && (
+                <div className="space-y-2 animate-in zoom-in-95">
+                  <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1">Tipo de Deficiência (PCD)</label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {["deficiência física", "deficiência auditiva", "deficiência visual", "deficiência intelectual", "deficiência múltipla"].map((tipo) => (
+                       <button
+                       key={tipo}
+                       type="button"
+                       onClick={() => setValue("tipoDeficiencia", tipo)}
+                       className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${
+                         watchTipoDeficiencia === tipo ? "border-purple-600 bg-white text-purple-600 shadow-sm" : "border-purple-50 bg-white/40 text-slate-400"
+                       }`}
+                     >
+                       {tipo}
+                     </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Detalhes Dinâmicos */}
+              {(watchCategoriasPCD.some(c => ['tea', 'tdah', 'intelectual'].includes(c))) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white/50 p-4 rounded-2xl border border-purple-100">
+                  {watchCategoriasPCD.includes('tea') && (
+                    <select {...register("detalheTEA")} className="w-full px-4 py-3 rounded-xl border-2 border-purple-50 bg-white font-bold text-xs outline-none">
+                      <option value="">nível de suporte tea...</option>
+                      <option value="nível 1">nível 1 (leve)</option>
+                      <option value="nível 2">nível 2 (moderado)</option>
+                      <option value="nível 3">nível 3 (severo)</option>
+                    </select>
+                  )}
+                  {watchCategoriasPCD.includes('tdah') && (
+                    <select {...register("detalheTDAH")} className="w-full px-4 py-3 rounded-xl border-2 border-purple-50 bg-white font-bold text-xs outline-none">
+                      <option value="">tipo de tdah/tod...</option>
+                      <option value="tdah - desatento">tdah - desatento</option>
+                      <option value="tdah - hiperativo">tdah - hiperativo</option>
+                      <option value="tdah - misto">tdah - misto</option>
+                      <option value="tod">tod (oposição desafiante)</option>
+                    </select>
+                  )}
+                  {watchCategoriasPCD.includes('intelectual') && (
+                    <select {...register("detalheIntelectual")} className="w-full px-4 py-3 rounded-xl border-2 border-purple-50 bg-white font-bold text-xs outline-none">
+                      <option value="">grau de deficiência...</option>
+                      <option value="leve">deficiência intelectual leve</option>
+                      <option value="moderada">deficiência intelectual moderada</option>
+                      <option value="severa">deficiência intelectual severa</option>
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {/* Locomoção */}
+              {watchCategoriasPCD.length > 0 && (
+                <div className="p-5 bg-white rounded-[25px] border-2 border-purple-100 space-y-3 shadow-inner animate-in slide-in-from-top-2">
+                  <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Accessibility size={16}/> Auxílio de Locomoção / Mobilidade</label>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {["andante sem auxílio", "cadeirante", "uso de muletas", "uso de andador", "prótese física", "paralisia cerebral"].map((item) => (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setValue("detalheFisico", item)}
+                        className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${
+                          watchDetalheFisico === item ? "border-purple-600 bg-purple-600 text-white shadow-md" : "border-purple-50 bg-slate-50 text-slate-400 hover:border-purple-200"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* MEDICAÇÃO */}
               <div className="pt-4 border-t border-purple-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-purple-500 uppercase italic ml-1 flex items-center gap-2"><Pill size={12}/> Toma Medicação?</label>
-                  <select {...register("tomaMedicao")} className="w-full px-5 py-4 bg-white border-2 border-purple-100 rounded-2xl font-bold outline-none focus:border-purple-600">
-                    <option value="não">Não utiliza medicação contínua</option>
-                    <option value="sim">Sim, utiliza medicação contínua</option>
+                  <label className="text-[10px] font-black text-purple-500 uppercase italic ml-1 flex items-center gap-2"><Pill size={12}/> Medicação Contínua?</label>
+                  <select {...register("tomaMedicao")} className="w-full px-5 py-4 bg-white border-2 border-purple-100 rounded-2xl font-bold outline-none">
+                    <option value="não">não utiliza medicação</option>
+                    <option value="sim">sim, utiliza medicação</option>
                   </select>
                 </div>
                 {watchTomaMedicao === 'sim' && (
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-purple-500 uppercase italic ml-1">Detalhes e Horários</label>
-                    <input {...register("detalhesMedicao")} placeholder="Nome do remédio e dose" className="w-full px-5 py-4 bg-white border-2 border-purple-200 rounded-2xl font-bold text-purple-700 focus:border-purple-600 outline-none" />
-                  </div>
+                  <input {...register("detalhesMedicao")} placeholder="Remédio e Dose" className="w-full px-5 py-4 bg-white border-2 border-purple-200 rounded-2xl font-bold text-purple-700 outline-none mt-auto" />
                 )}
               </div>
-            </>
+            </div>
           )}
         </div>
 
+        {/* CONTATOS DE EMERGÊNCIA - Parentescos adicionados */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-200 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2 italic"><Users size={14}/> Contatos de Emergência</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -398,16 +518,10 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
               <input {...register("contato1_nome", { required: true })} placeholder="Nome do Responsável" className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none" />
               <div className="grid grid-cols-2 gap-2">
                 <select {...register("contato1_parentesco")} className="px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none">
-                  <option value="mãe">Mãe</option>
-                  <option value="pai">Pai</option>
-                  <option value="madrasta">Madrasta</option>
-                  <option value="padrasto">Padrasto</option>
-                  <option value="avó">Avó</option>
-                  <option value="avô">Avô</option>
-                  <option value="tio">Tio</option>
-                  <option value="tia">Tia</option>
-                  <option value="irmão">Irmão</option>
-                  <option value="irmã">Irmã</option>
+                  <option value="mãe">mãe</option><option value="pai">pai</option><option value="avó">avó</option>
+                  <option value="avô">avô</option><option value="tio">tio</option><option value="tia">tia</option>
+                  <option value="padrasto">padrasto</option><option value="madrasta">madrasta</option>
+                  <option value="irmão">irmão</option><option value="irmã">irmã</option>
                 </select>
                 <input {...register("contato1_telefone", { required: true })} onChange={(e) => setValue("contato1_telefone", aplicarMascaraTelefone(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none" />
               </div>
@@ -416,16 +530,10 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
               <input {...register("contato2_nome")} placeholder="Nome do Segundo Contato" className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none" />
               <div className="grid grid-cols-2 gap-2">
                 <select {...register("contato2_parentesco")} className="px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none">
-                  <option value="pai">Pai</option>
-                  <option value="mãe">Mãe</option>
-                  <option value="madrasta">Madrasta</option>
-                  <option value="padrasto">Padrasto</option>
-                  <option value="avó">Avó</option>
-                  <option value="avô">Avô</option>
-                  <option value="tio">Tio</option>
-                  <option value="tia">Tia</option>
-                  <option value="irmão">Irmão</option>
-                  <option value="irmã">Irmã</option>
+                  <option value="pai">pai</option><option value="mãe">mãe</option><option value="avô">avô</option>
+                  <option value="avó">avó</option><option value="tio">tio</option><option value="tia">tia</option>
+                  <option value="padrasto">padrasto</option><option value="madrasta">madrasta</option>
+                  <option value="irmão">irmão</option><option value="irmã">irmã</option>
                 </select>
                 <input {...register("contato2_telefone")} onChange={(e) => setValue("contato2_telefone", aplicarMascaraTelefone(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none" />
               </div>
@@ -433,6 +541,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
+        {/* LOCALIZAÇÃO */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4 shadow-inner">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin size={12}/> Localização</label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -449,41 +558,49 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         <div className="space-y-2">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
           <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none" required>
-            <option value="">Selecione...</option>
-            <option value="masculino">Masculino</option>
-            <option value="feminino">Feminino</option>
+            <option value="">selecione...</option>
+            <option value="masculino">masculino</option>
+            <option value="feminino">feminino</option>
           </select>
         </div>
 
-        {/* --- SEÇÃO DE ALERGIAS COM CAMPO DE OBSERVAÇÕES CONDICIONAL --- */}
-        <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
-          <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Alergias & Observações</label>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <select {...register("temAlergia")} className="w-full px-5 py-4 bg-white border-2 border-red-100 rounded-2xl font-bold outline-none">
-              <option value="não">Não possui alergias</option>
-              <option value="sim">Sim, possui alergias</option>
-            </select>
-            {watchTemAlergia === 'sim' && (
-              <input {...register("historicoMedico")} placeholder="Quais as alergias?" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 focus:border-red-600 outline-none" />
-            )}
-          </div>
-          
-          {/* Campo de observações agora só abre se for alérgico */}
-          {watchTemAlergia === 'sim' && (
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-red-400 uppercase italic ml-1 flex items-center gap-2"><MessageSquare size={12}/> Observações Adicionais</label>
-              <textarea 
-                {...register("observacoesAlergia")} 
-                placeholder="Descreva detalhes sobre alergias, reações ou cuidados específicos..." 
-                rows="2"
-                className="w-full px-5 py-4 bg-white border-2 border-red-100 rounded-2xl font-bold text-slate-700 focus:red-600 outline-none resize-none"
-              />
-            </div>
-          )}
-        </div>
+       {/* ALERGIAS */}
+<div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
+  <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic">
+    <AlertCircle size={14}/> Alergias & Observações
+  </label>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <select {...register("temAlergia")} className="w-full px-5 py-4 bg-white border-2 border-red-100 rounded-2xl font-bold outline-none">
+      <option value="não">não possui alergias</option>
+      <option value="sim">sim, possui alergias</option>
+    </select>
 
-        <button type="submit" disabled={isSubmitting} className={`md:col-span-2 mt-4 py-6 rounded-[30px] font-black uppercase italic shadow-2xl flex items-center justify-center gap-4 transition-all ${Object.keys(errors).length > 0 ? 'bg-red-500 text-white' : 'bg-blue-600 text-white hover:bg-blue-700'} disabled:opacity-50`}>
-          {isSubmitting ? <Loader2 className="animate-spin" /> : <><Save size={20} /> Salvar e Sincronizar Tudo</>}
+    {/* Os campos abaixo só aparecem se 'temAlergia' for 'sim' */}
+    {watchTemAlergia === 'sim' && (
+      <>
+        <div className="animate-in zoom-in-95">
+          <input 
+            {...register("historicoMedico")} 
+            placeholder="Qual alergia? (Ex: amendoim, dipirona)" 
+            className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 outline-none focus:border-red-500 transition-all" 
+          />
+        </div>
+        <div className="md:col-span-2 animate-in slide-in-from-top-2">
+          <textarea 
+            {...register("observacoesAlergia")} 
+            placeholder="Descreva aqui os sintomas ou cuidados necessários em caso de reação..." 
+            className="w-full px-5 py-4 bg-white rounded-2xl font-bold text-slate-600 outline-none h-24 resize-none border-2 border-red-100 focus:border-red-400 transition-all" 
+          />
+        </div>
+      </>
+    )}
+  </div>
+</div>
+
+        <button type="submit" disabled={isSubmitting} className="md:col-span-2 w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-[25px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
+          {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
+          {dadosIniciais ? 'Atualizar Registro' : 'Finalizar Cadastro'}
         </button>
       </form>
     </div>
