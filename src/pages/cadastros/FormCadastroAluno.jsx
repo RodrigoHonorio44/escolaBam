@@ -24,12 +24,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   const [sugestoes, setSugestoes] = useState([]);
 
   const dadosIniciais = alunoParaEditar || dadosEdicao;
-  
-  // Normalização para minúsculas conforme solicitado
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
   const defaultValues = {
     nome: '',
+    nomeMae: '',
+    nomePai: '',
+    semPaiDeclarado: false,
     matriculaInteligente: '',
     cartaoSus: '',
     naoSabeEtnia: false,
@@ -89,7 +90,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     toast.success("formulário limpo!");
   };
 
-  // Busca de CEP
   useEffect(() => {
     const cepLimpo = watchCep?.replace(/\D/g, "");
     if (cepLimpo?.length === 8) {
@@ -101,18 +101,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             setValue("endereco_rua", paraBanco(data.logradouro));
             setValue("endereco_bairro", paraBanco(`${data.bairro} - ${data.localidade}/${data.uf}`));
             toast.success("endereço localizado!");
-          } else {
-            toast.error("cep não encontrado.");
-          }
-        } catch (e) {
-          toast.error("erro ao buscar cep.");
-        }
+          } else { toast.error("cep não encontrado."); }
+        } catch (e) { toast.error("erro ao buscar cep."); }
       };
       buscarCep();
     }
   }, [watchCep, setValue]);
 
-  // Carrega sugestões de nomes
   useEffect(() => {
     const carregarNomes = async () => {
       try {
@@ -125,7 +120,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     carregarNomes();
   }, []);
 
-  // Preenche dados para edição
   useEffect(() => {
     if (dadosIniciais) {
       reset({
@@ -142,7 +136,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     }
   }, [dadosIniciais, reset, setValue]);
 
-  // Lógica de Cruzamento de Dados (Busca Inteligente)
   const buscarAluno = async () => {
     const nomeAtual = watch("nome");
     const nomeBusca = paraBanco(nomeAtual);
@@ -186,6 +179,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       reset({
         pacienteId: pacienteId,
         nome: dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || nomeAtual,
+        nomeMae: dPasta.nomeMae || dQuest.filiacaoMae || "",
+        nomePai: dPasta.nomePai || dQuest.filiacaoPai || "",
         dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || "",
         turma: dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || "",
         sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || "",
@@ -225,7 +220,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     } finally { setBuscando(false); }
   };
 
-  // Cálculo de idade
   useEffect(() => {
     if (watchDataNasc) {
       const hoje = new Date();
@@ -246,6 +240,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         ...data, 
         nome: nomeNormalizado,
         nomeBusca: nomeNormalizado,
+        nomeMae: paraBanco(data.nomeMae),
+        nomePai: paraBanco(data.nomePai),
         matriculaInteligente: paraBanco(data.matriculaInteligente),
         cartaoSus: paraBanco(data.cartaoSus),
         contato1_nome: paraBanco(data.contato1_nome),
@@ -258,7 +254,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         turma: paraBanco(data.turma),
         sexo: paraBanco(data.sexo),
         etnia: data.naoSabeEtnia ? "" : paraBanco(data.etnia),
-        
+        peso: data.naoSabePeso ? "" : paraBanco(data.peso),
+        altura: data.naoSabeAltura ? "" : paraBanco(data.altura),
         tipoDeficiencia: data.isPCD === 'sim' ? paraBanco(data.tipoDeficiencia) : "",
         detalheTEA: data.isPCD === 'sim' ? paraBanco(data.detalheTEA) : "",
         detalheTDAH: data.isPCD === 'sim' ? paraBanco(data.detalheTDAH) : "",
@@ -266,7 +263,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         detalheFisico: paraBanco(data.detalheFisico), 
         outrosDiagnosticos: data.isPCD === 'sim' ? paraBanco(data.outrosDiagnosticos) : "",
         numeroCid: data.isPCD === 'sim' ? paraBanco(data.numeroCid) : "",
-        
         tomaMedicao: paraBanco(data.tomaMedicao),
         detalhesMedicao: data.tomaMedicao === 'sim' ? paraBanco(data.detalhesMedicao) : "",
         endereco_rua: data.naoSabeEndereco ? "pendente" : paraBanco(data.endereco_rua),
@@ -281,17 +277,13 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       
       const batch = writeBatch(db);
       batch.set(doc(db, "pastas_digitais", idGerado), payload, { merge: true });
-      batch.set(doc(db, "alunos", idGerado), { ...payload, createdAt: dadosIniciais?.createdAt || serverTimestamp() }, { merge: true });
+      batch.set(doc(db, "alunos", idGerado), { ...payload, createdAt: serverTimestamp() }, { merge: true });
       await batch.commit();
 
       if (onSucesso) onSucesso();
-      if (modoPastaDigital) {
-        (onClose ? onClose() : onVoltar());
-      } else {
-        reset(defaultValues);
-      }
+      if (modoPastaDigital) (onClose ? onClose() : onVoltar());
+      else reset(defaultValues);
     };
-
     toast.promise(saveAction(), { loading: 'salvando...', success: 'base atualizada!', error: 'erro ao salvar.' });
   };
 
@@ -307,7 +299,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
               {dadosIniciais ? 'Atualizar Pasta' : 'Cadastro de Aluno'}
             </h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">Salvamento em Minúsculas • Acessibilidade e Saúde</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">R S • SALVAMENTO EM MINÚSCULAS</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -319,7 +311,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       </div>
       
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* IDENTIFICAÇÃO ESCOLAR */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-blue-50 rounded-[30px] border-2 border-blue-100 shadow-inner">
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-2"><Hash size={14}/> Numero E. Cidade</label>
@@ -337,7 +328,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
         </div>
 
-        {/* NOME E DATA */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
           <div className="relative group">
@@ -357,19 +347,46 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Data de Nascimento</label>
-          <input type="date" {...register("dataNascimento")} className="w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none bg-slate-50 border-transparent focus:border-blue-600" required />
-        </div>
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 italic">Idade Atual</label>
-          <input type="number" {...register("idade")} readOnly className="w-full px-5 py-4 bg-blue-50 rounded-2xl font-bold text-blue-700 outline-none" />
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-slate-50 rounded-[30px] border-2 border-slate-100 shadow-inner">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Mãe</label>
+            <input {...register("nomeMae", { required: "nome da mãe é obrigatório" })} placeholder="nome completo da mãe" className="w-full px-5 py-4 bg-white rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600 text-slate-700 transition-all" />
+          </div>
+          <div className="space-y-2">
+            <div className="flex justify-between items-center px-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Nome do Pai</label>
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input type="checkbox" {...register("semPaiDeclarado")} onChange={(e) => setValue("nomePai", e.target.checked ? "não declarado" : "")} className="w-3 h-3 rounded border-slate-300 text-blue-600" />
+                <span className="text-[9px] font-black text-slate-500 uppercase group-hover:text-red-500 transition-colors">Pai não declarado</span>
+              </label>
+            </div>
+            <input {...register("nomePai")} disabled={watch("semPaiDeclarado")} placeholder={watch("semPaiDeclarado") ? "NÃO DECLARADO" : "NOME COMPLETO DO PAI"} className={`w-full px-5 py-4 rounded-2xl font-bold outline-none border-2 transition-all ${watch("semPaiDeclarado") ? "bg-slate-100 border-transparent text-slate-400 italic" : "bg-white border-transparent focus:border-blue-600 text-slate-700"}`} />
+          </div>
         </div>
 
-        {/* SEÇÃO PCD */}
+        {/* NOVOS CAMPOS: ETNIA, PESO E ALTURA */}
+        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etnia / Cor</label>
+            <select {...register("etnia")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none transition-all">
+              <option value="">selecione...</option>
+              <option value="branca">branca</option><option value="preta">preta</option>
+              <option value="parda">parda</option><option value="amarela">amarela</option>
+              <option value="indígena">indígena</option><option value="não declarado">não declarado</option>
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Peso (kg)</label>
+            <input {...register("peso")} placeholder="ex: 45.5" className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none transition-all" />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Altura (m)</label>
+            <input {...register("altura")} placeholder="ex: 1.65" className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none transition-all" />
+          </div>
+        </div>
+
         <div className="md:col-span-2 p-6 bg-purple-50 rounded-[35px] border-2 border-purple-100 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Stethoscope size={14}/> Condição PCD & Acessibilidade</label>
-          
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <select {...register("isPCD")} className="w-full px-5 py-4 bg-white border-2 border-purple-100 rounded-2xl font-bold outline-none">
               <option value="não">não possui necessidades especiais</option>
@@ -382,11 +399,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
               </div>
             )}
           </div>
-          
           {watchIsPCD === 'sim' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
-              
-              {/* Categorias - Múltipla Escolha */}
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1 flex items-center gap-2"><Brain size={12}/> Categorias do Laudo (Múltipla Escolha)</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
@@ -399,18 +413,11 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   ].map((cat) => {
                     const isSel = watchCategoriasPCD.includes(cat.id);
                     return (
-                      <button
-                        key={cat.id}
-                        type="button"
-                        onClick={() => {
+                      <button key={cat.id} type="button" onClick={() => {
                           const novos = isSel ? watchCategoriasPCD.filter(i => i !== cat.id) : [...watchCategoriasPCD, cat.id];
                           setValue("categoriasPCD", novos);
                         }}
-                        className={`flex flex-col items-center justify-center p-4 rounded-[20px] border-2 transition-all gap-2 h-[85px] ${
-                          isSel 
-                            ? "border-purple-600 bg-white text-purple-600 shadow-md scale-105" 
-                            : "border-transparent bg-purple-100/50 text-purple-300 hover:bg-purple-100"
-                        }`}
+                        className={`flex flex-col items-center justify-center p-4 rounded-[20px] border-2 transition-all gap-2 h-[85px] ${isSel ? "border-purple-600 bg-white text-purple-600 shadow-md scale-105" : "border-transparent bg-purple-100/50 text-purple-300 hover:bg-purple-100"}`}
                       >
                         {cat.icon}
                         <span className="font-black text-[8px] uppercase">{cat.label}</span>
@@ -419,29 +426,19 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   })}
                 </div>
               </div>
-
-              {/* Lista específica do CARD PCD */}
               {watchCategoriasPCD.includes('pcd') && (
                 <div className="space-y-2 animate-in zoom-in-95">
                   <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1">Tipo de Deficiência (PCD)</label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {["deficiência física", "deficiência auditiva", "deficiência visual", "deficiência intelectual", "deficiência múltipla"].map((tipo) => (
-                       <button
-                       key={tipo}
-                       type="button"
-                       onClick={() => setValue("tipoDeficiencia", tipo)}
-                       className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${
-                         watchTipoDeficiencia === tipo ? "border-purple-600 bg-white text-purple-600 shadow-sm" : "border-purple-50 bg-white/40 text-slate-400"
-                       }`}
-                     >
+                       <button key={tipo} type="button" onClick={() => setValue("tipoDeficiencia", tipo)}
+                       className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${watchTipoDeficiencia === tipo ? "border-purple-600 bg-white text-purple-600 shadow-sm" : "border-purple-50 bg-white/40 text-slate-400"}`}>
                        {tipo}
-                     </button>
+                      </button>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* Detalhes Dinâmicos */}
               {(watchCategoriasPCD.some(c => ['tea', 'tdah', 'intelectual'].includes(c))) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white/50 p-4 rounded-2xl border border-purple-100">
                   {watchCategoriasPCD.includes('tea') && (
@@ -471,29 +468,19 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   )}
                 </div>
               )}
-
-              {/* Locomoção */}
               {watchCategoriasPCD.length > 0 && (
                 <div className="p-5 bg-white rounded-[25px] border-2 border-purple-100 space-y-3 shadow-inner animate-in slide-in-from-top-2">
                   <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Accessibility size={16}/> Auxílio de Locomoção / Mobilidade</label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                     {["andante sem auxílio", "cadeirante", "uso de muletas", "uso de andador", "prótese física", "paralisia cerebral"].map((item) => (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setValue("detalheFisico", item)}
-                        className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${
-                          watchDetalheFisico === item ? "border-purple-600 bg-purple-600 text-white shadow-md" : "border-purple-50 bg-slate-50 text-slate-400 hover:border-purple-200"
-                        }`}
-                      >
+                      <button key={item} type="button" onClick={() => setValue("detalheFisico", item)}
+                        className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${watchDetalheFisico === item ? "border-purple-600 bg-purple-600 text-white shadow-md" : "border-purple-50 bg-slate-50 text-slate-400 hover:border-purple-200"}`}>
                         {item}
                       </button>
                     ))}
                   </div>
                 </div>
               )}
-
-              {/* MEDICAÇÃO */}
               <div className="pt-4 border-t border-purple-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-purple-500 uppercase italic ml-1 flex items-center gap-2"><Pill size={12}/> Medicação Contínua?</label>
@@ -510,7 +497,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           )}
         </div>
 
-        {/* CONTATOS DE EMERGÊNCIA - Parentescos adicionados */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-200 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2 italic"><Users size={14}/> Contatos de Emergência</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -541,7 +527,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* LOCALIZAÇÃO */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4 shadow-inner">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin size={12}/> Localização</label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -564,39 +549,25 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </select>
         </div>
 
-       {/* ALERGIAS */}
-<div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
-  <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic">
-    <AlertCircle size={14}/> Alergias & Observações
-  </label>
-  
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    <select {...register("temAlergia")} className="w-full px-5 py-4 bg-white border-2 border-red-100 rounded-2xl font-bold outline-none">
-      <option value="não">não possui alergias</option>
-      <option value="sim">sim, possui alergias</option>
-    </select>
-
-    {/* Os campos abaixo só aparecem se 'temAlergia' for 'sim' */}
-    {watchTemAlergia === 'sim' && (
-      <>
-        <div className="animate-in zoom-in-95">
-          <input 
-            {...register("historicoMedico")} 
-            placeholder="Qual alergia? (Ex: amendoim, dipirona)" 
-            className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 outline-none focus:border-red-500 transition-all" 
-          />
+        <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
+          <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Alergias & Observações</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <select {...register("temAlergia")} className="w-full px-5 py-4 bg-white border-2 border-red-100 rounded-2xl font-bold outline-none">
+              <option value="não">não possui alergias</option>
+              <option value="sim">sim, possui alergias</option>
+            </select>
+            {watchTemAlergia === 'sim' && (
+              <>
+                <div className="animate-in zoom-in-95">
+                  <input {...register("historicoMedico")} placeholder="Qual alergia? (Ex: amendoim, dipirona)" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 outline-none focus:border-red-500 transition-all" />
+                </div>
+                <div className="md:col-span-2 animate-in slide-in-from-top-2">
+                  <textarea {...register("observacoesAlergia")} placeholder="Descreva aqui os sintomas ou cuidados necessários em caso de reação..." className="w-full px-5 py-4 bg-white rounded-2xl font-bold text-slate-600 outline-none h-24 resize-none border-2 border-red-100 focus:border-red-400 transition-all" />
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <div className="md:col-span-2 animate-in slide-in-from-top-2">
-          <textarea 
-            {...register("observacoesAlergia")} 
-            placeholder="Descreva aqui os sintomas ou cuidados necessários em caso de reação..." 
-            className="w-full px-5 py-4 bg-white rounded-2xl font-bold text-slate-600 outline-none h-24 resize-none border-2 border-red-100 focus:border-red-400 transition-all" 
-          />
-        </div>
-      </>
-    )}
-  </div>
-</div>
 
         <button type="submit" disabled={isSubmitting} className="md:col-span-2 w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-[25px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
           {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}

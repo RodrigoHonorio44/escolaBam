@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { 
   Save, ArrowLeft, ClipboardPlus, Loader2, Hospital, Home, 
-  Clock, Hash, UserCheck, History, Search, Activity, AlertTriangle,
+  Clock, Hash, UserCheck, Search, Activity, AlertTriangle,
   Briefcase, GraduationCap 
 } from 'lucide-react';
 import { useAtendimentoLogica } from '../../hooks/useAtendimentoLogica';
 import { Toaster, toast } from 'react-hot-toast';
+import AlertaHistoricoPCD from '../../components/AlertaHistoricoPCD';
 
 const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDigital }) => {
   const { 
@@ -17,7 +18,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
 
   const [erroNome, setErroNome] = useState(false);
 
-  // --- MAPEAMENTO DE SURTOS R S ---
+  // --- MAPEAMENTO DE SURTOS ---
   const GRUPOS_RISCO = {
     "gastrointestinal": ["dor abdominal", "náusea/vômito", "diarreia", "enjoo"],
     "respiratório": ["febre", "sintomas gripais", "dor de garganta", "tosse"],
@@ -35,7 +36,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
 
   const grupoDetectado = identificarGrupoRisco(formData.motivoAtendimento);
 
-  // --- FUNÇÕES DE FORMATAÇÃO VISUAL ---
+  // --- FUNÇÕES DE FORMATAÇÃO E NORMALIZAÇÃO ---
+  
   const formatarCapitalize = (texto) => {
     if (!texto) return "";
     return texto.toLowerCase().replace(/(^\w|\s\w)/g, m => m.toUpperCase());
@@ -44,13 +46,14 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
   const formatarNomeExibicao = (nome) => {
     if (!nome) return "";
     let nomeFormatado = formatarCapitalize(nome);
+    // Garante que "R S" permaneça em maiúsculo na exibição
     return nomeFormatado
       .replace(/\bR\s+S\b/gi, "R S")
-      .replace(/\bRs\b/gi, "RS");
+      .replace(/\bRs\b/gi, "R S");
   };
 
   const validarNomeCompleto = (valor) => {
-    const nomeLimpo = valor.trim().toLowerCase(); 
+    const nomeLimpo = valor.trim();
     const partes = nomeLimpo.split(/\s+/).filter(p => p.length > 0);
     const valido = partes.length >= 2;
     setErroNome(!valido && nomeLimpo.length > 0);
@@ -60,6 +63,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
   const lidarSubmit = async (e) => {
     if (e) e.preventDefault();
     
+    // Normalização rigorosa para lowercase antes de salvar
     const nomeNormalizado = formData.nomePaciente.toLowerCase().trim();
 
     if (!validarNomeCompleto(nomeNormalizado)) {
@@ -69,8 +73,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     }
 
     try {
+      // O hook já deve tratar o salvamento em lowercase, mas reforçamos a consistência aqui
       const sucesso = await salvarAtendimento(e);
-      
       if (sucesso) {
         if (configUI.perfilPaciente === 'funcionario' && typeof onAbrirPastaDigital === 'function') {
           onAbrirPastaDigital({
@@ -87,7 +91,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     }
   };
 
-  // --- QUEIXAS ATUALIZADAS PARA O SELECT ---
   const queixasComuns = [
     "febre", "sintomas gripais", "dor de garganta", "tosse",
     "dor abdominal", "náusea/vômito", "diarreia", "enjoo",
@@ -116,15 +119,12 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
           </div>
         </div>
         <div className="flex gap-3">
-          {temCadastro && (
-            <button 
-              type="button" 
-              onClick={() => onVerHistorico?.(formData.nomePaciente.toLowerCase())} 
-              className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 rounded-xl text-xs font-black transition-all shadow-lg flex items-center gap-2 tracking-widest text-white"
-            >
-              <History size={14} /> ver histórico
-            </button>
-          )}
+          <AlertaHistoricoPCD 
+            formData={formData} 
+            temCadastro={temCadastro} 
+            onVerHistorico={onVerHistorico} 
+          />
+
           <button onClick={onVoltar} className="px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-black transition-all border border-white/10 flex items-center gap-2 tracking-widest text-white">
             <ArrowLeft size={14} /> voltar
           </button>
@@ -166,7 +166,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
         </div>
 
         <div className="space-y-6 font-sans">
-          {/* NOME COMPLETO */}
+          {/* IDENTIFICAÇÃO DO PACIENTE */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
             <div className="md:col-span-2 space-y-2 relative">
               <label className={`text-[10px] font-black uppercase ml-2 tracking-widest flex items-center gap-2 ${erroNome ? 'text-red-500' : 'text-slate-500'}`}>
@@ -176,7 +176,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
               <input 
                 type="text" 
                 required 
-                placeholder="Ex: Rodrigo Honorio Silva" 
+                placeholder="ex: rodrigo honorio silva" 
                 className={`w-full border-2 rounded-2xl px-5 py-4 text-sm font-bold outline-none transition-all
                   ${erroNome ? 'bg-red-50 border-red-500 focus:ring-red-200' : 'bg-slate-50 border-transparent focus:ring-blue-500'}`} 
                 value={formatarNomeExibicao(formData.nomePaciente)} 
@@ -230,6 +230,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             </div>
           </div>
 
+          {/* DADOS FÍSICOS E LOGÍSTICA */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest block">etnia *</label>
@@ -299,6 +300,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             </div>
           </div>
 
+          {/* SINAIS VITAIS BÁSICOS E ALERGIAS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-red-500 uppercase ml-2 italic tracking-widest block">temperatura *</label>
@@ -335,6 +337,8 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
                 <span className="font-black uppercase italic tracking-tighter text-lg">atendimento na unidade</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* MOTIVO PRINCIPAL */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">motivo principal *</label>
                   <select 
@@ -351,7 +355,37 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
                     {queixasComuns.map(q => <option key={q} value={q.toLowerCase()}>{q.toLowerCase()}</option>)}
                   </select>
 
-                  {/* ALERTA DE SURTO R S */}
+                  {formData.motivoAtendimento === 'hipertensão' && (
+                    <div className="mt-4 p-4 bg-red-50 rounded-2xl border-2 border-red-100 animate-in zoom-in-95 duration-200">
+                      <label className="text-[10px] font-black text-red-600 uppercase ml-1 tracking-widest block mb-2 italic">pressão arterial (pa) *</label>
+                      <input 
+                        type="text"
+                        required
+                        placeholder="ex: 120x80"
+                        className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-bold tabular-nums shadow-sm outline-none focus:ring-2 focus:ring-red-400"
+                        value={formData.pa}
+                        onChange={(e) => updateField('pa', e.target.value.toLowerCase())}
+                      />
+                    </div>
+                  )}
+
+                  {formData.motivoAtendimento === 'hipoglicemia' && (
+                    <div className="mt-4 p-4 bg-orange-50 rounded-2xl border-2 border-orange-100 animate-in zoom-in-95 duration-200">
+                      <label className="text-[10px] font-black text-orange-600 uppercase ml-1 tracking-widest block mb-2 italic">glicemia (hgt) *</label>
+                      <div className="relative">
+                        <input 
+                          type="number"
+                          required
+                          placeholder="000"
+                          className="w-full bg-white border-none rounded-xl px-4 py-3 text-sm font-bold tabular-nums shadow-sm outline-none focus:ring-2 focus:ring-orange-400"
+                          value={formData.hgt}
+                          onChange={(e) => updateField('hgt', e.target.value)}
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-orange-300 uppercase">mg/dl</span>
+                      </div>
+                    </div>
+                  )}
+
                   {grupoDetectado && (
                     <div className="flex items-center gap-2 px-3 py-2 bg-amber-500 rounded-xl mt-2 animate-pulse shadow-md">
                       <AlertTriangle size={14} className="text-white" />
@@ -422,7 +456,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
                 </div>
                 <div className="md:col-span-2 space-y-2">
                   <label className="text-[10px] font-black text-orange-600 uppercase ml-2 tracking-widest block">observações da remoção</label>
-                  <textarea rows="2" className="w-full bg-orange-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic resize-none" value={formData.obsEncaminhamento} onChange={(e) => updateField('obsEncaminhamento', e.target.value.toLowerCase())} />
+                  <textarea rows="2" className="w-full bg-orange-50/50 border-none rounded-2xl px-5 py-4 text-sm font-bold italic resize-none outline-none" value={formData.obsEncaminhamento} onChange={(e) => updateField('obsEncaminhamento', e.target.value.toLowerCase())} />
                 </div>
               </div>
             </div>
@@ -435,7 +469,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             <div className="bg-blue-600 p-2.5 rounded-xl"><UserCheck size={22} className="text-white" /></div>
             <div className="flex flex-col">
               <span className="text-[9px] text-blue-400 font-black uppercase tracking-[0.2em] mb-0.5">assinatura digital baenf</span>
-              <p className="text-white font-black text-lg italic leading-none tracking-tight">{formatarNomeExibicao(user?.nome) || 'Profissional'}</p>
+              <p className="text-white font-black text-lg italic leading-none tracking-tight">{formatarNomeExibicao(user?.nome) || 'profissional'}</p>
               <span className="text-emerald-400 text-[10px] font-bold lowercase tracking-[0.1em] mt-1 italic">
                 {user?.cargo?.toLowerCase() || 'enfermagem'} — reg: {user?.registroProfissional}
               </span>

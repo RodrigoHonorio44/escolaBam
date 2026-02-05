@@ -13,7 +13,7 @@ export const useAtendimentoLogica = (user) => {
   const { buscarSugestoes, sugestoes, puxarDadosCompletos, buscando } = usePacienteSinc();
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
-  // --- MAPEAMENTO DE SURTOS R S (Para lógica interna) ---
+  // --- MAPEAMENTO DE SURTOS ---
   const GRUPOS_RISCO = {
     "gastrointestinal": ["dor abdominal", "náusea/vômito", "diarreia", "enjoo"],
     "respiratório": ["febre", "sintomas gripais", "dor de garganta", "tosse"],
@@ -67,11 +67,13 @@ export const useAtendimentoLogica = (user) => {
     cargo: '',
     etnia: '',
     temperatura: '',
+    pa: '', 
+    hgt: '', 
     peso: '',
     altura: '',
     imc: '',
     motivoAtendimento: '',
-    grupoRisco: 'nenhum', // NOVO CAMPO
+    grupoRisco: 'nenhum',
     procedimentos: '',
     medicacao: '',
     observacoes: '',
@@ -81,6 +83,8 @@ export const useAtendimentoLogica = (user) => {
     alunoPossuiAlergia: 'não',
     qualAlergia: '',
     pacienteId: '',
+    condicoesEspeciais: [], 
+    contatoEmergencia: '', 
     registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase()
   }), [user]);
 
@@ -92,13 +96,12 @@ export const useAtendimentoLogica = (user) => {
     }
   }, [formData.nomePaciente, buscarSugestoes]);
 
-  // UPDATE FIELD COM DETECÇÃO DE SURTO
   const updateField = useCallback((campo, valor) => {
     setFormData(prev => {
+      // Normalização para lowercase em tempo real para strings
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       let novoEstado = { ...prev, [campo]: valorFormatado };
       
-      // Se mudar o motivo, atualiza o grupo de risco automaticamente
       if (campo === 'motivoAtendimento') {
         novoEstado.grupoRisco = identificarGrupoRisco(valorFormatado);
       }
@@ -142,6 +145,20 @@ export const useAtendimentoLogica = (user) => {
       let dados = docSnap.exists() ? docSnap.data() : await puxarDadosCompletos(nomeOriginal, dataParaInput);
 
       if (dados) {
+        const alertas = [];
+        if (dados.isPCD === 'sim' || dados.isPcd === 'sim') {
+          if (Array.isArray(dados.categoriasPCD)) {
+            alertas.push(...dados.categoriasPCD.map(c => c.toLowerCase()));
+          }
+          if (dados.detalheTEA) alertas.push(dados.detalheTEA.toLowerCase());
+          if (dados.detalheTDAH) alertas.push(dados.detalheTDAH.toLowerCase());
+          if (dados.detalheIntelectual) alertas.push(dados.detalheIntelectual.toLowerCase());
+          if (dados.detalheFisico && dados.detalheFisico.toLowerCase() !== "andante sem auxilio") {
+            alertas.push(dados.detalheFisico.toLowerCase());
+          }
+          if (typeof dados.categoriasPCD === 'string') alertas.push(dados.categoriasPCD.toLowerCase());
+        }
+
         setFormData(prev => ({
           ...prev,
           pacienteId: idSugerido,
@@ -154,11 +171,13 @@ export const useAtendimentoLogica = (user) => {
           peso: dados.peso || "",
           altura: dados.altura || "",
           imc: dados.imc || 0,
-          alunoPossuiAlergia: (dados.alunoPossuiAlergia || 'não').toLowerCase(),
-          qualAlergia: (dados.qualAlergia || '').toLowerCase()
+          alunoPossuiAlergia: (dados.temAlergia || dados.alunoPossuiAlergia || 'não').toLowerCase(),
+          qualAlergia: (dados.historicoMedico || dados.qualAlergia || '').toLowerCase(),
+          condicoesEspeciais: [...new Set(alertas)], // Remove duplicatas
+          contatoEmergencia: dados.contato1_telefone ? `${dados.contato1_nome} (${dados.contato1_telefone})`.toLowerCase() : ''
         }));
 
-        const perfil = dados.tipoPerfil || (dados.cargo ? 'funcionario' : 'aluno');
+        const perfil = (dados.tipoPerfil || (dados.cargo ? 'funcionario' : 'aluno')).toLowerCase();
         setConfigUI(prev => ({ ...prev, perfilPaciente: perfil }));
         setTemCadastro(true);
         toast.success("perfil carregado!", { id: toastId });
@@ -185,6 +204,7 @@ export const useAtendimentoLogica = (user) => {
       const eFuncionario = configUI.perfilPaciente === 'funcionario';
       const colecaoBase = eFuncionario ? "funcionarios" : "alunos";
 
+      // Normalização profunda de todo o payload para lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
@@ -194,7 +214,7 @@ export const useAtendimentoLogica = (user) => {
 
       const finalDataAtendimento = {
         ...payload,
-        dataNascimento: formData.dataNascimento, 
+        dataNascimento: formData.dataNascimento, // Mantém formato original da data
         pacienteId: idPasta, 
         idade: Number(payload.idade) || 0,
         peso: Number(payload.peso) || 0,
@@ -204,7 +224,7 @@ export const useAtendimentoLogica = (user) => {
         horarioSaida: agoraHora,
         statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
         tipoRegistro: eRemocao ? 'remoção' : 'local',
-        perfilPaciente: configUI.perfilPaciente,
+        perfilPaciente: configUI.perfilPaciente.toLowerCase(),
         escola: (user?.escolaId || "e. m. anísio teixeira").toLowerCase(),
         profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
         createdAt: serverTimestamp()
@@ -212,6 +232,9 @@ export const useAtendimentoLogica = (user) => {
 
       if (eFuncionario) { delete finalDataAtendimento.turma; } 
       else { delete finalDataAtendimento.cargo; }
+
+      delete finalDataAtendimento.condicoesEspeciais;
+      delete finalDataAtendimento.contatoEmergencia;
 
       const finalDataPasta = {
         id: idPasta,
@@ -245,11 +268,14 @@ export const useAtendimentoLogica = (user) => {
       await batch.commit();
       
       toast.success(eRemocao ? "remoção pendente!" : "atendimento finalizado!", { id: toastId });
+      
       setFormData(getInitialFormState());
       setTemCadastro(false);
+      return true; 
     } catch (error) {
       console.error(error);
       toast.error("erro ao salvar", { id: toastId });
+      return false;
     } finally {
       setLoading(false);
     }
