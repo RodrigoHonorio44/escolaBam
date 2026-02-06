@@ -6,10 +6,16 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
     window.print();
   };
 
-  // Formata nomes para exibição visual (Capitalize)
+  // --- LÓGICA DE NORMALIZAÇÃO ATUALIZADA (R S em Maiúsculo) ---
   const formatarDisplay = (texto) => {
     if (!texto) return "";
-    return texto.split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ');
+    const palavras = texto.toString().toLowerCase().trim().split(/\s+/);
+    return palavras.map(p => {
+      // Regra: R ou S sozinhos (ou qualquer letra única) ficam em maiúsculo
+      if (p === 'r' || p === 's' || p.length === 1) return p.toUpperCase();
+      // Primeira letra maiúscula para o restante
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }).join(' ');
   };
 
   const CheckBox = ({ label, value }) => (
@@ -98,7 +104,7 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
             <h4 className="font-black bg-slate-900 text-white px-3 py-1 mb-3 uppercase italic text-[11px] skew-x-[-10deg] inline-block">
               Relato da Ocorrência / Queixa Principal
             </h4>
-            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 italic min-h-[60px]">
+            <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 italic min-h-[60px] text-sm uppercase">
               {data.relatoOcorrencia || data.motivoAtendimento || 'Não informado.'}
             </div>
           </section>
@@ -108,10 +114,11 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
             <div>
               <h4 className="font-bold border-b border-black mb-2 uppercase text-[11px]">Sinais Vitais</h4>
               <div className="grid grid-cols-2 gap-y-2 text-[11px]">
-                <p><strong>PA:</strong> {data.pa || '___ x ___'} mmHg</p>
-                <p><strong>SPO2:</strong> {data.spo2 || '___'} %</p>
+                <p><strong>PA:</strong> {data.pa || data.pressaoArterial || '___ x ___'} mmHg</p>
+                <p><strong>SPO2:</strong> {data.spo2 || data.saturacao || '___'} %</p>
                 <p><strong>TEMP:</strong> {data.temperatura || '___'} °C</p>
-                <p><strong>FREQ. CARD:</strong> {data.fc || '___'} bpm</p>
+                <p><strong>FREQ. CARD:</strong> {data.fc || data.frequenciaCardiaca || '___'} bpm</p>
+                <p><strong>HGT:</strong> {data.hgt || data.glicemia || '---'} mg/dL</p>
               </div>
             </div>
             <div>
@@ -131,11 +138,13 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-3 border-2 border-slate-100 rounded-xl">
                   <p className="text-[9px] font-bold uppercase text-slate-400">Procedimentos Realizados</p>
-                  <p className="text-[11px] uppercase">{data.condutaHospitalar || 'Em aberto'}</p>
+                  <p className="text-[11px] uppercase">{data.procedimentos || data.condutaHospitalar || 'Em aberto'}</p>
                 </div>
                 <div className="p-3 border-2 border-slate-100 rounded-xl">
-                  <p className="text-[9px] font-bold uppercase text-slate-400">Observações de Repouso</p>
-                  <p className="text-[11px] uppercase">{data.observacoesFinais || 'Nenhuma'}</p>
+                  <p className="text-[9px] font-bold uppercase text-slate-400">Desfecho / Status Final</p>
+                  <p className="text-[11px] font-black text-green-700 uppercase">
+                    {data.tipoRegistro?.toLowerCase() === 'remoção' ? '⚠️ REMOÇÃO HOSPITALAR' : '✅ ALTA DA ENFERMARIA ESCOLAR'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -153,10 +162,10 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
             <div className="text-center flex-1">
               <div className="border-t-2 border-blue-600 pt-2">
                 <p className="text-[11px] font-black uppercase text-blue-900">
-                  {formatarDisplay(data.finalizadoPor || data.profissionalNome)}
+                  {formatarDisplay(data.finalizadoPor || data.profissionalNome || 'RODRIGO VARGAS')}
                 </p>
                 <p className="text-[9px] font-bold text-blue-600 uppercase">
-                  Enfermeiro(a) • Registro: {data.registroFinalizador || data.profissionalRegistro}
+                  Enfermeiro(a) • Registro: {data.registroFinalizador || data.profissionalRegistro || '114828-RJ'}
                 </p>
               </div>
             </div>
@@ -165,8 +174,8 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
 
         {/* RODAPÉ */}
         <footer className="mt-12 pt-4 border-t border-slate-200 text-[8px] flex justify-between text-slate-400 font-bold uppercase tracking-widest">
-          <span>RODHON INTELLIGENCE — SISTEMA DE GESTÃO CLÍNICA</span>
-          <span>AUTENTICAÇÃO: {data.id?.toUpperCase()}</span>
+          <span>RODHON INTELLIGENCE — SISTEMA DE GESTÃO  CLÍNICA</span>
+          <span>AUTENTICAÇÃO: {data.id?.toUpperCase() || 'S/ID'}</span>
           <span>DATA IMPRESSÃO: {new Date().toLocaleDateString()}</span>
         </footer>
       </div>
@@ -176,7 +185,7 @@ const PrintFichaSaude = ({ data, onVoltar }) => {
           @page { margin: 10mm; size: portrait; }
           body { background: white !important; margin: 0; padding: 0; }
           .print\\:hidden { display: none !important; }
-          .shadow-2xl { shadow: none !important; }
+          .shadow-2xl { box-shadow: none !important; }
         }
       `}} />
     </div>

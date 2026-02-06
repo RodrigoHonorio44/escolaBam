@@ -98,7 +98,6 @@ export const useAtendimentoLogica = (user) => {
 
   const updateField = useCallback((campo, valor) => {
     setFormData(prev => {
-      // Normalização para lowercase em tempo real para strings
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       let novoEstado = { ...prev, [campo]: valorFormatado };
       
@@ -173,7 +172,7 @@ export const useAtendimentoLogica = (user) => {
           imc: dados.imc || 0,
           alunoPossuiAlergia: (dados.temAlergia || dados.alunoPossuiAlergia || 'não').toLowerCase(),
           qualAlergia: (dados.historicoMedico || dados.qualAlergia || '').toLowerCase(),
-          condicoesEspeciais: [...new Set(alertas)], // Remove duplicatas
+          condicoesEspeciais: [...new Set(alertas)], 
           contatoEmergencia: dados.contato1_telefone ? `${dados.contato1_nome} (${dados.contato1_telefone})`.toLowerCase() : ''
         }));
 
@@ -212,9 +211,20 @@ export const useAtendimentoLogica = (user) => {
       const idPasta = gerarIdPadrao(payload.nomePaciente, formData.dataNascimento);
       const eRemocao = configUI.tipoAtendimento === 'remocao';
 
+      // --- R S: LÓGICA DE TRATAMENTO DE CARGO DO PROFISSIONAL ---
+      const formatarCargoLegivel = (role) => {
+        if (!role) return "enfermeiro(a)";
+        const cargos = {
+          'tecnico_enfermagem': 'técnico de enfermagem',
+          'enfermeiro': 'enfermeiro(a)',
+          'administrador': 'administrador'
+        };
+        return cargos[role] || role.replace('_', ' ');
+      };
+
       const finalDataAtendimento = {
         ...payload,
-        dataNascimento: formData.dataNascimento, // Mantém formato original da data
+        dataNascimento: formData.dataNascimento, 
         pacienteId: idPasta, 
         idade: Number(payload.idade) || 0,
         peso: Number(payload.peso) || 0,
@@ -226,7 +236,13 @@ export const useAtendimentoLogica = (user) => {
         tipoRegistro: eRemocao ? 'remoção' : 'local',
         perfilPaciente: configUI.perfilPaciente.toLowerCase(),
         escola: (user?.escolaId || "e. m. anísio teixeira").toLowerCase(),
+        
+        // R S: SALVANDO IDENTIFICAÇÃO COMPLETA DO PROFISSIONAL
         profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
+        registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase(),
+        role: (user?.role || "").toLowerCase(), // Salva "tecnico_enfermagem"
+        profissionalCargo: formatarCargoLegivel(user?.role).toLowerCase(), // Salva "técnico de enfermagem"
+        
         createdAt: serverTimestamp()
       };
 
