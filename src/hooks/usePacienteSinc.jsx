@@ -19,7 +19,6 @@ export const usePacienteSinc = () => {
     return `${nomeSlug}-${dataRef}`;
   };
 
-  // BUSCA GLOBAL DE SUGESTÕES (OLHA PARA TODAS AS ENTRADAS)
   const buscarSugestoes = async (termo) => {
     const busca = termo.trim().toLowerCase();
     if (busca.length < 3) {
@@ -28,13 +27,10 @@ export const usePacienteSinc = () => {
     }
 
     try {
-      // Lista de coleções onde o paciente pode estar
       const colecoes = ["alunos", "pastas_digitais", "questionarios_saude", "atendimentos_enfermagem"];
       let resultadosBrutos = [];
 
-      // Criamos promessas de busca para todas as coleções simultaneamente
       const buscas = colecoes.map(async (colNome) => {
-        // Nota: 'nome' para alunos/atendimentos, 'nomeBusca' para pastas, 'alunoNome' para questionarios
         const campoBusca = colNome === "pastas_digitais" ? "nomeBusca" : 
                            colNome === "questionarios_saude" ? "alunoNome" : "nome";
         
@@ -49,7 +45,6 @@ export const usePacienteSinc = () => {
         const snap = await getDocs(q);
         return snap.docs.map(d => ({
           id: d.id,
-          // Normalizamos o nome para o componente de UI
           nome: d.data()[campoBusca] || d.data().nome || d.data().nomePaciente,
           dataNascimento: d.data().dataNascimento || "",
           origem: colNome,
@@ -60,14 +55,13 @@ export const usePacienteSinc = () => {
       const retornoBuscas = await Promise.all(buscas);
       resultadosBrutos = retornoBuscas.flat();
 
-      // REMOVE DUPLICADOS (pelo nome e data de nascimento ou ID)
       const unificados = resultadosBrutos.filter((valor, index, self) =>
         index === self.findIndex((t) => (
           t.nome === valor.nome && t.dataNascimento === valor.dataNascimento
         ))
       );
 
-      setSugestoes(unificados.slice(0, 8)); // Retorna as 8 melhores sugestões
+      setSugestoes(unificados.slice(0, 8));
     } catch (error) {
       console.error("Erro na busca global:", error);
     }
@@ -93,7 +87,6 @@ export const usePacienteSinc = () => {
 
       let etniaFinal = norm(dPas.etnia || dAlu.etnia || dQue.etnia || dQue.raca || '');
       
-      // Busca no histórico de atendimentos se a etnia ainda estiver vazia
       if (!etniaFinal) {
         try {
           const qAtend = query(
@@ -116,9 +109,15 @@ export const usePacienteSinc = () => {
         nome: norm(dAlu.nome || dQue.alunoNome || dPas.nomeBusca || nome),
         dataNascimento: dAlu.dataNascimento || dQue.dataNascimento || dataNasc,
         sexo: norm(dAlu.sexo || dQue.sexo || dPas.sexo),
+        
+        // --- LÓGICA DE GESTANTE (Sincronismo Circular) ---
+        // Se no cadastro (dQue) for 'gestante' e no atendimento (dPas) for 'estaGestante'
+        estaGestante: norm(dPas.estaGestante || dQue.gestante || dAlu.estaGestante || 'não'),
+        semanasGestacao: dPas.semanasGestacao || dQue.semanasGestacao || '',
+        // ------------------------------------------------
+
         turma: norm(dAlu.turma || dQue.turma || dPas.turma),
         etnia: etniaFinal,
-        // Mantém os tipos originais do Firebase (Numbers)
         peso: dPas.peso || dQue.peso || '',
         altura: dPas.altura || dQue.altura || '',
         imc: dPas.imc || dQue.imc || '',

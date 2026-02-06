@@ -63,6 +63,10 @@ export const useAtendimentoLogica = (user) => {
     dataNascimento: '',
     idade: '',
     sexo: '',
+    // --- NOVOS CAMPOS GESTANTE ---
+    estaGestante: 'não',
+    semanasGestacao: '',
+    // ----------------------------
     turma: '',
     cargo: '',
     etnia: '',
@@ -101,6 +105,12 @@ export const useAtendimentoLogica = (user) => {
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       let novoEstado = { ...prev, [campo]: valorFormatado };
       
+      // Resetar gestação se mudar sexo para masculino
+      if (campo === 'sexo' && valorFormatado === 'masculino') {
+        novoEstado.estaGestante = 'não';
+        novoEstado.semanasGestacao = '';
+      }
+
       if (campo === 'motivoAtendimento') {
         novoEstado.grupoRisco = identificarGrupoRisco(valorFormatado);
       }
@@ -145,6 +155,12 @@ export const useAtendimentoLogica = (user) => {
 
       if (dados) {
         const alertas = [];
+        
+        // Alerta de Gestação
+        if (dados.sexo === 'feminino' && dados.estaGestante === 'sim') {
+          alertas.push(`gestante (${dados.semanasGestacao || '?'} sem)`);
+        }
+
         if (dados.isPCD === 'sim' || dados.isPcd === 'sim') {
           if (Array.isArray(dados.categoriasPCD)) {
             alertas.push(...dados.categoriasPCD.map(c => c.toLowerCase()));
@@ -155,7 +171,6 @@ export const useAtendimentoLogica = (user) => {
           if (dados.detalheFisico && dados.detalheFisico.toLowerCase() !== "andante sem auxilio") {
             alertas.push(dados.detalheFisico.toLowerCase());
           }
-          if (typeof dados.categoriasPCD === 'string') alertas.push(dados.categoriasPCD.toLowerCase());
         }
 
         setFormData(prev => ({
@@ -164,6 +179,8 @@ export const useAtendimentoLogica = (user) => {
           nomePaciente: nomeOriginal,
           dataNascimento: dataParaInput, 
           sexo: (dados.sexo || "").toLowerCase(),
+          estaGestante: (dados.estaGestante || "não").toLowerCase(),
+          semanasGestacao: dados.semanasGestacao || "",
           turma: (dados.turma || "").toLowerCase(),
           cargo: (dados.cargo || "").toLowerCase(),
           etnia: (dados.etnia || "").toLowerCase(),
@@ -203,7 +220,6 @@ export const useAtendimentoLogica = (user) => {
       const eFuncionario = configUI.perfilPaciente === 'funcionario';
       const colecaoBase = eFuncionario ? "funcionarios" : "alunos";
 
-      // Normalização profunda de todo o payload para lowercase
       const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
         typeof value === 'string' ? value.toLowerCase().trim() : value
       );
@@ -211,7 +227,6 @@ export const useAtendimentoLogica = (user) => {
       const idPasta = gerarIdPadrao(payload.nomePaciente, formData.dataNascimento);
       const eRemocao = configUI.tipoAtendimento === 'remocao';
 
-      // --- R S: LÓGICA DE TRATAMENTO DE CARGO DO PROFISSIONAL ---
       const formatarCargoLegivel = (role) => {
         if (!role) return "enfermeiro(a)";
         const cargos = {
@@ -231,18 +246,19 @@ export const useAtendimentoLogica = (user) => {
         altura: Number(payload.altura) || 0,
         imc: Number(payload.imc) || 0,
         temperatura: Number(payload.temperatura) || 0,
+        // Limpeza de lógica de gestante
+        estaGestante: payload.sexo === 'feminino' ? payload.estaGestante : 'não',
+        semanasGestacao: (payload.sexo === 'feminino' && payload.estaGestante === 'sim') ? payload.semanasGestacao : '',
+        
         horarioSaida: agoraHora,
         statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
         tipoRegistro: eRemocao ? 'remoção' : 'local',
         perfilPaciente: configUI.perfilPaciente.toLowerCase(),
         escola: (user?.escolaId || "e. m. anísio teixeira").toLowerCase(),
-        
-        // R S: SALVANDO IDENTIFICAÇÃO COMPLETA DO PROFISSIONAL
         profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
         registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase(),
-        role: (user?.role || "").toLowerCase(), // Salva "tecnico_enfermagem"
-        profissionalCargo: formatarCargoLegivel(user?.role).toLowerCase(), // Salva "técnico de enfermagem"
-        
+        role: (user?.role || "").toLowerCase(),
+        profissionalCargo: formatarCargoLegivel(user?.role).toLowerCase(),
         createdAt: serverTimestamp()
       };
 
@@ -257,6 +273,8 @@ export const useAtendimentoLogica = (user) => {
         nomeBusca: finalDataAtendimento.nomePaciente,
         dataNascimento: finalDataAtendimento.dataNascimento,
         sexo: finalDataAtendimento.sexo,
+        estaGestante: finalDataAtendimento.estaGestante,
+        semanasGestacao: finalDataAtendimento.semanasGestacao,
         etnia: finalDataAtendimento.etnia,
         peso: finalDataAtendimento.peso,
         altura: finalDataAtendimento.altura,
@@ -274,6 +292,7 @@ export const useAtendimentoLogica = (user) => {
         nome: finalDataAtendimento.nomePaciente,
         dataNascimento: finalDataAtendimento.dataNascimento,
         sexo: finalDataAtendimento.sexo,
+        estaGestante: finalDataAtendimento.estaGestante,
         ultimaAtualizacao: serverTimestamp(),
         ...(eFuncionario ? { cargo: finalDataAtendimento.cargo } : { turma: finalDataAtendimento.turma })
       };
@@ -284,7 +303,6 @@ export const useAtendimentoLogica = (user) => {
       await batch.commit();
       
       toast.success(eRemocao ? "remoção pendente!" : "atendimento finalizado!", { id: toastId });
-      
       setFormData(getInitialFormState());
       setTemCadastro(false);
       return true; 

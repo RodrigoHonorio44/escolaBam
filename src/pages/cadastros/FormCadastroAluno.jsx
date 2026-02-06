@@ -6,8 +6,8 @@ import {
   collection, serverTimestamp, doc, getDoc, getDocs, query, where, writeBatch, orderBy, limit 
 } from 'firebase/firestore';
 import { 
-  UserPlus, Save, Loader2, AlertCircle, School, X, ArrowLeft,
-  Hash, CreditCard, Users, Stethoscope, Brain, Search, MapPin, Eraser, Pill, MessageSquare, Accessibility, Zap, PlusCircle, Accessibility as Wheelchair
+  UserPlus, Save, Loader2, AlertCircle, School, X, ArrowLeft, Baby,
+  Hash, CreditCard, Users, Stethoscope, Brain, Search, MapPin, Eraser, Pill, Accessibility, Zap, Accessibility as Wheelchair
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -38,6 +38,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     naoSabeAltura: false,
     naoSabeEndereco: false,
     sexo: '',
+    estaGestante: 'não', // Novo campo
+    semanasGestacao: '', // Novo campo
     dataNascimento: '',
     idade: '',
     turma: '',
@@ -84,6 +86,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   const watchCep = watch("endereco_cep");
   const watchDetalheFisico = watch("detalheFisico");
   const watchTipoDeficiencia = watch("tipoDeficiencia");
+  const watchSexo = watch("sexo");
+  const watchEstaGestante = watch("estaGestante");
 
   const limparFormulario = () => {
     reset(defaultValues);
@@ -128,13 +132,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         contato2_telefone: aplicarMascaraTelefone(dadosIniciais.contato2_telefone || ""),
         categoriasPCD: Array.isArray(dadosIniciais.categoriasPCD) ? dadosIniciais.categoriasPCD : [],
       });
-      setValue("naoSabeEtnia", !dadosIniciais.etnia);
-      setValue("naoSabePeso", !dadosIniciais.peso);
-      setValue("naoSabeAltura", !dadosIniciais.altura);
-      setValue("naoSabeEndereco", !!dadosIniciais.naoSabeEndereco);
-      setValue("naoSabeMatricula", !dadosIniciais.matriculaInteligente);
     }
-  }, [dadosIniciais, reset, setValue]);
+  }, [dadosIniciais, reset]);
 
   const buscarAluno = async () => {
     const nomeAtual = watch("nome");
@@ -184,6 +183,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || "",
         turma: dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || "",
         sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || "",
+        estaGestante: dPasta.estaGestante || "não",
+        semanasGestacao: dPasta.semanasGestacao || "",
         etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || "",
         peso: dQuest.peso || dAtend.peso || dPasta.peso || "",
         altura: dQuest.altura || dAtend.altura || dPasta.altura || "",
@@ -253,6 +254,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         responsavel: paraBanco(data.contato1_nome), 
         turma: paraBanco(data.turma),
         sexo: paraBanco(data.sexo),
+        estaGestante: data.sexo === 'feminino' ? paraBanco(data.estaGestante) : 'não',
+        semanasGestacao: (data.sexo === 'feminino' && data.estaGestante === 'sim') ? paraBanco(data.semanasGestacao) : '',
         etnia: data.naoSabeEtnia ? "" : paraBanco(data.etnia),
         peso: data.naoSabePeso ? "" : paraBanco(data.peso),
         altura: data.naoSabeAltura ? "" : paraBanco(data.altura),
@@ -311,6 +314,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       </div>
       
       <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* BLOCO IDENTIFICAÇÃO ESCOLAR */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-blue-50 rounded-[30px] border-2 border-blue-100 shadow-inner">
             <div className="space-y-2">
                 <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-1 flex items-center gap-2"><Hash size={14}/> Numero E. Cidade</label>
@@ -328,6 +332,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
         </div>
 
+        {/* NOME ALUNO */}
         <div className="md:col-span-2 space-y-2">
           <label className={`text-[10px] font-black uppercase tracking-widest ${errors.nome ? 'text-red-500' : 'text-slate-400'}`}>Nome Completo do Aluno</label>
           <div className="relative group">
@@ -347,6 +352,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
+        {/* FILIAÇÃO */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-5 bg-slate-50 rounded-[30px] border-2 border-slate-100 shadow-inner">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Mãe</label>
@@ -364,7 +370,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* NOVOS CAMPOS: ETNIA, PESO E ALTURA */}
+        {/* DADOS FÍSICOS */}
         <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etnia / Cor</label>
@@ -385,6 +391,40 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
+        {/* SEXO E TURMA */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
+          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none" required>
+            <option value="">selecione...</option>
+            <option value="masculino">masculino</option>
+            <option value="feminino">feminino</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><School size={12}/> Turma</label>
+          <input {...register("turma")} placeholder="Ex: 1º Ano A" className="w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none bg-slate-50 border-transparent focus:border-blue-600" required />
+        </div>
+
+        {/* BLOCO GESTANTE INTELIGENTE */}
+        {watchSexo === 'feminino' && (
+          <div className="md:col-span-2 p-6 bg-pink-50 rounded-[30px] border-2 border-pink-100 space-y-4 shadow-sm animate-in zoom-in-95">
+            <label className="text-[10px] font-black text-pink-600 uppercase flex items-center gap-2 italic"><Baby size={16}/> Informações de Gestação</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <select {...register("estaGestante")} className="w-full px-5 py-4 bg-white border-2 border-pink-100 rounded-2xl font-bold outline-none focus:border-pink-400">
+                <option value="não">não está gestante</option>
+                <option value="sim">sim, está gestante</option>
+              </select>
+              {watchEstaGestante === 'sim' && (
+                <div className="relative animate-in slide-in-from-right-2">
+                  <input {...register("semanasGestacao")} type="number" placeholder="Nº de semanas (Ex: 24)" className="w-full px-5 py-4 bg-white border-2 border-pink-300 rounded-2xl font-black text-pink-700 outline-none focus:border-pink-600" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-black text-pink-400 italic">SEMANAS</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* BLOCO PCD */}
         <div className="md:col-span-2 p-6 bg-purple-50 rounded-[35px] border-2 border-purple-100 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Stethoscope size={14}/> Condição PCD & Acessibilidade</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -402,7 +442,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           {watchIsPCD === 'sim' && (
             <div className="space-y-6 animate-in fade-in slide-in-from-top-2">
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1 flex items-center gap-2"><Brain size={12}/> Categorias do Laudo (Múltipla Escolha)</label>
+                <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1 flex items-center gap-2"><Brain size={12}/> Categorias do Laudo</label>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   {[
                     { id: 'tea', label: 'tea (autismo)', icon: <Brain size={16}/> },
@@ -426,6 +466,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   })}
                 </div>
               </div>
+              
               {watchCategoriasPCD.includes('pcd') && (
                 <div className="space-y-2 animate-in zoom-in-95">
                   <label className="text-[10px] font-black text-purple-400 uppercase italic ml-1">Tipo de Deficiência (PCD)</label>
@@ -439,6 +480,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   </div>
                 </div>
               )}
+
+              {/* DETALHES ESPECÍFICOS */}
               {(watchCategoriasPCD.some(c => ['tea', 'tdah', 'intelectual'].includes(c))) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-white/50 p-4 rounded-2xl border border-purple-100">
                   {watchCategoriasPCD.includes('tea') && (
@@ -468,19 +511,21 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   )}
                 </div>
               )}
-              {watchCategoriasPCD.length > 0 && (
-                <div className="p-5 bg-white rounded-[25px] border-2 border-purple-100 space-y-3 shadow-inner animate-in slide-in-from-top-2">
-                  <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Accessibility size={16}/> Auxílio de Locomoção / Mobilidade</label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                    {["andante sem auxílio", "cadeirante", "uso de muletas", "uso de andador", "prótese física", "paralisia cerebral"].map((item) => (
-                      <button key={item} type="button" onClick={() => setValue("detalheFisico", item)}
-                        className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${watchDetalheFisico === item ? "border-purple-600 bg-purple-600 text-white shadow-md" : "border-purple-50 bg-slate-50 text-slate-400 hover:border-purple-200"}`}>
-                        {item}
-                      </button>
-                    ))}
-                  </div>
+
+              {/* MOBILIDADE */}
+              <div className="p-5 bg-white rounded-[25px] border-2 border-purple-100 space-y-3 shadow-inner">
+                <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Accessibility size={16}/> Auxílio de Locomoção</label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {["andante sem auxílio", "cadeirante", "uso de muletas", "uso de andador", "prótese física", "paralisia cerebral"].map((item) => (
+                    <button key={item} type="button" onClick={() => setValue("detalheFisico", item)}
+                      className={`py-3 px-2 rounded-xl border-2 font-bold text-[8px] uppercase transition-all ${watchDetalheFisico === item ? "border-purple-600 bg-purple-600 text-white shadow-md" : "border-purple-50 bg-slate-50 text-slate-400"}`}>
+                      {item}
+                    </button>
+                  ))}
                 </div>
-              )}
+              </div>
+
+              {/* MEDICAÇÃO */}
               <div className="pt-4 border-t border-purple-100 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-purple-500 uppercase italic ml-1 flex items-center gap-2"><Pill size={12}/> Medicação Contínua?</label>
@@ -497,6 +542,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           )}
         </div>
 
+        {/* CONTATOS */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-200 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-slate-600 uppercase flex items-center gap-2 italic"><Users size={14}/> Contatos de Emergência</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -506,8 +552,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                 <select {...register("contato1_parentesco")} className="px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none">
                   <option value="mãe">mãe</option><option value="pai">pai</option><option value="avó">avó</option>
                   <option value="avô">avô</option><option value="tio">tio</option><option value="tia">tia</option>
-                  <option value="padrasto">padrasto</option><option value="madrasta">madrasta</option>
-                  <option value="irmão">irmão</option><option value="irmã">irmã</option>
                 </select>
                 <input {...register("contato1_telefone", { required: true })} onChange={(e) => setValue("contato1_telefone", aplicarMascaraTelefone(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none" />
               </div>
@@ -517,9 +561,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
               <div className="grid grid-cols-2 gap-2">
                 <select {...register("contato2_parentesco")} className="px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none">
                   <option value="pai">pai</option><option value="mãe">mãe</option><option value="avô">avô</option>
-                  <option value="avó">avó</option><option value="tio">tio</option><option value="tia">tia</option>
-                  <option value="padrasto">padrasto</option><option value="madrasta">madrasta</option>
-                  <option value="irmão">irmão</option><option value="irmã">irmã</option>
+                  <option value="avó">avó</option>
                 </select>
                 <input {...register("contato2_telefone")} onChange={(e) => setValue("contato2_telefone", aplicarMascaraTelefone(e.target.value))} placeholder="(00) 00000-0000" maxLength={15} className="w-full px-4 py-3 bg-slate-50 rounded-xl font-bold outline-none" />
               </div>
@@ -527,6 +569,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
+        {/* ENDEREÇO */}
         <div className="md:col-span-2 p-6 bg-slate-50 rounded-[30px] border-2 border-slate-100 space-y-4 shadow-inner">
           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><MapPin size={12}/> Localização</label>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -536,19 +579,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2"><School size={12}/> Turma</label>
-          <input {...register("turma")} placeholder="Ex: 1º Ano A" className="w-full px-5 py-4 border-2 rounded-2xl font-bold outline-none bg-slate-50 border-transparent focus:border-blue-600" required />
-        </div>
-        <div className="space-y-2">
-          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
-          <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 border-2 border-transparent rounded-2xl font-bold focus:border-blue-600 outline-none" required>
-            <option value="">selecione...</option>
-            <option value="masculino">masculino</option>
-            <option value="feminino">feminino</option>
-          </select>
-        </div>
-
+        {/* ALERGIAS */}
         <div className="md:col-span-2 p-6 bg-red-50 rounded-[30px] border-2 border-red-100 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-red-600 uppercase flex items-center gap-2 italic"><AlertCircle size={14}/> Alergias & Observações</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -559,10 +590,10 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             {watchTemAlergia === 'sim' && (
               <>
                 <div className="animate-in zoom-in-95">
-                  <input {...register("historicoMedico")} placeholder="Qual alergia? (Ex: amendoim, dipirona)" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 outline-none focus:border-red-500 transition-all" />
+                  <input {...register("historicoMedico")} placeholder="Qual alergia? (Ex: amendoim)" className="w-full px-5 py-4 bg-white border-2 border-red-200 rounded-2xl font-bold text-red-700 outline-none focus:border-red-500 transition-all" />
                 </div>
                 <div className="md:col-span-2 animate-in slide-in-from-top-2">
-                  <textarea {...register("observacoesAlergia")} placeholder="Descreva aqui os sintomas ou cuidados necessários em caso de reação..." className="w-full px-5 py-4 bg-white rounded-2xl font-bold text-slate-600 outline-none h-24 resize-none border-2 border-red-100 focus:border-red-400 transition-all" />
+                  <textarea {...register("observacoesAlergia")} placeholder="Sintomas ou cuidados..." className="w-full px-5 py-4 bg-white rounded-2xl font-bold text-slate-600 outline-none h-24 resize-none border-2 border-red-100 focus:border-red-400 transition-all" />
                 </div>
               </>
             )}

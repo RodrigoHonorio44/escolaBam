@@ -7,7 +7,7 @@ import {
 export const useBuscaPaciente = () => {
   const [loading, setLoading] = useState(false);
 
-  // --- FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (PADRÃO CAIO GIROMBA) ---
+  // --- FUNÇÃO AUXILIAR DE NORMALIZAÇÃO (PADRÃO RS / CAIO GIROMBA) ---
   const paraBanco = (str) => {
     if (!str) return '';
     return str.toString()
@@ -103,7 +103,6 @@ export const useBuscaPaciente = () => {
     const idMestre = gerarIdMestre(termoBusca, dataNascOpcional);
 
     try {
-      // Busca em paralelo usando ID Mestre (se houver) ou Termo
       const [aluno, funcionario, pasta, saude, atendimentos] = await Promise.all([
         buscarAlunos(termoBusca, idMestre),
         buscarFuncionarios(termoBusca),
@@ -131,6 +130,12 @@ export const useBuscaPaciente = () => {
         turma: paraBanco(perfilOriginal?.turma || saude?.turma || (funcionario ? "staff" : "n/a")),
         dataNascimento: perfilOriginal?.dataNascimento || saude?.dataNascimento || dataNascOpcional || "",
         sexo: paraBanco(perfilOriginal?.sexo || saude?.sexo || ""),
+        
+        // --- GESTAÇÃO (Respeitando a diferença Cadastro vs Atendimento) ---
+        // 'gestante' vem do cadastro/questionário, 'estaGestante' vem da pasta/atendimento
+        estaGestante: paraBanco(perfilOriginal?.estaGestante || perfilOriginal?.gestante || saude?.gestante || "não"),
+        semanasGestacao: perfilOriginal?.semanasGestacao || saude?.semanasGestacao || "",
+        
         peso: perfilOriginal?.peso || saude?.peso || "",
         altura: perfilOriginal?.altura || saude?.altura || "",
         qualAlergia: paraBanco(perfilOriginal?.qualAlergia || saude?.alergias?.detalhes || ""),
@@ -150,12 +155,16 @@ export const useBuscaPaciente = () => {
           diabetes: paraBanco(saude?.diabetes?.possui || "não"),
           cardiaco: paraBanco(saude?.doencasCardiacas?.possui || "não"),
           epilepsia: paraBanco(saude?.epilepsia?.possui || "não"),
-          medicacaoContinua: paraBanco(saude?.medicacaoContinua?.possui || "não")
+          medicacaoContinua: paraBanco(saude?.medicacaoContinua?.possui || "não"),
+          // Informação rápida para o Dashboard de busca
+          gestante: perfilConsolidado.estaGestante === 'sim'
         },
 
         dadosParaForm: {
           ...saude,
           ...perfilConsolidado,
+          // Mapeia para o formulário de atendimento o campo correto
+          estaGestante: perfilConsolidado.estaGestante,
           isEdicao: !!(perfilOriginal || saude),
           origem: 'pasta_digital'
         }

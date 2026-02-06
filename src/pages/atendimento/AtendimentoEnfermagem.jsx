@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   Save, ArrowLeft, ClipboardPlus, Loader2, Hospital, Home, 
   Clock, Hash, UserCheck, Search, Activity, AlertTriangle,
-  Briefcase, GraduationCap 
+  Briefcase, GraduationCap, Baby 
 } from 'lucide-react';
 import { useAtendimentoLogica } from '../../hooks/useAtendimentoLogica';
 import { Toaster, toast } from 'react-hot-toast';
@@ -17,6 +17,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
   } = useAtendimentoLogica(user);
 
   const [erroNome, setErroNome] = useState(false);
+  const [isGestante, setIsGestante] = useState(false); // Inicia como falso (aluno/homem)
 
   // --- MAPEAMENTO DE SURTOS ---
   const GRUPOS_RISCO = {
@@ -46,7 +47,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
   const formatarNomeExibicao = (nome) => {
     if (!nome) return "";
     let nomeFormatado = formatarCapitalize(nome);
-    // Garante que "R S" permaneça em maiúsculo na exibição
     return nomeFormatado
       .replace(/\bR\s+S\b/gi, "R S")
       .replace(/\bRs\b/gi, "R S");
@@ -63,7 +63,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
   const lidarSubmit = async (e) => {
     if (e) e.preventDefault();
     
-    // Normalização rigorosa para lowercase antes de salvar
     const nomeNormalizado = formData.nomePaciente.toLowerCase().trim();
 
     if (!validarNomeCompleto(nomeNormalizado)) {
@@ -73,7 +72,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     }
 
     try {
-      // O hook já deve tratar o salvamento em lowercase, mas reforçamos a consistência aqui
       const sucesso = await salvarAtendimento(e);
       if (sucesso) {
         if (configUI.perfilPaciente === 'funcionario' && typeof onAbrirPastaDigital === 'function') {
@@ -109,7 +107,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     <div className="bg-white rounded-[40px] border border-slate-200 shadow-2xl overflow-hidden font-sans antialiased text-left">
       <Toaster position="top-right" />
       
-      {/* Header */}
       <div className="bg-[#0A1629] p-8 text-white flex justify-between items-center">
         <div className="flex items-center gap-4">
           <div className="bg-blue-600 p-3 rounded-2xl shadow-lg"><ClipboardPlus size={24} /></div>
@@ -124,7 +121,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             temCadastro={temCadastro} 
             onVerHistorico={onVerHistorico} 
           />
-
           <button onClick={onVoltar} className="px-5 py-2.5 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-black transition-all border border-white/10 flex items-center gap-2 tracking-widest text-white">
             <ArrowLeft size={14} /> voltar
           </button>
@@ -133,7 +129,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
 
       <form onSubmit={lidarSubmit} className="p-8 md:p-12 space-y-10">
         
-        {/* Info Bar */}
         <div className="flex flex-col md:flex-row justify-center items-center gap-4 font-sans">
           <div className="bg-slate-900 px-6 py-3 rounded-2xl border-2 border-blue-500/30 flex items-center gap-3">
             <Hash size={18} className="text-blue-400" />
@@ -145,7 +140,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
           </div>
         </div>
 
-        {/* Seletores Perfil/Atendimento */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto font-sans">
           <div className="bg-slate-100 p-2 rounded-[25px] flex shadow-inner">
             <button type="button" onClick={() => setConfigUI({...configUI, perfilPaciente: 'aluno'})} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[20px] font-black text-xs transition-all tracking-widest ${configUI.perfilPaciente === 'aluno' ? 'bg-white text-blue-600 shadow-md' : 'text-slate-400'}`}>
@@ -166,7 +160,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
         </div>
 
         <div className="space-y-6 font-sans">
-          {/* IDENTIFICAÇÃO DO PACIENTE */}
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
             <div className="md:col-span-2 space-y-2 relative">
               <label className={`text-[10px] font-black uppercase ml-2 tracking-widest flex items-center gap-2 ${erroNome ? 'text-red-500' : 'text-slate-500'}`}>
@@ -230,7 +223,60 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             </div>
           </div>
 
-          {/* DADOS FÍSICOS E LOGÍSTICA */}
+          {/* BLOCO INTELIGENTE DE GESTAÇÃO - ATIVADO MANUALMENTE */}
+          <div className="md:col-span-6 space-y-4">
+            <button
+              type="button"
+              onClick={() => {
+                const novoEstado = !isGestante;
+                setIsGestante(novoEstado);
+                updateField('gestante', novoEstado ? 'sim' : 'nao');
+              }}
+              className={`flex items-center gap-3 px-6 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all border-2 
+                ${isGestante 
+                  ? 'bg-pink-50 border-pink-200 text-pink-600 shadow-md' 
+                  : 'bg-slate-50 border-transparent text-slate-400 hover:bg-slate-100'}`}
+            >
+              <Baby size={18} />
+              {isGestante ? 'paciente gestante' : 'clique se for gestante'}
+            </button>
+
+            {isGestante && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-pink-50/50 rounded-[30px] border-2 border-pink-100 animate-in zoom-in-95 duration-200">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-pink-600 uppercase ml-2 tracking-widest block">dum (última menstruação)</label>
+                  <input 
+                    type="date" 
+                    className="w-full bg-white border-none rounded-xl px-5 py-3 text-sm font-bold text-pink-900 outline-none focus:ring-2 focus:ring-pink-300" 
+                    value={formData.dum || ''} 
+                    onChange={(e) => updateField('dum', e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-pink-600 uppercase ml-2 tracking-widest block">semanas de gestação</label>
+                  <input 
+                    type="number" 
+                    placeholder="00"
+                    className="w-full bg-white border-none rounded-xl px-5 py-3 text-sm font-bold text-pink-900 outline-none focus:ring-2 focus:ring-pink-300" 
+                    value={formData.semanasGestacao || ''} 
+                    onChange={(e) => updateField('semanasGestacao', e.target.value)} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-pink-600 uppercase ml-2 tracking-widest block">fez pré-natal?</label>
+                  <select 
+                    className="w-full bg-white border-none rounded-xl px-5 py-3 text-sm font-bold text-pink-900 outline-none focus:ring-2 focus:ring-pink-300 lowercase"
+                    value={formData.preNatal || 'nao'} 
+                    onChange={(e) => updateField('preNatal', e.target.value.toLowerCase())}
+                  >
+                    <option value="nao">não</option>
+                    <option value="sim">sim</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase ml-2 tracking-widest block">etnia *</label>
@@ -300,7 +346,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             </div>
           </div>
 
-          {/* SINAIS VITAIS BÁSICOS E ALERGIAS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-red-500 uppercase ml-2 italic tracking-widest block">temperatura *</label>
@@ -308,7 +353,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-orange-500 uppercase ml-2 tracking-widest block">alergia?</label>
-              <select className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.alunoPossuiAlergia} onChange={(e) => updateField('alunoPossuiAlergia', e.target.value)}>
+              <select className="w-full bg-orange-50 border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase" value={formData.alunoPossuiAlergia} onChange={(e) => updateField('alunoPossuiAlergia', e.target.value.toLowerCase())}>
                 <option value="não">não</option>
                 <option value="sim">sim</option>
               </select>
@@ -328,7 +373,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
           )}
         </div>
 
-        {/* ÁREA CLÍNICA */}
         <div className="pt-10 border-t border-slate-100">
           {configUI.tipoAtendimento === 'local' ? (
             <div className="space-y-8">
@@ -338,7 +382,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* MOTIVO PRINCIPAL */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">motivo principal *</label>
                   <select 
@@ -463,7 +506,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
           )}
         </div>
 
-        {/* ASSINATURA E FINALIZAÇÃO */}
         <div className="pt-10 border-t border-slate-100 flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center gap-4 bg-slate-900 px-8 py-5 rounded-[25px] border-2 border-blue-500/20 w-full md:w-auto shadow-xl">
             <div className="bg-blue-600 p-2.5 rounded-xl"><UserCheck size={22} className="text-white" /></div>
