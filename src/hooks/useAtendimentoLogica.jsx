@@ -54,19 +54,25 @@ export const useAtendimentoLogica = (user) => {
     return `${nomeLimpo}-${dataLimpa}`;
   }, []);
 
+  // FUNÇÃO AUXILIAR PARA DATA LOCAL YYYY-MM-DD
+  const getDataLocal = () => {
+    const d = new Date();
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const dia = String(d.getDate()).padStart(2, '0');
+    return `${d.getFullYear()}-${mes}-${dia}`;
+  };
+
   const getInitialFormState = useCallback(() => ({
     baenf: `baenf-2026-${Math.random().toString(36).substring(2, 8).toLowerCase()}`,
-    data: new Date().toISOString().split('T')[0],
+    data: getDataLocal(), // CORREÇÃO: Data local garantida
     horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     horarioSaida: '', 
     nomePaciente: '',
     dataNascimento: '',
     idade: '',
     sexo: '',
-    // --- NOVOS CAMPOS GESTANTE ---
     estaGestante: 'não',
     semanasGestacao: '',
-    // ----------------------------
     turma: '',
     cargo: '',
     etnia: '',
@@ -105,7 +111,6 @@ export const useAtendimentoLogica = (user) => {
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       let novoEstado = { ...prev, [campo]: valorFormatado };
       
-      // Resetar gestação se mudar sexo para masculino
       if (campo === 'sexo' && valorFormatado === 'masculino') {
         novoEstado.estaGestante = 'não';
         novoEstado.semanasGestacao = '';
@@ -156,7 +161,6 @@ export const useAtendimentoLogica = (user) => {
       if (dados) {
         const alertas = [];
         
-        // Alerta de Gestação
         if (dados.sexo === 'feminino' && dados.estaGestante === 'sim') {
           alertas.push(`gestante (${dados.semanasGestacao || '?'} sem)`);
         }
@@ -239,6 +243,7 @@ export const useAtendimentoLogica = (user) => {
 
       const finalDataAtendimento = {
         ...payload,
+        data: formData.data, // Garante que a data local do início seja mantida
         dataNascimento: formData.dataNascimento, 
         pacienteId: idPasta, 
         idade: Number(payload.idade) || 0,
@@ -246,10 +251,8 @@ export const useAtendimentoLogica = (user) => {
         altura: Number(payload.altura) || 0,
         imc: Number(payload.imc) || 0,
         temperatura: Number(payload.temperatura) || 0,
-        // Limpeza de lógica de gestante
         estaGestante: payload.sexo === 'feminino' ? payload.estaGestante : 'não',
         semanasGestacao: (payload.sexo === 'feminino' && payload.estaGestante === 'sim') ? payload.semanasGestacao : '',
-        
         horarioSaida: agoraHora,
         statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
         tipoRegistro: eRemocao ? 'remoção' : 'local',
