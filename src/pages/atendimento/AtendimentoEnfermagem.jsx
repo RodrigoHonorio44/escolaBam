@@ -95,7 +95,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     "coceira intensa", "pediculose", "lesões de pele",
     "crise de ansiedade", "falta de ar", "dor de cabeça", 
     "pequeno curativo", "trauma/queda", "hipertensão", 
-    "hipoglicemia", "cólica menstrual", "enxaqueca","dor muscular","hiperglicemia","outros"
+    "hipoglicemia", "cólica menstrual", "enxaqueca","dor muscular","hiperglicemia","corpo estranho nos olhos","outros"
   ];
 
   const opcoesEncaminhamentoAluno = [

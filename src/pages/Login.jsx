@@ -163,7 +163,7 @@ const Login = () => {
         <div className="absolute bottom-[-10%] right-[-10%] w-[35vw] h-[35vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10 w-full flex flex-col items-center text-center max-w-lg">
-          <img src="/logo2.png" alt="Logo" className="w-32 xl:w-40 h-auto mb-8 drop-shadow-2xl" />
+          <img src="/10.png" alt="Logo" className="w-40 xl:w-52 h-auto mb-8 drop-shadow-2xl" />
           
           <div className="flex flex-col items-center gap-3 mb-8">
             <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
