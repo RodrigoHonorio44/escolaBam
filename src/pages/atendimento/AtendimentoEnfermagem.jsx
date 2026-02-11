@@ -17,7 +17,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
   } = useAtendimentoLogica(user);
 
   const [erroNome, setErroNome] = useState(false);
-  const [isGestante, setIsGestante] = useState(false); // Inicia como falso (aluno/homem)
+  const [isGestante, setIsGestante] = useState(false);
 
   // --- MAPEAMENTO DE SURTOS ---
   const GRUPOS_RISCO = {
@@ -95,7 +95,7 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
     "coceira intensa", "pediculose", "lesões de pele",
     "crise de ansiedade", "falta de ar", "dor de cabeça", 
     "pequeno curativo", "trauma/queda", "hipertensão", 
-    "hipoglicemia", "cólica menstrual", "enxaqueca","dor muscular","hiperglicemia","corpo estranho nos olhos","outros"
+    "hipoglicemia", "cólica menstrual", "enxaqueca","dor muscular","hiperglicemia","corpo estranho nos olhos"
   ];
 
   const opcoesEncaminhamentoAluno = [
@@ -223,7 +223,6 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
             </div>
           </div>
 
-          {/* BLOCO INTELIGENTE DE GESTAÇÃO - ATIVADO MANUALMENTE */}
           <div className="md:col-span-6 space-y-4">
             <button
               type="button"
@@ -384,8 +383,13 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
                 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-blue-600 uppercase ml-2 tracking-widest block">motivo principal *</label>
-                  <select 
+                  
+                  {/* INPUT COM DATALIST PARA SUGESTÕES */}
+                  <input 
+                    list="lista-queixas"
+                    type="text"
                     required 
+                    placeholder="digite o motivo ou selecione..."
                     className={`w-full border-none rounded-2xl px-5 py-4 text-sm font-bold lowercase transition-all ${grupoDetectado ? 'bg-amber-50 ring-2 ring-amber-500/20' : 'bg-blue-50'}`} 
                     value={formData.motivoAtendimento} 
                     onChange={(e) => {
@@ -393,10 +397,10 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
                       updateField('motivoAtendimento', val);
                       updateField('grupoRisco', identificarGrupoRisco(val) || 'nenhum');
                     }}
-                  >
-                    <option value="">selecione...</option>
-                    {queixasComuns.map(q => <option key={q} value={q.toLowerCase()}>{q.toLowerCase()}</option>)}
-                  </select>
+                  />
+                  <datalist id="lista-queixas">
+                    {queixasComuns.map(q => <option key={q} value={q.toLowerCase()} />)}
+                  </datalist>
 
                   {formData.motivoAtendimento === 'hipertensão' && (
                     <div className="mt-4 p-4 bg-red-50 rounded-2xl border-2 border-red-100 animate-in zoom-in-95 duration-200">
@@ -517,9 +521,20 @@ const AtendimentoEnfermagem = ({ user, onVoltar, onVerHistorico, onAbrirPastaDig
               </span>
             </div>
           </div>
-          <button type="submit" disabled={loading} className={`w-full md:w-auto px-16 py-7 rounded-[35px] font-black uppercase italic tracking-[0.15em] text-xs transition-all shadow-2xl flex items-center justify-center gap-4 ${configUI.tipoAtendimento === 'local' ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-orange-500 hover:bg-orange-600'} text-white disabled:opacity-50`}>
-            {loading ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-            {loading ? 'salvando...' : 'finalizar atendimento'}
+          
+          <button 
+            type="submit" 
+            disabled={loading} 
+            className={`w-full md:w-auto px-12 py-6 rounded-[25px] font-black uppercase italic tracking-widest transition-all flex items-center justify-center gap-4 shadow-2xl hover:scale-[1.02] active:scale-95 ${loading ? 'bg-slate-400' : 'bg-blue-600 hover:bg-blue-700 text-white'}`}
+          >
+            {loading ? (
+              <Loader2 className="animate-spin" size={24} />
+            ) : (
+              <>
+                <Save size={24} />
+                <span>finalizar atendimento</span>
+              </>
+            )}
           </button>
         </div>
       </form>
