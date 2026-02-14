@@ -13,7 +13,6 @@ export const useAtendimentoLogica = (user) => {
   const { buscarSugestoes, sugestoes, puxarDadosCompletos, buscando } = usePacienteSinc();
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
-  // --- MAPEAMENTO DE SURTOS ---
   const GRUPOS_RISCO = {
     "gastrointestinal": ["dor abdominal", "náusea/vômito", "diarreia", "enjoo"],
     "respiratório": ["febre", "sintomas gripais", "dor de garganta", "tosse"],
@@ -54,7 +53,6 @@ export const useAtendimentoLogica = (user) => {
     return `${nomeLimpo}-${dataLimpa}`;
   }, []);
 
-  // FUNÇÃO AUXILIAR PARA DATA LOCAL YYYY-MM-DD
   const getDataLocal = () => {
     const d = new Date();
     const mes = String(d.getMonth() + 1).padStart(2, '0');
@@ -64,7 +62,7 @@ export const useAtendimentoLogica = (user) => {
 
   const getInitialFormState = useCallback(() => ({
     baenf: `baenf-2026-${Math.random().toString(36).substring(2, 8).toLowerCase()}`,
-    data: getDataLocal(), // CORREÇÃO: Data local garantida
+    data: getDataLocal(),
     horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     horarioSaida: '', 
     nomePaciente: '',
@@ -73,6 +71,8 @@ export const useAtendimentoLogica = (user) => {
     sexo: '',
     estaGestante: 'não',
     semanasGestacao: '',
+    dum: '',
+    preNatal: 'nao',
     turma: '',
     cargo: '',
     etnia: '',
@@ -107,13 +107,19 @@ export const useAtendimentoLogica = (user) => {
   }, [formData.nomePaciente, buscarSugestoes]);
 
   const updateField = useCallback((campo, valor) => {
+    // PROTEÇÃO EXTRA: Impede qualquer tentativa de mudar o horário via interface
+    if (campo === 'horario') return;
+
     setFormData(prev => {
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       let novoEstado = { ...prev, [campo]: valorFormatado };
       
-      if (campo === 'sexo' && valorFormatado === 'masculino') {
+      // TRAVA DE GÊNERO: Se mudar para masculino, reseta TUDO de gestação
+      if (campo === 'sexo' && valorFormatado !== 'feminino') {
         novoEstado.estaGestante = 'não';
         novoEstado.semanasGestacao = '';
+        novoEstado.dum = '';
+        novoEstado.preNatal = 'nao';
       }
 
       if (campo === 'motivoAtendimento') {
@@ -185,6 +191,8 @@ export const useAtendimentoLogica = (user) => {
           sexo: (dados.sexo || "").toLowerCase(),
           estaGestante: (dados.estaGestante || "não").toLowerCase(),
           semanasGestacao: dados.semanasGestacao || "",
+          dum: dados.dum || "",
+          preNatal: (dados.preNatal || "nao").toLowerCase(),
           turma: (dados.turma || "").toLowerCase(),
           cargo: (dados.cargo || "").toLowerCase(),
           etnia: (dados.etnia || "").toLowerCase(),
@@ -243,7 +251,7 @@ export const useAtendimentoLogica = (user) => {
 
       const finalDataAtendimento = {
         ...payload,
-        data: formData.data, // Garante que a data local do início seja mantida
+        data: formData.data,
         dataNascimento: formData.dataNascimento, 
         pacienteId: idPasta, 
         idade: Number(payload.idade) || 0,
@@ -253,7 +261,8 @@ export const useAtendimentoLogica = (user) => {
         temperatura: Number(payload.temperatura) || 0,
         estaGestante: payload.sexo === 'feminino' ? payload.estaGestante : 'não',
         semanasGestacao: (payload.sexo === 'feminino' && payload.estaGestante === 'sim') ? payload.semanasGestacao : '',
-        horarioSaida: agoraHora,
+        horario: formData.horario, 
+        horarioSaida: agoraHora, 
         statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
         tipoRegistro: eRemocao ? 'remoção' : 'local',
         perfilPaciente: configUI.perfilPaciente.toLowerCase(),
@@ -278,6 +287,8 @@ export const useAtendimentoLogica = (user) => {
         sexo: finalDataAtendimento.sexo,
         estaGestante: finalDataAtendimento.estaGestante,
         semanasGestacao: finalDataAtendimento.semanasGestacao,
+        dum: finalDataAtendimento.dum || "",
+        preNatal: finalDataAtendimento.preNatal || "nao",
         etnia: finalDataAtendimento.etnia,
         peso: finalDataAtendimento.peso,
         altura: finalDataAtendimento.altura,

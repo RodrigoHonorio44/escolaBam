@@ -150,16 +150,21 @@ const Login = () => {
     <div className="h-screen w-full flex flex-col lg:flex-row bg-white overflow-hidden font-sans relative">
       <Toaster position="top-right" />
 
-      {/* LADO ESQUERDO: BRANDING (Ajustado para subir os elementos no notebook) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-start items-center border-r border-white/5 overflow-hidden pt-16 xl:pt-24">
+      {/* LADO ESQUERDO: BRANDING (Corrigido para Notebooks) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-center items-center border-r border-white/5 overflow-hidden">
+        {/* Efeitos de fundo */}
         <div className="absolute top-[-10%] left-[-10%] w-[45vw] h-[45vw] bg-blue-600/10 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[35vw] h-[35vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10 w-full flex flex-col items-center text-center max-w-lg">
-          {/* Logo um pouco menor para economizar espaço vertical */}
-          <img src="/10.png" alt="Logo" className="w-32 xl:w-48 h-auto mb-6 drop-shadow-2xl" />
+          {/* Logo com altura máxima para não empurrar o conteúdo em telas baixas */}
+          <img 
+            src="/10.png" 
+            alt="Logo" 
+            className="w-32 xl:w-48 max-h-[180px] h-auto mb-6 xl:mb-10 drop-shadow-2xl object-contain" 
+          />
           
-          <div className="flex flex-col items-center gap-2 mb-6">
+          <div className="flex flex-col items-center gap-2 mb-6 xl:mb-10">
             <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
               <GraduationCap className="text-blue-500" size={20} />
               <h3 className="text-white font-black text-lg xl:text-xl tracking-[0.1em] uppercase italic leading-none">C . E . P . T</h3>
@@ -167,13 +172,14 @@ const Login = () => {
             <p className="text-blue-400 text-[8px] font-black tracking-[0.4em] uppercase">Unidade Escolar</p>
           </div>
 
-          <h1 className="text-4xl xl:text-6xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-6">
+          <h1 className="text-3xl xl:text-6xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-6">
             SISTEMA <br />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-400">DE SAÚDE</span>
           </h1>
-          <div className="h-1 w-16 bg-gradient-to-r from-blue-600 to-cyan-500 mb-6 rounded-full"></div>
           
-          <p className="text-slate-400 max-w-xs font-medium text-xs xl:text-sm leading-relaxed opacity-70">
+          <div className="h-1 w-16 bg-gradient-to-r from-blue-600 to-cyan-500 mb-6 xl:mb-8 rounded-full"></div>
+          
+          <p className="text-slate-400 max-w-xs font-medium text-[10px] xl:text-sm leading-relaxed opacity-70">
             Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
           </p>
         </div>

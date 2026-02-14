@@ -58,6 +58,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   const watchDetalheFisico = watch("detalheFisico");
   const watchSexo = watch("sexo");
   const watchEstaGestante = watch("estaGestante");
+  const watchNaoSabePeso = watch("naoSabePeso");
+  const watchNaoSabeAltura = watch("naoSabeAltura");
 
   // LÓGICA R S: CALCULO DE IDADE AUTOMÁTICO
   useEffect(() => {
@@ -225,6 +227,8 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
         contato2_telefone: data.contato2_telefone.replace(/\D/g, ""),
         endereco_rua: paraBanco(data.endereco_rua),
         endereco_bairro: paraBanco(data.endereco_bairro),
+        peso: paraBanco(data.peso),
+        altura: paraBanco(data.altura),
         updatedAt: serverTimestamp()
       };
       
@@ -246,7 +250,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       
       <div className="flex justify-between items-center mb-8 border-b pb-6">
         <div className="flex items-center gap-4">
-          <button type="button" onClick={() => modoPastaDigital ? (onClose ? onClose() : onVoltar()) : navigate('/dashboard')} className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-all"><ArrowLeft size={24} /></button>
+          <button type="button" onClick={() => (onClose ? onClose() : onVoltar())} className="p-2 hover:bg-blue-50 text-blue-600 rounded-full transition-all"><ArrowLeft size={24} /></button>
           <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg"><UserPlus size={24} /></div>
           <div>
             <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
@@ -259,7 +263,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           <button type="button" onClick={limparFormulario} title="Limpar formulário" className="p-2 hover:bg-amber-50 text-amber-500 rounded-full transition-all">
             <Eraser size={26} />
           </button>
-          <button type="button" onClick={() => modoPastaDigital ? (onClose ? onClose() : onVoltar()) : navigate('/dashboard')} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"><X size={28} /></button>
+          <button type="button" onClick={() => (onClose ? onClose() : onVoltar())} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"><X size={28} /></button>
         </div>
       </div>
       
@@ -325,31 +329,43 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* DADOS FÍSICOS E TURMA */}
-        <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* DADOS FÍSICOS E TURMA - INCLUINDO ALTURA */}
+        <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
-            <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none">
+            <select {...register("sexo")} className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600">
               <option value="">...</option><option value="masculino">masculino</option><option value="feminino">feminino</option>
             </select>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etnia</label>
-            <select {...register("etnia")} className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none">
+            <select {...register("etnia")} className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600">
               <option value="">...</option><option value="branca">branca</option><option value="preta">preta</option><option value="parda">parda</option>
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Peso</label>
-            <input {...register("peso")} placeholder="0.0" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none" />
+            <div className="flex justify-between items-center px-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Peso (kg)</label>
+              <input type="checkbox" {...register("naoSabePeso")} className="w-3 h-3 rounded text-blue-600" />
+            </div>
+            <input {...register("peso")} disabled={watchNaoSabePeso} placeholder={watchNaoSabePeso ? "N/P" : "0.0"} className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600" />
           </div>
+          
+          <div className="space-y-2">
+            <div className="flex justify-between items-center px-1">
+              <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Altura (m)</label>
+              <input type="checkbox" {...register("naoSabeAltura")} className="w-3 h-3 rounded text-blue-600" />
+            </div>
+            <input {...register("altura")} disabled={watchNaoSabeAltura} placeholder={watchNaoSabeAltura ? "N/S" : "0.00"} className="w-full px-5 py-4 bg-blue-50 border-2 border-blue-100 rounded-2xl font-bold outline-none focus:border-blue-600 text-blue-900" />
+          </div>
+
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Turma</label>
             <input {...register("turma")} placeholder="Ex: 5º A" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600" />
           </div>
         </div>
 
-        {/* RESTAURADO: OPÇÃO DE GESTANTE */}
+        {/* GESTANTE */}
         {watchSexo === 'feminino' && (
           <div className="md:col-span-2 p-6 bg-pink-50 rounded-[30px] border-2 border-pink-100 space-y-4 shadow-sm animate-in zoom-in-95">
             <label className="text-[10px] font-black text-pink-600 uppercase flex items-center gap-2 italic"><Baby size={16}/> Informações de Gestação</label>
@@ -504,7 +520,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        <button type="submit" disabled={isSubmitting} className="md:col-span-2 w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-[25px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3">
+        <button type="submit" disabled={isSubmitting} className="md:col-span-2 w-full py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-[25px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all active:scale-95">
           {isSubmitting ? <Loader2 className="animate-spin" /> : <Save />}
           {dadosIniciais ? 'Atualizar Registro' : 'Finalizar Cadastro'}
         </button>
