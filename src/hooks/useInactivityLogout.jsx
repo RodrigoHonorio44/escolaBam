@@ -1,43 +1,63 @@
 import { useEffect, useRef } from "react";
-// AJUSTADO: De "../api/Firebase" para o seu caminho real
-import { auth } from '../firebase/firebaseConfig'; // Certifique-se que o C está maiúsculo
-import { signOut } from "firebase/auth";
-import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
+import { useAuth } from "../context/AuthContext";
+import toast from "react-hot-toast";
 
 export function useInactivityLogout(minutes = 40) {
-  const navigate = useNavigate();
+  const { handleLogout, user } = useAuth();
   const timeoutRef = useRef(null);
+  const lastActivityRef = useRef(Date.now());
 
+  // ✅ Função para reiniciar o cronômetro
   const resetTimer = () => {
+    // 1. Só inicia o timer se houver usuário e não for Root
+    const isRoot = user?.role?.toLowerCase() === 'root' || user?.email === "rodrigohono21@gmail.com";
+    if (!user || isRoot) {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      return;
+    }
+
+    // 2. Throttling: Só reinicia o timer se passaram mais de 2 segundos desde a última execução
+    // Isso evita processamento excessivo durante o movimento do mouse
+    const agora = Date.now();
+    if (agora - lastActivityRef.current < 2000) return;
+    lastActivityRef.current = agora;
+
+    // 3. Limpa o timer anterior e define o novo
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     
     timeoutRef.current = setTimeout(() => {
+      toast('Sessão encerrada por inatividade.', {
+        icon: '⏳',
+        duration: 6000,
+        style: {
+          borderRadius: '10px',
+          background: '#333',
+          color: '#fff',
+        },
+      });
+      
       handleLogout();
     }, minutes * 60 * 1000);
   };
 
-  const handleLogout = async () => {
-    try {
-      // O Firebase Auth usa a instância vinda do seu firebaseconfig
-      await signOut(auth);
-      toast.info("Sessão encerrada por inatividade.");
-      navigate("/login");
-    } catch (error) {
-      console.error("Erro ao deslogar:", error);
-    }
-  };
-
   useEffect(() => {
-    // Eventos que resetam o cronômetro de 40 minutos
+    // Lista de eventos que indicam atividade humana
     const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
     
-    events.forEach((event) => document.addEventListener(event, resetTimer));
-    resetTimer();
+    const handleEvent = () => resetTimer();
+
+    if (user) {
+      events.forEach((event) => document.addEventListener(event, handleEvent));
+      // Inicializa o primeiro timer
+      resetTimer();
+    }
 
     return () => {
-      events.forEach((event) => document.removeEventListener(event, resetTimer));
+      // Limpeza completa para evitar memory leaks e bugs de redirecionamento
+      events.forEach((event) => document.removeEventListener(event, handleEvent));
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
-  }, []);
+  }, [user]); // Monitora apenas o estado do usuário
+
+  return null;
 }

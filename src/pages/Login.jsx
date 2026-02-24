@@ -35,7 +35,13 @@ const Login = () => {
             const userData = docSnap.data();
             const localSessionId = localStorage.getItem("current_session_id");
 
-            if (userData.role !== 'root' && localSessionId && userData.currentSessionId && userData.currentSessionId !== localSessionId) {
+            // Normalização para o padrão R S (lowercase)
+            const roleLimpo = userData.role?.toLowerCase();
+            const statusLimpo = userData.status?.toLowerCase();
+            const licencaLimpa = userData.statusLicenca?.toLowerCase() || userData.licencaStatus?.toLowerCase();
+
+            // Verificação de Sessão Única
+            if (roleLimpo !== 'root' && localSessionId && userData.currentSessionId && userData.currentSessionId !== localSessionId) {
               toast.error("ACESSO ENCERRADO: OUTRO DISPOSITIVO CONECTOU.", {
                 duration: 8000,
                 icon: '🚫',
@@ -49,12 +55,10 @@ const Login = () => {
               return;
             }
 
-            const isBloqueado = 
-              userData.status === "bloqueado" || 
-              userData.statusLicenca === "bloqueada" || 
-              userData.licencaStatus === "bloqueada";
+            // Verificação de Bloqueio
+            const isBloqueado = statusLimpo === "bloqueado" || licencaLimpa === "bloqueada" || licencaLimpa === "expirada";
 
-            if (isBloqueado && userData.role !== 'root') {
+            if (isBloqueado && roleLimpo !== 'root') {
               toast.error("ACESSO SUSPENSO PELO ADMINISTRADOR.", { icon: '🛑' });
               localStorage.clear();
               signOut(auth);
@@ -74,24 +78,32 @@ const Login = () => {
     setLoading(true);
 
     const loginLogic = async () => {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+      // 🧹 LIMPEZA PREVENTIVA DE UNIDADE (Fim do fantasma do CEPT)
+      localStorage.removeItem("inspecao_unidade_id");
+      localStorage.removeItem("inspecao_unidade_nome");
+      localStorage.setItem("modo_inspecao", "false");
+
+      const userCredential = await signInWithEmailAndPassword(auth, email.trim().toLowerCase(), password);
       const user = userCredential.user;
       
       const newSessionId = `sess_${Date.now()}`;
       const userDocRef = doc(db, "usuarios", user.uid);
       const userSnap = await getDoc(userDocRef);
 
+      // --- 🛡️ LÓGICA ROOT (RODRIGO) ---
       if (user.email === "rodrigohono21@gmail.com") {
+        const rootData = {
+          nome: "rodrigo honório", // Padrão R S
+          email: user.email.toLowerCase(),
+          role: "root",
+          status: "ativo",
+          statusLicenca: "ativa",
+          currentSessionId: newSessionId,
+          ultimoLogin: serverTimestamp()
+        };
+
         if (!userSnap.exists()) {
-          await setDoc(userDocRef, {
-            nome: "Rodrigo Honório",
-            email: user.email,
-            role: "root",
-            status: "ativo",
-            statusLicenca: "ativa",
-            currentSessionId: newSessionId,
-            ultimoLogin: serverTimestamp()
-          });
+          await setDoc(userDocRef, rootData);
         } else {
           await updateDoc(userDocRef, {
             currentSessionId: newSessionId,
@@ -104,6 +116,7 @@ const Login = () => {
         return "ACESSO MESTRE LIBERADO"; 
       }
 
+      // --- 👥 LÓGICA USUÁRIO COMUM ---
       if (!userSnap.exists()) {
         await signOut(auth);
         throw new Error("USUÁRIO NÃO LOCALIZADO NA BASE DE DADOS");
@@ -111,26 +124,33 @@ const Login = () => {
 
       const userData = userSnap.data();
 
-      const isBloqueado = userData.status === "bloqueado" || userData.statusLicenca === "bloqueada";
-      if (isBloqueado) {
+      // Normalização de status para checagem
+      const statusLimpo = userData.status?.toLowerCase();
+      const licencaLimpa = userData.statusLicenca?.toLowerCase() || userData.licencaStatus?.toLowerCase();
+
+      if (statusLimpo === "bloqueado" || licencaLimpa === "bloqueada" || licencaLimpa === "expirada") {
         await signOut(auth);
         throw new Error("ACESSO SUSPENSO: CONSULTE O ADMINISTRADOR");
       }
 
       localStorage.setItem("current_session_id", newSessionId);
+      
       await updateDoc(userDocRef, {
         currentSessionId: newSessionId,
         ultimoLogin: serverTimestamp(),
-        primeiroAcesso: false 
+        primeiroAcesso: userData.primeiroAcesso ?? false 
       });
 
+      // Redirecionamento de Segurança
       if (!userData.dataUltimaTroca || userData.primeiroAcesso === true) {
         navigate('/trocar-senha'); 
         return "SEGURANÇA: ALTERE SUA SENHA INICIAL";
       }
 
       navigate('/');
-      return `BEM-VINDO, ${userData.nome.split(' ')[0].toUpperCase()}`;
+      // Retorna o primeiro nome em maiúsculo para o toast
+      const primeiroNome = (userData.nome || "USUÁRIO").split(' ')[0].toUpperCase();
+      return `BEM-VINDO, ${primeiroNome}`;
     };
 
     toast.promise(loginLogic(), {
@@ -138,7 +158,9 @@ const Login = () => {
       success: (data) => data,
       error: (err) => {
         setLoading(false);
-        if (err.code === 'auth/invalid-credential') return "E-MAIL OU SENHA INCORRETOS";
+        if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+          return "E-MAIL OU SENHA INCORRETOS";
+        }
         return err.message.toUpperCase();
       },
     }, {
@@ -150,14 +172,12 @@ const Login = () => {
     <div className="h-screen w-full flex flex-col lg:flex-row bg-white overflow-hidden font-sans relative">
       <Toaster position="top-right" />
 
-      {/* LADO ESQUERDO: BRANDING (Corrigido para Notebooks) */}
+      {/* LADO ESQUERDO: BRANDING */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#020617] relative p-8 xl:p-12 flex-col justify-center items-center border-r border-white/5 overflow-hidden">
-        {/* Efeitos de fundo */}
         <div className="absolute top-[-10%] left-[-10%] w-[45vw] h-[45vw] bg-blue-600/10 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[35vw] h-[35vw] bg-indigo-600/10 rounded-full blur-[100px]"></div>
 
         <div className="relative z-10 w-full flex flex-col items-center text-center max-w-lg">
-          {/* Logo com altura máxima para não empurrar o conteúdo em telas baixas */}
           <img 
             src="/10.png" 
             alt="Logo" 
@@ -167,9 +187,9 @@ const Login = () => {
           <div className="flex flex-col items-center gap-2 mb-6 xl:mb-10">
             <div className="flex items-center gap-3 bg-white/5 px-5 py-2 rounded-2xl border border-white/10">
               <GraduationCap className="text-blue-500" size={20} />
-              <h3 className="text-white font-black text-lg xl:text-xl tracking-[0.1em] uppercase italic leading-none">C . E . P . T</h3>
+              <h3 className="text-white font-black text-lg xl:text-xl tracking-[0.1em] uppercase italic leading-none">S . G . C</h3>
             </div>
-            <p className="text-blue-400 text-[8px] font-black tracking-[0.4em] uppercase">Unidade Escolar</p>
+            <p className="text-blue-400 text-[8px] font-black tracking-[0.4em] uppercase">Gestão Inteligente</p>
           </div>
 
           <h1 className="text-3xl xl:text-6xl font-black text-white leading-[0.9] tracking-tighter italic uppercase mb-6">
@@ -180,7 +200,7 @@ const Login = () => {
           <div className="h-1 w-16 bg-gradient-to-r from-blue-600 to-cyan-500 mb-6 xl:mb-8 rounded-full"></div>
           
           <p className="text-slate-400 max-w-xs font-medium text-[10px] xl:text-sm leading-relaxed opacity-70">
-            Plataforma inteligente de prontuários e gestão clínica para o ambiente escolar.
+            Monitoramento clínico e prontuário digital unificado para unidades escolares.
           </p>
         </div>
       </div>
@@ -203,7 +223,7 @@ const Login = () => {
                 <input
                   type="email"
                   className="w-full pl-13 pr-6 py-4.5 bg-white border-2 border-slate-100 rounded-2xl outline-none font-bold text-slate-700 focus:border-blue-600 transition-all text-sm"
-                  placeholder="admin@rodhon.com"
+                  placeholder="usuario@rodhon.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -254,8 +274,8 @@ const Login = () => {
             <div className="text-center">
               <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-600/30"><MessageSquare size={28} /></div>
               <h3 className="text-2xl font-black text-slate-900 uppercase italic">Suporte</h3>
-              <p className="text-slate-500 text-sm mt-2 mb-8">Central de Suporte Intelligence: Como podemos otimizar sua gestão hoje?</p>
-              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:scale-[1.02] transition-transform">WhatsApp</a>
+              <p className="text-slate-500 text-sm mt-2 mb-8">Central de Atendimento: Como podemos ajudar?</p>
+              <a href="https://wa.me/5521975966330" target="_blank" rel="noreferrer" className="flex items-center justify-center w-full bg-[#25D366] text-white py-4 rounded-xl font-black uppercase text-[10px] tracking-widest shadow-md hover:scale-[1.02] transition-transform">WhatsApp Suporte</a>
             </div>
           </div>
         </div>

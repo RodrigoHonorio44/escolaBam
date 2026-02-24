@@ -4,8 +4,8 @@ import {
   ChevronRight, ChevronLeft, Hospital, X, Save, Loader2, Stethoscope, Printer, 
   Search, FilterX
 } from 'lucide-react';
-import Calendar from 'react-calendar'; // Importação do novo calendário
-import 'react-calendar/dist/Calendar.css'; // Estilos base
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import { db } from '../../firebase/firebaseConfig';
 import { 
   collection, query, where, onSnapshot, orderBy, updateDoc, doc 
@@ -36,11 +36,11 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     observacoesFinais: ''
   });
 
+  // ✅ Formatação R S e Lowercase Capitalized conforme suas regras
   const formatarNomeDisplay = (nome) => {
     if (!nome) return "---";
-    const palavras = nome.toLowerCase().split(' ');
-    return palavras.map(p => {
-      if (p === 'r' || p === 's' || p.length === 1) return p.toUpperCase();
+    return nome.toString().toLowerCase().trim().split(/\s+/).map(p => {
+      if (p === 'r' || p === 's' || p === 'r.' || p === 's.') return p.toUpperCase();
       return p.charAt(0).toUpperCase() + p.slice(1);
     }).join(' ');
   };
@@ -53,10 +53,20 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
   };
 
   useEffect(() => {
-    const escolaUsuario = (user?.escolaId || "E. M. ANÍSIO TEIXEIRA");
+    // ✅ CAPTURA DA ID ESCOLAR (Normalizada em lowercase)
+    // Se for Root e estiver em modo inspeção, o dashboard já injeta o escolaId correto via props
+    const escolaIdFiltro = user?.escolaId?.toLowerCase().trim();
+
+    if (!escolaIdFiltro) {
+        console.warn("Usuário sem escolaId vinculado.");
+        setLoading(false);
+        return;
+    }
+
+    // ✅ Query baseada no ID e não no nome (mais preciso)
     const q = query(
       collection(db, "atendimentos_enfermagem"),
-      where("escola", "in", [escolaUsuario.toUpperCase(), escolaUsuario.toLowerCase()]),
+      where("escolaId", "==", escolaIdFiltro),
       orderBy("createdAt", "desc")
     );
 
@@ -76,33 +86,32 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     }, (error) => {
       console.error("Erro Firestore:", error);
       toast.error("Erro ao carregar fluxo clínico.");
+      setLoading(false);
     });
+
     return () => unsubscribe();
   }, [user]);
 
-  // LÓGICA DE FILTRAGEM CORRIGIDA (Trava de mês para Finalizados)
+  // LÓGICA DE FILTRAGEM
   const atendimentosFiltrados = useMemo(() => {
     return atendimentos.filter(atend => {
       const statusDoc = atend.statusAtendimento;
       const ehPendente = statusDoc === 'pendente' || statusDoc === 'aberto' || (atend.tipoRegistro === 'remoção' && statusDoc !== 'finalizado');
       
-      // 1. Filtro de Status
       const matchesStatus = filtroStatus === 'Todos' ? true : (filtroStatus === 'Aberto' ? ehPendente : statusDoc === 'finalizado');
       
-      // 2. Trava de Data Rigorosa
       const dataDoc = atend.dataAtendimento || atend.data || "";
-      const mesAtual = new Date().toISOString().slice(0, 7); // "2026-02"
+      const mesAtual = new Date().toISOString().slice(0, 7); 
       
       let matchesData = true;
       if (buscaNome) {
-        matchesData = true; // Busca global se houver nome
+        matchesData = true; 
       } else if (filtroData) {
-        matchesData = dataDoc === filtroData; // Filtro de dia específico
+        matchesData = dataDoc === filtroData;
       } else {
-        matchesData = dataDoc.startsWith(mesAtual); // TRAVA: Apenas mês atual para Aberto/Finalizado
+        matchesData = dataDoc.startsWith(mesAtual); 
       }
 
-      // 3. Filtro de Nome
       const termoBusca = buscaNome.toLowerCase().trim();
       const nomePaciente = (atend.nomePaciente || "").toLowerCase();
       const matchesNome = nomePaciente.includes(termoBusca);
@@ -111,9 +120,9 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     });
   }, [atendimentos, filtroStatus, filtroData, buscaNome]);
 
-  // Mapeia dias que têm atendimento para as bolinhas do calendário
+  // Bolinhas do calendário baseadas nos dados brutos
   const diasComDados = useMemo(() => {
-    return atendimentos.map(a => a.dataAtendimento || a.data);
+    return [...new Set(atendimentos.map(a => a.dataAtendimento || a.data))];
   }, [atendimentos]);
 
   const totalPaginas = Math.ceil(atendimentosFiltrados.length / itensPorPagina);
@@ -143,7 +152,6 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
     <div className="bg-white rounded-[40px] p-8 border border-slate-200 shadow-sm relative animate-in fade-in duration-500 font-sans antialiased">
       <Toaster position="top-center" />
       
-      {/* Estilos customizados para o react-calendar */}
       <style>{`
         .react-calendar { border: none; font-family: inherit; width: 100%; background: transparent; }
         .dot-indicator { height: 6px; width: 6px; background-color: #3b82f6; border-radius: 50%; display: inline-block; position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%); }
@@ -163,7 +171,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
             <div>
               <h2 className="text-3xl font-black text-slate-800 uppercase italic tracking-tighter">Fluxo <span className="text-blue-600">Clínico</span></h2>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                {filtroData ? `Data Selecionada: ${filtroData}` : `Registros do Mês Atual`}
+                {user?.escola ? `Unidade: ${formatarNomeDisplay(user.escola)}` : "Carregando unidade..."}
               </p>
             </div>
           </div>
@@ -206,7 +214,6 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
           </div>
         </div>
 
-        {/* CALENDÁRIO COM BOLINHAS INDICADORAS */}
         {showCalendar && (
           <div className="absolute right-8 top-52 z-50 bg-white p-6 rounded-[30px] shadow-2xl border border-slate-100 animate-in zoom-in duration-200 w-80">
             <Calendar 
@@ -258,7 +265,6 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         )}
       </div>
 
-      {/* Paginação Simplificada */}
       {totalPaginas > 1 && (
         <div className="flex items-center justify-center gap-4 mt-10">
           <button disabled={paginaAtual === 1} onClick={() => setPaginaAtual(p => p - 1)} className="p-4 bg-slate-100 rounded-2xl disabled:opacity-30"><ChevronLeft size={20} /></button>
@@ -267,7 +273,7 @@ const HistoricoAtendimentos = ({ user, onVerPasta }) => {
         </div>
       )}
 
-      {/* Modal de Finalização (Arquivamento) */}
+      {/* MODAL DE ALTA */}
       {selectedAtend && (
          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/90 backdrop-blur-sm">
             <div className="bg-white w-full max-w-2xl rounded-[40px] p-10 relative animate-in zoom-in duration-300">

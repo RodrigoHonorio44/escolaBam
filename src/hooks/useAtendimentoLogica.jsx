@@ -13,6 +13,10 @@ export const useAtendimentoLogica = (user) => {
   const { buscarSugestoes, sugestoes, puxarDadosCompletos, buscando } = usePacienteSinc();
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
 
+  // ✅ EXTRAÇÃO SEGURA E NORMALIZADA (PADRÃO R S)
+  const escolaIdLogada = user?.escolaId?.toLowerCase().trim() || null;
+  const escolaNomeLogada = user?.escola?.toLowerCase().trim() || null;
+
   const GRUPOS_RISCO = {
     "gastrointestinal": ["dor abdominal", "náusea/vômito", "diarreia", "enjoo"],
     "respiratório": ["febre", "sintomas gripais", "dor de garganta", "tosse"],
@@ -50,8 +54,8 @@ export const useAtendimentoLogica = (user) => {
       .replace(/\s+/g, '-'); 
     
     const dataLimpa = data ? data.replace(/-/g, '') : 'nd';
-    return `${nomeLimpo}-${dataLimpa}`;
-  }, []);
+    return `${escolaIdLogada}-${nomeLimpo}-${dataLimpa}`;
+  }, [escolaIdLogada]);
 
   const getDataLocal = () => {
     const d = new Date();
@@ -63,6 +67,7 @@ export const useAtendimentoLogica = (user) => {
   const getInitialFormState = useCallback(() => ({
     baenf: `baenf-2026-${Math.random().toString(36).substring(2, 8).toLowerCase()}`,
     data: getDataLocal(),
+    // ✅ Inicializa com a hora atual, mas permite edição posterior
     horario: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
     horarioSaida: '', 
     nomePaciente: '',
@@ -100,32 +105,51 @@ export const useAtendimentoLogica = (user) => {
 
   const [formData, setFormData] = useState(getInitialFormState());
 
+  // ✅ CÁLCULO DE IDADE AUTOMÁTICO
+  useEffect(() => {
+    if (formData.dataNascimento && formData.dataNascimento.length === 10) {
+      const hoje = new Date();
+      const [ano, mes, dia] = formData.dataNascimento.split('-').map(Number);
+      const nascimento = new Date(ano, mes - 1, dia);
+
+      if (!isNaN(nascimento.getTime())) {
+        let idadeCalculada = hoje.getFullYear() - nascimento.getFullYear();
+        const m = hoje.getMonth() - nascimento.getMonth();
+        if (m < 0 || (m === 0 && hoje.getDate() < nascimento.getDate())) {
+          idadeCalculada--;
+        }
+        const idadeFinal = (idadeCalculada >= 0 && idadeCalculada < 120) ? String(idadeCalculada) : "";
+        if (formData.idade !== idadeFinal) {
+          setFormData(prev => ({ ...prev, idade: idadeFinal }));
+        }
+      }
+    } else if (formData.idade !== "") {
+       setFormData(prev => ({ ...prev, idade: "" }));
+    }
+  }, [formData.dataNascimento, formData.idade]);
+
   useEffect(() => {
     if (formData.nomePaciente.length > 2) {
       buscarSugestoes(formData.nomePaciente.toLowerCase());
     }
   }, [formData.nomePaciente, buscarSugestoes]);
 
+  // ✅ UPDATE FIELD ATUALIZADO PARA LIBERAR O HORÁRIO
   const updateField = useCallback((campo, valor) => {
-    // PROTEÇÃO EXTRA: Impede qualquer tentativa de mudar o horário via interface
-    if (campo === 'horario') return;
-
+    // REMOVIDO: if (campo === 'horario') return; 
     setFormData(prev => {
       const valorFormatado = typeof valor === 'string' ? valor.toLowerCase() : valor;
       let novoEstado = { ...prev, [campo]: valorFormatado };
       
-      // TRAVA DE GÊNERO: Se mudar para masculino, reseta TUDO de gestação
       if (campo === 'sexo' && valorFormatado !== 'feminino') {
         novoEstado.estaGestante = 'não';
         novoEstado.semanasGestacao = '';
         novoEstado.dum = '';
         novoEstado.preNatal = 'nao';
       }
-
       if (campo === 'motivoAtendimento') {
         novoEstado.grupoRisco = identificarGrupoRisco(valorFormatado);
       }
-
       if (campo === 'peso' || campo === 'altura') {
         const p = parseFloat(String(novoEstado.peso).replace(',', '.'));
         const a = parseFloat(String(novoEstado.altura).replace(',', '.'));
@@ -135,20 +159,9 @@ export const useAtendimentoLogica = (user) => {
     });
   }, []);
 
-  useEffect(() => {
-    if (formData.dataNascimento && !configUI.naoSabeDataNasc) {
-      const hoje = new Date();
-      const nasc = new Date(formData.dataNascimento);
-      let idadeCalc = hoje.getFullYear() - nasc.getFullYear();
-      const m = hoje.getMonth() - nasc.getMonth();
-      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) { idadeCalc--; }
-      setFormData(prev => ({ ...prev, idade: idadeCalc >= 0 ? idadeCalc : '' }));
-    }
-  }, [formData.dataNascimento, configUI.naoSabeDataNasc]);
-
   const selecionarPaciente = async (p) => {
     setMostrarSugestoes(false);
-    const toastId = toast.loading("sincronizando...");
+    const toastId = toast.loading("Sincronizando prontuário...");
     const nomeOriginal = (p.nome || p.nomeBusca || p.nomePaciente || "").toLowerCase().trim();
     let dataParaInput = p.dataNascimento || "";
 
@@ -157,74 +170,43 @@ export const useAtendimentoLogica = (user) => {
       dataParaInput = `${a}-${m}-${d}`;
     }
 
-    const idSugerido = gerarIdPadrao(nomeOriginal, dataParaInput);
-
     try {
-      const docRef = doc(db, "pastas_digitais", idSugerido);
-      const docSnap = await getDoc(docRef);
-      let dados = docSnap.exists() ? docSnap.data() : await puxarDadosCompletos(nomeOriginal, dataParaInput);
+      const dados = await puxarDadosCompletos(nomeOriginal, dataParaInput);
 
       if (dados) {
-        const alertas = [];
-        
-        if (dados.sexo === 'feminino' && dados.estaGestante === 'sim') {
-          alertas.push(`gestante (${dados.semanasGestacao || '?'} sem)`);
-        }
-
-        if (dados.isPCD === 'sim' || dados.isPcd === 'sim') {
-          if (Array.isArray(dados.categoriasPCD)) {
-            alertas.push(...dados.categoriasPCD.map(c => c.toLowerCase()));
-          }
-          if (dados.detalheTEA) alertas.push(dados.detalheTEA.toLowerCase());
-          if (dados.detalheTDAH) alertas.push(dados.detalheTDAH.toLowerCase());
-          if (dados.detalheIntelectual) alertas.push(dados.detalheIntelectual.toLowerCase());
-          if (dados.detalheFisico && dados.detalheFisico.toLowerCase() !== "andante sem auxilio") {
-            alertas.push(dados.detalheFisico.toLowerCase());
-          }
-        }
-
         setFormData(prev => ({
           ...prev,
-          pacienteId: idSugerido,
-          nomePaciente: nomeOriginal,
-          dataNascimento: dataParaInput, 
-          sexo: (dados.sexo || "").toLowerCase(),
-          estaGestante: (dados.estaGestante || "não").toLowerCase(),
-          semanasGestacao: dados.semanasGestacao || "",
-          dum: dados.dum || "",
-          preNatal: (dados.preNatal || "nao").toLowerCase(),
-          turma: (dados.turma || "").toLowerCase(),
-          cargo: (dados.cargo || "").toLowerCase(),
-          etnia: (dados.etnia || "").toLowerCase(),
+          pacienteId: dados.id,
+          nomePaciente: dados.nome,
+          dataNascimento: dados.dataNascimento, 
+          sexo: dados.sexo,
+          turma: dados.turma,
+          etnia: dados.etnia,
           peso: dados.peso || "",
-          altura: dados.altura || "",
-          imc: dados.imc || 0,
-          alunoPossuiAlergia: (dados.temAlergia || dados.alunoPossuiAlergia || 'não').toLowerCase(),
-          qualAlergia: (dados.historicoMedico || dados.qualAlergia || '').toLowerCase(),
-          condicoesEspeciais: [...new Set(alertas)], 
-          contatoEmergencia: dados.contato1_telefone ? `${dados.contato1_nome} (${dados.contato1_telefone})`.toLowerCase() : ''
+          altura: dados.altura || "", 
+          alunoPossuiAlergia: dados.alunoPossuiAlergia || 'não',
+          qualAlergia: dados.qualAlergia || '',
+          contatoEmergencia: dados.contatos?.[0]?.telefone ? `${dados.contatos[0].nome} (${dados.contatos[0].telefone})`.toLowerCase() : ''
         }));
-
-        const perfil = (dados.tipoPerfil || (dados.cargo ? 'funcionario' : 'aluno')).toLowerCase();
-        setConfigUI(prev => ({ ...prev, perfilPaciente: perfil }));
         setTemCadastro(true);
-        toast.success("perfil carregado!", { id: toastId });
+        toast.success("Perfil carregado!", { id: toastId });
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("erro ao carregar dados.", { id: toastId });
-    }
+    } catch (err) { toast.error("Erro ao carregar dados.", { id: toastId }); }
   };
 
   const salvarAtendimento = async (e) => {
     if (e) e.preventDefault();
+    if (!escolaIdLogada) {
+      toast.error("Unidade não identificada.");
+      return;
+    }
     if (!validarNomeCompleto(formData.nomePaciente)) {
-      toast.error("nome completo obrigatório!");
+      toast.error("Nome completo obrigatório!");
       return;
     }
 
     setLoading(true);
-    const toastId = toast.loading("salvando...");
+    const toastId = toast.loading("Salvando...");
 
     try {
       const batch = writeBatch(db);
@@ -239,94 +221,54 @@ export const useAtendimentoLogica = (user) => {
       const idPasta = gerarIdPadrao(payload.nomePaciente, formData.dataNascimento);
       const eRemocao = configUI.tipoAtendimento === 'remocao';
 
-      const formatarCargoLegivel = (role) => {
-        if (!role) return "enfermeiro(a)";
-        const cargos = {
-          'tecnico_enfermagem': 'técnico de enfermagem',
-          'enfermeiro': 'enfermeiro(a)',
-          'administrador': 'administrador'
-        };
-        return cargos[role] || role.replace('_', ' ');
-      };
-
       const finalDataAtendimento = {
         ...payload,
-        data: formData.data,
-        dataNascimento: formData.dataNascimento, 
+        escolaId: escolaIdLogada,
+        escola: escolaNomeLogada,
+        unidadeId: escolaIdLogada,
+        unidade: escolaNomeLogada, 
         pacienteId: idPasta, 
         idade: Number(payload.idade) || 0,
-        peso: Number(payload.peso) || 0,
-        altura: Number(payload.altura) || 0,
+        peso: Number(String(payload.peso).replace(',', '.')) || 0,
+        altura: Number(String(payload.altura).replace(',', '.')) || 0,
         imc: Number(payload.imc) || 0,
-        temperatura: Number(payload.temperatura) || 0,
-        estaGestante: payload.sexo === 'feminino' ? payload.estaGestante : 'não',
-        semanasGestacao: (payload.sexo === 'feminino' && payload.estaGestante === 'sim') ? payload.semanasGestacao : '',
-        horario: formData.horario, 
+        temperatura: Number(String(payload.temperatura).replace(',', '.')) || 0,
         horarioSaida: agoraHora, 
         statusAtendimento: eRemocao ? 'pendente' : 'finalizado',
-        tipoRegistro: eRemocao ? 'remoção' : 'local',
-        perfilPaciente: configUI.perfilPaciente.toLowerCase(),
-        escola: (user?.escolaId || "e. m. anísio teixeira").toLowerCase(),
-        profissionalResponsavel: (user?.nome || "profissional").toLowerCase(),
-        registroProfissional: (user?.registroProfissional || user?.coren || "n/a").toLowerCase(),
-        role: (user?.role || "").toLowerCase(),
-        profissionalCargo: formatarCargoLegivel(user?.role).toLowerCase(),
         createdAt: serverTimestamp()
       };
 
-      if (eFuncionario) { delete finalDataAtendimento.turma; } 
-      else { delete finalDataAtendimento.cargo; }
-
+      if (eFuncionario) { delete finalDataAtendimento.turma; } else { delete finalDataAtendimento.cargo; }
       delete finalDataAtendimento.condicoesEspeciais;
       delete finalDataAtendimento.contatoEmergencia;
 
       const finalDataPasta = {
         id: idPasta,
+        escolaId: escolaIdLogada,
+        escola: escolaNomeLogada,
         nomeBusca: finalDataAtendimento.nomePaciente,
         dataNascimento: finalDataAtendimento.dataNascimento,
         sexo: finalDataAtendimento.sexo,
-        estaGestante: finalDataAtendimento.estaGestante,
-        semanasGestacao: finalDataAtendimento.semanasGestacao,
-        dum: finalDataAtendimento.dum || "",
-        preNatal: finalDataAtendimento.preNatal || "nao",
-        etnia: finalDataAtendimento.etnia,
+        tipoPerfil: configUI.perfilPaciente.toLowerCase(),
         peso: finalDataAtendimento.peso,
         altura: finalDataAtendimento.altura,
-        imc: finalDataAtendimento.imc,
-        tipoPerfil: finalDataAtendimento.perfilPaciente,
-        alunoPossuiAlergia: finalDataAtendimento.alunoPossuiAlergia,
-        qualAlergia: finalDataAtendimento.qualAlergia,
         ultimaAtualizacao: serverTimestamp(),
         ...(eFuncionario ? { cargo: finalDataAtendimento.cargo } : { turma: finalDataAtendimento.turma })
       };
 
       batch.set(doc(db, "atendimentos_enfermagem", finalDataAtendimento.baenf), finalDataAtendimento);
-      
-      const dataColecaoSimples = {
-        nome: finalDataAtendimento.nomePaciente,
-        dataNascimento: finalDataAtendimento.dataNascimento,
-        sexo: finalDataAtendimento.sexo,
-        estaGestante: finalDataAtendimento.estaGestante,
-        ultimaAtualizacao: serverTimestamp(),
-        ...(eFuncionario ? { cargo: finalDataAtendimento.cargo } : { turma: finalDataAtendimento.turma })
-      };
-      
-      batch.set(doc(db, colecaoBase, idPasta), dataColecaoSimples, { merge: true });
+      batch.set(doc(db, colecaoBase, idPasta), { ...finalDataPasta, nome: finalDataAtendimento.nomePaciente }, { merge: true });
       batch.set(doc(db, "pastas_digitais", idPasta), finalDataPasta, { merge: true });
 
       await batch.commit();
-      
-      toast.success(eRemocao ? "remoção pendente!" : "atendimento finalizado!", { id: toastId });
+      toast.success(eRemocao ? "Remoção pendente!" : "Atendimento finalizado!", { id: toastId });
       setFormData(getInitialFormState());
       setTemCadastro(false);
       return true; 
     } catch (error) {
-      console.error(error);
-      toast.error("erro ao salvar", { id: toastId });
+      toast.error("Erro ao salvar", { id: toastId });
       return false;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return {

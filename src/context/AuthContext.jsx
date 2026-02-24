@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from "react";
 import { auth, db } from "../firebase/firebaseConfig"; 
 import { onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -9,14 +9,27 @@ export const AuthProvider = ({ children }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem("current_session_id");
     signOut(auth);
-    setUserData(null); // Limpa o estado local imediatamente
+    setUserData(null);
     if (window.location.pathname !== "/login") {
       window.location.href = "/login";
     }
-  };
+  }, []);
+
+  // ✅ Função para carimbar novos documentos com a unidade do usuário logado
+  // Ajustada para usar escolaId e escola (conforme seu Firestore)
+  const getContextoUnidade = useCallback(() => {
+    if (!userData) return null;
+    return {
+      escolaId: (userData.escolaId || 'sem-unidade').toLowerCase().trim(),
+      escola: (userData.escola || 'não atribuída').toLowerCase().trim(),
+      unidade: (userData.unidade || userData.escola || 'não atribuída').toLowerCase().trim(),
+      atendenteNome: (userData.nome || 'desconhecido').toLowerCase().trim(),
+      atendenteUid: userData.uid
+    };
+  }, [userData]);
 
   useEffect(() => {
     let isMounted = true;
@@ -52,7 +65,7 @@ export const AuthProvider = ({ children }) => {
                   data.statusLicenca === 'bloqueada' || 
                   data.licencaStatus === 'bloqueada';
 
-                // Root (você) é imune à sessão única para poder testar em várias abas
+                // Root (você) imune
                 const isRoot = currentUser.email === "rodrigohono21@gmail.com";
 
                 if (!isRoot && (sessaoInvalida || contaBloqueada)) {
@@ -60,13 +73,13 @@ export const AuthProvider = ({ children }) => {
                   return;
                 }
 
+                // ✅ Seta os dados normalizados
                 setUserData({ 
                   uid: currentUser.uid, 
                   email: currentUser.email, 
                   ...data 
                 });
               } else {
-                // Caso o documento do usuário seja deletado do banco
                 setUserData({ 
                   uid: currentUser.uid, 
                   email: currentUser.email, 
@@ -84,7 +97,6 @@ export const AuthProvider = ({ children }) => {
           console.error("Erro ao configurar snapshot:", err);
           if (isMounted) setLoading(false);
         }
-
       } else {
         if (isMounted) {
           setUserData(null);
@@ -98,13 +110,16 @@ export const AuthProvider = ({ children }) => {
       unsubscribeAuth();
       if (unsubscribeDoc) unsubscribeDoc();
     };
-  }, []);
+  }, [handleLogout]);
 
+  // Memoize o valor para evitar re-renderizações desnecessárias
   const value = useMemo(() => ({
     user: userData,
     loading,
-    handleLogout
-  }), [userData, loading]);
+    handleLogout,
+    getContextoUnidade, // ✅ Agora retorna escolaId e escola em lowercase
+    isAtivo: userData?.status === 'ativo' && userData?.statusLicenca === 'ativa'
+  }), [userData, loading, handleLogout, getContextoUnidade]);
 
   return (
     <AuthContext.Provider value={value}>

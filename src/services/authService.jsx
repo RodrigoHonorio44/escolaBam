@@ -15,8 +15,7 @@ import {
 import { initializeApp, deleteApp } from 'firebase/app';
 
 /**
- * SERVIÇO DE LOGIN COM SESSÃO ÚNICA E TRAVA DE EXPIRAÇÃO
- * Sincronizado com Perfil Root e Verificação ISO Date
+ * SERVIÇO DE LOGIN COM SESSÃO ÚNICA E LIMPEZA DE UNIDADE
  */
 export const loginService = async (email, password) => {
   try {
@@ -28,11 +27,10 @@ export const loginService = async (email, password) => {
 
     // 1. Verificação de Perfil Existente
     if (!userSnap.exists()) {
-      // Bypas para criar o perfil Root caso ele não exista no Firestore
       if (user.email === "rodrigohono21@gmail.com") {
         const rootData = {
-          nome: "Rodrigo Honório",
-          email: user.email,
+          nome: "rodrigo honório", // R S: Salvo em lowercase
+          email: user.email.toLowerCase(),
           role: "root",
           status: "ativo",
           statusLicenca: "ativa",
@@ -65,16 +63,18 @@ export const loginService = async (email, password) => {
       }
     }
 
-    // 🛡️ TRAVA: Verificação de Status Suspenso (IGNORA SE FOR ROOT)
-    const isBloqueado = 
-      userData.status === 'bloqueado' || 
-      userData.statusLicenca === 'bloqueada' || 
-      userData.licencaStatus === 'bloqueada';
-
-    if (!isRoot && isBloqueado) {
+    // 🛡️ TRAVA: Verificação de Status Suspenso
+    const statusLimpo = userData.status?.toLowerCase();
+    if (!isRoot && statusLimpo === 'bloqueado') {
       await signOut(auth);
       throw new Error("Acesso suspenso ou bloqueado.");
     }
+
+    // 🧹 LIMPEZA DE "FANTASMAS" DE UNIDADE (O segredo para parar de ver o CEPT)
+    // Isso garante que ao logar, o sistema esqueça qualquer escola anterior do cache
+    localStorage.removeItem('inspecao_unidade_id');
+    localStorage.removeItem('inspecao_unidade_nome');
+    localStorage.setItem('modo_inspecao', 'false');
 
     // 🔑 GERAÇÃO DE SESSÃO ÚNICA
     const newSessionId = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -99,8 +99,7 @@ export const loginService = async (email, password) => {
 };
 
 /**
- * SERVIÇO DE CADASTRO DINÂMICO
- * Salva Coren, Módulos e Prazos via ...dadosParaSalvar
+ * SERVIÇO DE CADASTRO DINÂMICO (Padronizado Lowercase)
  */
 export const cadastrarUsuarioService = async (dados) => {
   const tempAppName = `tempApp_${Date.now()}`;
@@ -111,22 +110,26 @@ export const cadastrarUsuarioService = async (dados) => {
     const userCredential = await createUserWithEmailAndPassword(tempAuth, dados.email, dados.password);
     const newUser = userCredential.user;
 
-    // 1. Removemos a senha para segurança
     const { password, ...dadosParaSalvar } = dados;
 
-    // 2. Gravamos no Firestore (Preservando todos os campos dinâmicos)
+    // Normalizando dados para o seu padrão "R S" (tudo lowercase)
+    const dadosNormalizados = Object.keys(dadosParaSalvar).reduce((acc, key) => {
+      const valor = dadosParaSalvar[key];
+      acc[key] = typeof valor === 'string' ? valor.toLowerCase().trim() : valor;
+      return acc;
+    }, {});
+
     const userRef = doc(db, "usuarios", newUser.uid);
     await setDoc(userRef, {
-      ...dadosParaSalvar,       // <--- Salva automaticamente Modulos, Coren, etc.
+      ...dadosNormalizados,
       uid: newUser.uid,
       status: 'ativo',
       statusLicenca: 'ativa',
-      primeiroAcesso: true,     // Obriga a troca de senha
+      primeiroAcesso: true,
       dataCadastro: serverTimestamp(),
-      currentSessionId: ""      // Inicia vazio
+      currentSessionId: ""
     });
 
-    // 3. Limpeza
     await signOut(tempAuth);
     await deleteApp(tempApp);
 

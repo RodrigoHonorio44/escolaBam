@@ -1,10 +1,3 @@
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
-
-/**
- * Monitora o status da licença em tempo real.
- * Se o admin bloquear ou a data expirar, executa o callback.
- */
 export const monitorarLicenca = (userId, onBlock) => {
   if (!userId) return;
 
@@ -13,12 +6,31 @@ export const monitorarLicenca = (userId, onBlock) => {
   return onSnapshot(userDoc, (docSnap) => {
     if (docSnap.exists()) {
       const data = docSnap.data();
-      const hoje = new Date();
-      const dataExp = new Date(data.dataExpiracao);
+      
+      // 🛡️ SEGURANÇA ROOT: Rodrigo Honorío imune a bloqueios
+      // Usamos o e-mail como trava mestre conforme seu AuthContext
+      if (data.email === "rodrigohono21@gmail.com" || data.role === 'root') return;
 
-      // Bloqueia se o status for 'bloqueado' OU se a data de expiração passou
-      if (data.licencaStatus === 'bloqueado' || hoje > dataExp) {
-        onBlock();
+      const hoje = new Date();
+      
+      // Converte timestamp do Firebase ou string para objeto Date
+      const dataExp = data.dataExpiracao?.seconds 
+        ? new Date(data.dataExpiracao.seconds * 1000) 
+        : new Date(data.dataExpiracao);
+
+      // ✅ PADRÃO R S: Verificação em lowercase absoluto
+      const statusBloqueado = 
+        data.licencaStatus?.toLowerCase().trim() === 'bloqueada' || 
+        data.licencaStatus?.toLowerCase().trim() === 'bloqueado' || 
+        data.status?.toLowerCase().trim() === 'bloqueado' ||
+        data.statusLicenca?.toLowerCase().trim() === 'bloqueada';
+
+      // 🚨 CRITÉRIOS DE EXPULSÃO
+      const expirou = data.dataExpiracao && hoje > dataExp;
+
+      if (statusBloqueado || expirou) {
+        console.warn(`🚫 Bloqueio Ativo para: ${data.nome} | Motivo: ${expirou ? 'Expiração' : 'Status'}`);
+        onBlock(); // Esta função deve executar o handleLogout do seu Context
       }
     }
   });

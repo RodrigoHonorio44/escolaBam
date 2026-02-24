@@ -4,67 +4,65 @@ import {
   doc, getDoc, query, collection, where, getDocs, limit, orderBy, startAt, endAt
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 export const usePacienteSinc = () => {
   const [buscando, setBuscando] = useState(false);
   const [sugestoes, setSugestoes] = useState([]);
+  const { user } = useAuth();
 
-  const gerarIdMestre = (nome, dataNasc) => {
-    if (!nome || !dataNasc) return null;
+  const escolaUsuarioId = (localStorage.getItem("escolaIdLogada") || user?.escolaId)?.toLowerCase().trim();
+  const isRoot = user?.role?.toLowerCase() === 'root' || user?.email === "rodrigohono21@gmail.com";
+
+  const gerarIdMestre = useCallback((nome, dataNasc) => {
+    if (!nome || !escolaUsuarioId) return null;
     const nomeSlug = nome.trim().toLowerCase()
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
       .replace(/[^a-z0-9\s]/g, "")
       .replace(/\s+/g, '-');
-    const dataRef = dataNasc.replace(/-/g, '');
-    return `${nomeSlug}-${dataRef}`;
-  };
+    const dataRef = dataNasc ? dataNasc.replace(/-/g, '') : 'nd';
+    return `${escolaUsuarioId}-${nomeSlug}-${dataRef}`;
+  }, [escolaUsuarioId]);
 
   const buscarSugestoes = async (termo) => {
     const busca = termo.trim().toLowerCase();
-    if (busca.length < 3) {
+    if (busca.length < 3 || !escolaUsuarioId) {
       setSugestoes([]);
       return;
     }
-
     try {
-      const colecoes = ["alunos", "pastas_digitais", "questionarios_saude", "atendimentos_enfermagem"];
-      let resultadosBrutos = [];
-
+      // ✅ Adicionado "atendimentos_enfermagem" na busca de sugestões
+      const colecoes = ["alunos", "pastas_digitais", "funcionarios", "atendimentos_enfermagem"];
       const buscas = colecoes.map(async (colNome) => {
-        const campoBusca = colNome === "pastas_digitais" ? "nomeBusca" : 
-                           colNome === "questionarios_saude" ? "alunoNome" : "nome";
+        let campoBusca = "nome";
+        if (colNome === "pastas_digitais") campoBusca = "nomeBusca";
+        if (colNome === "atendimentos_enfermagem") campoBusca = "nomePaciente";
         
-        const q = query(
-          collection(db, colNome),
-          orderBy(campoBusca),
-          startAt(busca),
-          endAt(busca + "\uf8ff"),
-          limit(5)
-        );
+        const ref = collection(db, colNome);
+        let q = isRoot 
+          ? query(ref, orderBy(campoBusca), startAt(busca), endAt(busca + "\uf8ff"), limit(5))
+          : query(ref, where("escolaId", "==", escolaUsuarioId), orderBy(campoBusca), startAt(busca), endAt(busca + "\uf8ff"), limit(5));
         
         const snap = await getDocs(q);
         return snap.docs.map(d => ({
           id: d.id,
           nome: d.data()[campoBusca] || d.data().nome || d.data().nomePaciente,
           dataNascimento: d.data().dataNascimento || "",
-          origem: colNome,
+          escolaId: d.data().escolaId,
+          tipoPerfil: d.data().tipoPerfil || (colNome === "funcionarios" ? "funcionario" : "aluno"),
           ...d.data()
         }));
       });
 
       const retornoBuscas = await Promise.all(buscas);
-      resultadosBrutos = retornoBuscas.flat();
-
-      const unificados = resultadosBrutos.filter((valor, index, self) =>
+      const unificados = retornoBuscas.flat().filter((valor, index, self) =>
         index === self.findIndex((t) => (
-          t.nome === valor.nome && t.dataNascimento === valor.dataNascimento
+          t.nome?.toLowerCase() === valor.nome?.toLowerCase() && 
+          t.dataNascimento === valor.dataNascimento
         ))
       );
-
       setSugestoes(unificados.slice(0, 8));
-    } catch (error) {
-      console.error("Erro na busca global:", error);
-    }
+    } catch (error) { console.error("Erro na busca global:", error); }
   };
 
   const puxarDadosCompletos = useCallback(async (nome, dataNasc) => {
@@ -73,74 +71,73 @@ export const usePacienteSinc = () => {
 
     setBuscando(true);
     try {
-      const [snapAluno, snapPasta, snapQuest] = await Promise.all([
+      // ✅ Busca também o ÚLTIMO atendimento para pegar peso/altura se o aluno não tiver cadastro
+      const qAtend = query(
+        collection(db, "atendimentos_enfermagem"),
+        where("pacienteId", "==", idMestre),
+        orderBy("createdAt", "desc"),
+        limit(1)
+      );
+
+      const [snapAluno, snapPasta, snapQuest, snapFunc, snapAtend] = await Promise.all([
         getDoc(doc(db, "alunos", idMestre)),
         getDoc(doc(db, "pastas_digitais", idMestre)),
-        getDoc(doc(db, "questionarios_saude", idMestre))
+        getDoc(doc(db, "questionarios_saude", idMestre)),
+        getDoc(doc(db, "funcionarios", idMestre)),
+        getDocs(qAtend)
       ]);
 
       const dAlu = snapAluno.exists() ? snapAluno.data() : {};
       const dPas = snapPasta.exists() ? snapPasta.data() : {};
       const dQue = snapQuest.exists() ? snapQuest.data() : {};
+      const dFun = snapFunc.exists() ? snapFunc.data() : {};
+      const dAtend = !snapAtend.empty ? snapAtend.docs[0].data() : {};
+
+      const escolaDono = (dAlu.escolaId || dPas.escolaId || dQue.escolaId || dFun.escolaId || dAtend.escolaId)?.toLowerCase().trim();
+      
+      if (!isRoot && escolaDono && escolaDono !== escolaUsuarioId) {
+        toast.error("ACESSO NEGADO: Este registro pertence a outra unidade.");
+        return null;
+      }
 
       const norm = (val) => (val ? String(val).toLowerCase().trim() : '');
-
-      let etniaFinal = norm(dPas.etnia || dAlu.etnia || dQue.etnia || dQue.raca || '');
-      
-      if (!etniaFinal) {
-        try {
-          const qAtend = query(
-            collection(db, "atendimentos_enfermagem"),
-            where("pacienteId", "==", idMestre),
-            limit(1) 
-          );
-          const snapAtend = await getDocs(qAtend);
-          if (!snapAtend.empty) {
-            etniaFinal = norm(snapAtend.docs[0].data().etnia);
-          }
-        } catch (err) {
-          console.warn("Histórico inacessível:", err.message);
-        }
-      }
+      const numParaString = (val) => (val !== undefined && val !== null && val !== "" ? String(val) : '');
 
       const unificado = {
         id: idMestre,
-        existe: snapAluno.exists() || snapPasta.exists() || snapQuest.exists(),
-        nome: norm(dAlu.nome || dQue.alunoNome || dPas.nomeBusca || nome),
-        dataNascimento: dAlu.dataNascimento || dQue.dataNascimento || dataNasc,
-        sexo: norm(dAlu.sexo || dQue.sexo || dPas.sexo),
+        existe: snapAluno.exists() || snapPasta.exists() || snapQuest.exists() || snapFunc.exists() || !snapAtend.empty,
+        nome: norm(dAlu.nome || dFun.nome || dAtend.nomePaciente || dQue.alunoNome || dPas.nomeBusca || nome),
+        dataNascimento: dAlu.dataNascimento || dFun.dataNascimento || dAtend.dataNascimento || dQue.dataNascimento || dataNasc,
+        sexo: norm(dAlu.sexo || dFun.sexo || dAtend.sexo || dQue.sexo || dPas.sexo),
+        turma: norm(dAlu.turma || dAtend.turma || dQue.turma || dPas.turma || (snapFunc.exists() ? "staff" : "")),
+        etnia: norm(dPas.etnia || dAlu.etnia || dFun.etnia || dQue.etnia || dAtend.etnia || ''),
         
-        // --- LÓGICA DE GESTANTE (Sincronismo Circular) ---
-        // Se no cadastro (dQue) for 'gestante' e no atendimento (dPas) for 'estaGestante'
-        estaGestante: norm(dPas.estaGestante || dQue.gestante || dAlu.estaGestante || 'não'),
-        semanasGestacao: dPas.semanasGestacao || dQue.semanasGestacao || '',
-        // ------------------------------------------------
+        // ✅ PESO E ALTURA: Agora olha também para o histórico de atendimentos (Caso Allan Giromba)
+        peso: numParaString(dPas.peso ?? dAlu.peso ?? dAtend.peso ?? dQue.peso ?? dFun.peso),
+        altura: numParaString(dPas.altura ?? dAlu.altura ?? dAtend.altura ?? dQue.altura ?? dFun.altura),
+        
+        // ✅ ALERGIAS: Também olha no atendimento anterior
+        alunoPossuiAlergia: norm(dPas.alunoPossuiAlergia || dAtend.alunoPossuiAlergia || dQue.alergias?.possui || dAlu.alunoPossuiAlergia || 'não'),
+        qualAlergia: norm(dPas.qualAlergia || dAtend.qualAlergia || dQue.alergias?.detalhes || dAlu.qualAlergia || ''),
 
-        turma: norm(dAlu.turma || dQue.turma || dPas.turma),
-        etnia: etniaFinal,
-        peso: dPas.peso || dQue.peso || '',
-        altura: dPas.altura || dQue.altura || '',
-        imc: dPas.imc || dQue.imc || '',
-        alunoPossuiAlergia: norm(dPas.alunoPossuiAlergia || dQue.alergias?.possui || dAlu.alunoPossuiAlergia || 'não'),
-        qualAlergia: norm(dPas.qualAlergia || dQue.alergias?.detalhes || dAlu.qualAlergia || ''),
-        contatos: dQue.contatos || [
-          { nome: norm(dPas.responsavel || dAlu.responsavel || ''), telefone: dPas.contato || dAlu.contato || '' }
+        contatos: dQue.contatos || dAtend.contatos || [
+          { 
+            nome: norm(dPas.contato1_nome || dFun.nomeContato1 || dAlu.contato1_nome || 'não informado'), 
+            telefone: dPas.contato1_telefone || dFun.contato || dAlu.contato1_telefone || '' 
+          }
         ],
-        temQuestionario: snapQuest.exists(),
-        temPastaDigital: snapPasta.exists()
+        escolaId: escolaDono || escolaUsuarioId,
+        tipoPerfil: dFun.tipoPerfil || dPas.tipoPerfil || dAlu.tipoPerfil || "aluno"
       };
 
-      if (unificado.existe) toast.success("perfil sincronizado!");
+      if (unificado.existe) toast.success("Dados sincronizados!", { icon: '🔄' });
       return unificado;
-
     } catch (error) {
-      console.error("Erro fatal no cruzamento:", error);
-      toast.error("erro ao cruzar dados");
+      console.error("Erro no sincronizador:", error);
+      toast.error("Erro ao cruzar dados.");
       return null;
-    } finally {
-      setBuscando(false);
-    }
-  }, []);
+    } finally { setBuscando(false); }
+  }, [escolaUsuarioId, isRoot, gerarIdMestre]);
 
   return { buscando, sugestoes, buscarSugestoes, puxarDadosCompletos, gerarIdMestre };
 };

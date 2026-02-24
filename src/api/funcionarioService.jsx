@@ -1,50 +1,67 @@
-import { db, auth } from '../firebase/firebaseConfig';
-import { collection, getDocs, query, where, doc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db } from "../firebase/firebaseConfig";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { doc, setDoc, query, collection, where, getDocs, serverTimestamp } from "firebase/firestore";
 
 export const funcionarioService = {
-  // Cadastrar novo funcionário e criar conta de acesso
   async cadastrar(dados) {
     try {
-      // 1. Cria o usuário no Firebase Authentication (Login)
-      // Usamos a senha vinda do formulário ou a padrão
       const userCredential = await createUserWithEmailAndPassword(
         auth, 
-        dados.email, 
+        dados.email.toLowerCase().trim(), 
         dados.password || "mudar123" 
       );
       
       const uid = userCredential.user.uid;
 
-      // 🚨 CORREÇÃO: Salvando na coleção "usuarios" e garantindo escolaId correto
+      // 🚨 PADRÃO R S: Lowercase e Identidade Vinculada
+      const escolaIdFormatado = dados.escolaId ? dados.escolaId.toLowerCase().trim() : 'escola_nao_definida';
+      const escolaNomeFormatado = dados.escola ? dados.escola.toLowerCase().trim() : 'escola não definida';
+
       await setDoc(doc(db, "usuarios", uid), {
-        nome: dados.nome,
-        email: dados.email,
-        role: dados.role,
-        // Garante que salve a escola correta ou a unidade Anísio Teixeira
-        escolaId: dados.escolaId || 'E. M. Anísio Teixeira', 
+        uid: uid,
+        nome: dados.nome.toLowerCase().trim(),
+        email: dados.email.toLowerCase().trim(),
+        role: dados.role.toLowerCase().trim(),
+        registroProfissional: dados.registroProfissional || "",
+        
+        // 🛡️ Vínculo de Unidade (Campos que seu AuthContext consome)
+        escolaId: escolaIdFormatado, 
+        escola: escolaNomeFormatado,
+        unidadeId: escolaIdFormatado, // redundância de segurança
+        unidade: escolaNomeFormatado, // redundância de segurança
+        
         dataCadastro: serverTimestamp(),
         status: 'ativo',
         statusLicenca: 'ativa',
+        licencaStatus: 'ativa',
         currentSessionId: '',
-        primeiroAcesso: true
+        primeiroAcesso: true,
+        
+        // Módulos padrão (ajuste conforme necessário)
+        modulosSidebar: dados.modulosSidebar || {
+          atendimento: true,
+          dashboard: true,
+          pacientes: true,
+          pasta_digital: true
+        }
       });
 
       return uid;
     } catch (error) {
       console.error("Erro ao cadastrar funcionário:", error.message);
-      if (error.code === 'auth/email-already-in-use') {
-        throw new Error("Este e-mail já está em uso.");
-      }
       throw error;
     }
   },
 
-  // 🚨 CORREÇÃO CRUCIAL: Estava buscando em "users", mudei para "usuarios"
   async listarPorEscola(escolaId) {
     try {
-      // Se não passar escolaId, ele busca da Anísio Teixeira por padrão
-      const unidadeBusca = escolaId || 'E. M. Anísio Teixeira';
+      // 🛡️ SEGURANÇA: Bloqueia vazamento de dados se o ID for nulo
+      if (!escolaId) {
+        console.warn("Tentativa de listagem sem escolaId definido.");
+        return [];
+      }
+      
+      const unidadeBusca = escolaId.toLowerCase().trim();
       
       const q = query(
         collection(db, "usuarios"), 
@@ -52,6 +69,7 @@ export const funcionarioService = {
       );
       
       const querySnapshot = await getDocs(q);
+      // Retorna os dados garantindo que o ID do documento esteja incluso
       return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     } catch (error) {
       console.error("Erro ao listar funcionários:", error);

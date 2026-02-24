@@ -6,7 +6,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import { 
   UserPlus, CheckCircle2, 
   Loader2, ShieldCheck, Stethoscope, Gem, Hash, Lock, Calendar, UserCog,
-  Accessibility // ✅ Ícone para Saúde Inclusiva
+  Accessibility, School 
 } from 'lucide-react';
 
 const CadastrarUsuario = () => {
@@ -18,8 +18,16 @@ const CadastrarUsuario = () => {
     senha: '', 
     role: 'enfermeiro', 
     prazo: '365', 
-    registroProfissional: ''
+    registroProfissional: '',
+    escolaId: 'em-anisio-teixeira' 
   });
+
+  // ✅ LISTA ATUALIZADA COM NOME OFICIAL
+  const UNIDADES = [
+    { id: 'em-anisio-teixeira', nome: 'E. M. Anísio Teixeira' },
+    { id: 'joana-benedicta', nome: 'C. M. Joana Benedicta Rangel' }, 
+    { id: 'marica', nome: 'Sede Maricá' }
+  ];
 
   const [modulos, setModulos] = useState({
     dashboard: true,       
@@ -27,7 +35,7 @@ const CadastrarUsuario = () => {
     pasta_digital: true,   
     pacientes: true,       
     relatorios: true,       
-    saude_inclusiva: true, // ✅ Novo módulo habilitado por padrão
+    saude_inclusiva: true, 
     dashboard_admin: false 
   });
 
@@ -37,7 +45,7 @@ const CadastrarUsuario = () => {
     pasta_digital: "Pasta Digital",
     pacientes: "Cadastros (Alunos/Ficha)",
     relatorios: "BAENF Antigos",
-    saude_inclusiva: "Saúde Inclusiva", // ✅ Label adicionado
+    saude_inclusiva: "Saúde Inclusiva",
     dashboard_admin: "Relatório Geral"
   };
 
@@ -70,13 +78,17 @@ const CadastrarUsuario = () => {
       const dataExpira = new Date();
       dataExpira.setDate(dataHoje.getDate() + parseInt(formData.prazo));
 
+      const escolaSelecionada = UNIDADES.find(u => u.id === formData.escolaId);
+
       const dadosParaCadastro = {
         nome: nomeLimpo.toLowerCase(), 
         email: formData.email.trim().toLowerCase(),
         password: formData.senha,
         role: formData.role,
         registroProfissional: formData.registroProfissional.toUpperCase() || "N/A",
-        escolaId: "E. M. Anísio Teixeira",
+        // ✅ SALVANDO O ID E NOME NORMALIZADOS
+        escolaId: formData.escolaId.toLowerCase(), 
+        escola: escolaSelecionada.nome.toLowerCase(), 
         dataExpiracao: Timestamp.fromDate(dataExpira), 
         dataCadastro: Timestamp.fromDate(dataHoje),
         createdAt: dataHoje.toISOString(),
@@ -93,7 +105,7 @@ const CadastrarUsuario = () => {
         style: { background: '#0f172a', color: '#fff', fontWeight: 'bold' }
       });
 
-      setFormData({ ...formData, nome: '', email: '', senha: '', registroProfissional: '', prazo: '365' });
+      setFormData({ ...formData, nome: '', email: '', senha: '', registroProfissional: '', escolaId: 'em-anisio-teixeira' });
 
     } catch (error) { 
       toast.error("ERRO NO CADASTRO: " + error.message.toUpperCase()); 
@@ -133,6 +145,22 @@ const CadastrarUsuario = () => {
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4 mb-2 block">Nome Completo</label>
                 <input required className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all" 
                   placeholder="Ex: Marcelo Silva" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} />
+              </div>
+
+              {/* SELETOR DE ESCOLA COM NOME OFICIAL */}
+              <div className="md:col-span-2 bg-blue-50/50 p-6 rounded-3xl border border-blue-100">
+                <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest ml-4 mb-2 block flex items-center gap-2">
+                  <School size={14}/> Unidade de Lotação (Onde o usuário vai trabalhar)
+                </label>
+                <select 
+                  className="w-full p-4 bg-white rounded-2xl border-2 border-blue-200 focus:border-blue-500 outline-none font-black text-slate-700 cursor-pointer transition-all shadow-sm"
+                  value={formData.escolaId} 
+                  onChange={e => setFormData({...formData, escolaId: e.target.value})}
+                >
+                  {UNIDADES.map(u => (
+                    <option key={u.id} value={u.id}>{u.nome.toUpperCase()}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
@@ -185,12 +213,12 @@ const CadastrarUsuario = () => {
             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/10 rounded-full blur-3xl"></div>
             
             <h2 className="text-xl font-black mb-8 flex items-center gap-3 italic uppercase text-blue-400 relative z-10">
-              <ShieldCheck size={24} /> Configurações
+              <ShieldCheck size={24} /> Configurações de Licença
             </h2>
 
             <div className="mb-8 relative z-10">
               <label className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 mb-3 block flex items-center gap-2">
-                <Calendar size={14} /> Validade da Licença
+                <Calendar size={14} /> Validade do Acesso
               </label>
               <select className="w-full p-5 bg-slate-800/50 rounded-[24px] border-2 border-slate-700 outline-none font-bold text-sm text-white cursor-pointer hover:border-blue-500 transition-all"
                 value={formData.prazo} onChange={e => setFormData({...formData, prazo: e.target.value})}>
@@ -202,11 +230,10 @@ const CadastrarUsuario = () => {
             </div>
 
             <div className="space-y-3 mb-10 relative z-10">
-              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 mb-2">Módulos Habilitados</p>
+              <p className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] ml-2 mb-2">Módulos Liberados</p>
               {Object.keys(modulos).map(m => (
                 <label key={m} className={`flex items-center justify-between p-4 rounded-[22px] cursor-pointer transition-all border ${modulos[m] ? 'bg-blue-600/20 border-blue-500/40 text-white' : 'bg-slate-800/20 border-transparent text-slate-600'}`}>
                   <div className="flex items-center gap-3">
-                    {/* Exibindo ícone específico para Saúde Inclusiva se for o caso */}
                     {m === 'saude_inclusiva' ? <Accessibility size={16} className={modulos[m] ? 'text-blue-400' : 'text-slate-700'} /> : null}
                     <span className="text-[10px] font-black uppercase tracking-widest">{moduloLabels[m]}</span>
                   </div>

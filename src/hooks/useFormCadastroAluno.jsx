@@ -3,16 +3,17 @@ import { useForm } from 'react-hook-form';
 import { db } from '../firebase/firebaseConfig';
 import { 
   collection, serverTimestamp, doc, getDoc, getDocs, 
-  query, where, writeBatch, orderBy, limit 
+  query, where, writeBatch, limit 
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
 export const useFormCadastroAluno = (props) => {
-  const { onVoltar, dadosEdicao, alunoParaEditar, modoPastaDigital, onClose, onSucesso } = props;
+  const { onVoltar, dadosEdicao, alunoParaEditar, modoPastaDigital, onClose, onSucesso, usuarioLogado } = props;
+  
   const [buscando, setBuscando] = useState(false);
   const [sugestoes, setSugestoes] = useState([]);
 
-  // LÓGICA R S: Normalização para minúsculas
+  // --- HELPERS R S ---
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
   const aplicarMascaraTelefone = (valor) => {
@@ -43,18 +44,15 @@ export const useFormCadastroAluno = (props) => {
     defaultValues
   });
 
-  // Observadores para lógica de interface
   const watchers = {
     dataNasc: watch("dataNascimento"),
     nome: watch("nome"),
     sexo: watch("sexo"),
-    estaGestante: watch("estaGestante"),
     isPCD: watch("isPCD"),
     categoriasPCD: watch("categoriasPCD") || [],
     tomaMedicao: watch("tomaMedicao"),
     temAlergia: watch("temAlergia"),
     cep: watch("endereco_cep"),
-    detalheFisico: watch("detalheFisico"),
     semPai: watch("semPaiDeclarado")
   };
 
@@ -88,23 +86,31 @@ export const useFormCadastroAluno = (props) => {
     }
   }, [watchers.cep, setValue]);
 
-  // 3. Carregar Sugestões de nomes
+  // 3. Carregar Sugestões
   useEffect(() => {
     const carregarNomes = async () => {
+      const escolaId = (localStorage.getItem("escolaIdLogada") || usuarioLogado?.escolaId || usuarioLogado?.unidadeid)?.toLowerCase().trim();
+      if (!escolaId) return;
       try {
-        const snap = await getDocs(query(collection(db, "alunos"), limit(50)));
-        const nomes = snap.docs.map(doc => doc.data().nome).filter(Boolean);
+        const q = query(
+          collection(db, "pastas_digitais"), 
+          where("escolaId", "==", escolaId),
+          limit(50)
+        );
+        const snap = await getDocs(q);
+        const nomes = snap.docs.map(doc => doc.data().nome || doc.data().nomeBusca).filter(Boolean);
         setSugestoes([...new Set(nomes)]);
-      } catch (e) { console.error(e); }
+      } catch (e) { console.error("Erro sugestões", e); }
     };
     carregarNomes();
-  }, []);
+  }, [usuarioLogado]);
 
-  // 4. Efeito de Edição (Dados Iniciais)
+  // 4. Efeito de Edição
   useEffect(() => {
     const dados = alunoParaEditar || dadosEdicao;
     if (dados) {
       reset({
+        ...defaultValues,
         ...dados,
         contato1_telefone: aplicarMascaraTelefone(dados.contato1_telefone || ""),
         contato2_telefone: aplicarMascaraTelefone(dados.contato2_telefone || ""),
@@ -113,67 +119,99 @@ export const useFormCadastroAluno = (props) => {
     }
   }, [alunoParaEditar, dadosEdicao, reset]);
 
-  // 5. Busca Cruzada (Sincronização)
+  // 5. Busca Cruzada (LIBERADA PARA ENCONTRAR OS REGISTROS QUE VOCÊ MOSTROU)
   const buscarAluno = async () => {
-    const nomeBusca = paraBanco(watchers.nome);
+    const nomeOriginal = watchers.nome;
+    const nomeBusca = paraBanco(nomeOriginal);
+
     if (nomeBusca.length < 3) return toast.error("digite ao menos 3 letras");
 
     setBuscando(true);
     const toastId = toast.loading("sincronizando...");
     try {
       let pacienteId = null;
-      const qPasta = query(collection(db, "pastas_digitais"), where("nomeBusca", "==", nomeBusca), limit(1));
-      const snapId = await getDocs(qPasta);
+      let dadosEncontrados = null;
+
+      // BUSCA GLOBAL: Como vimos que o escolaId varia, buscamos pelo nomeBusca em todo o banco
+      const q = query(
+        collection(db, "pastas_digitais"), 
+        where("nomeBusca", "==", nomeBusca),
+        limit(1)
+      );
       
-      if (!snapId.empty) pacienteId = snapId.docs[0].id;
+      const snap = await getDocs(q);
+      
+      if (!snap.empty) {
+        pacienteId = snap.docs[0].id;
+        dadosEncontrados = snap.docs[0].data();
+      }
 
       if (!pacienteId) {
-        toast.error("não localizado", { id: toastId });
+        toast.error("aluno não encontrado no sistema", { id: toastId });
+        setBuscando(false);
         return;
       }
 
-      const [snapQuest, snapPasta, snapAlu] = await Promise.all([
+      // Sincroniza dados de todas as coleções
+      const [snapQuest, snapAlu] = await Promise.all([
         getDoc(doc(db, "questionarios_saude", pacienteId)),
-        getDoc(doc(db, "pastas_digitais", pacienteId)),
         getDoc(doc(db, "alunos", pacienteId))
       ]);
 
       const dQuest = snapQuest.exists() ? snapQuest.data() : {};
-      const dPasta = snapPasta.exists() ? snapPasta.data() : {};
       const dAlu = snapAlu.exists() ? snapAlu.data() : {};
+      const dPasta = dadosEncontrados;
 
+      // Preenche o formulário com o merge de tudo (incluindo turma, sexo e escola do banco)
       reset({
-        ...defaultValues, ...dAlu, ...dQuest, ...dPasta,
+        ...defaultValues, 
+        ...dAlu, 
+        ...dQuest, 
+        ...dPasta,
         pacienteId: pacienteId,
-        contato1_telefone: aplicarMascaraTelefone(dPasta.contato1_telefone || ""),
-        contato2_telefone: aplicarMascaraTelefone(dPasta.contato2_telefone || ""),
+        nome: dPasta.nome || dAlu.nome || nomeOriginal,
+        contato1_telefone: aplicarMascaraTelefone(dPasta.contato1_telefone || dAlu.contato1_telefone || ""),
+        contato2_telefone: aplicarMascaraTelefone(dPasta.contato2_telefone || dAlu.contato2_telefone || ""),
       });
-      toast.success("sincronizado!", { id: toastId });
-    } catch (e) { toast.error("erro na busca", { id: toastId }); }
-    finally { setBuscando(false); }
+      
+      toast.success("perfil localizado!", { id: toastId });
+    } catch (e) { 
+      console.error(e);
+      toast.error("erro ao conectar ao banco", { id: toastId }); 
+    } finally { 
+      setBuscando(false); 
+    }
   };
 
-  // 6. Envio do Formulário
+  // 6. Envio do Formulário (SALVA COM escolaId PARA MANTER PADRÃO)
   const onSubmit = async (data) => {
+    const escolaIdAtiva = (
+        localStorage.getItem("escolaIdLogada") || 
+        usuarioLogado?.escolaId || 
+        usuarioLogado?.unidadeid
+    )?.toLowerCase().trim();
+    
+    if (!escolaIdAtiva) {
+      return toast.error("erro: escola não identificada!");
+    }
+
     const nomeNormalizado = paraBanco(data.nome);
     const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
-    const idGerado = data.pacienteId || `${nomeNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
     
-    // Normalização em massa para minúsculas (R S padrão)
+    // Se já tem pacienteId (veio da busca), mantém. Se não, gera novo padrão.
+    const idGerado = data.pacienteId || `${escolaIdAtiva}-${nomeNormalizado.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${dataNascLimpa}`;
+    
     const payload = { 
       ...data, 
       nome: nomeNormalizado, 
       nomeBusca: nomeNormalizado,
       nomeMae: paraBanco(data.nomeMae),
       nomePai: paraBanco(data.nomePai),
-      matriculaInteligente: paraBanco(data.matriculaInteligente),
-      cartaoSus: paraBanco(data.cartaoSus),
-      contato1_nome: paraBanco(data.contato1_nome),
-      contato1_telefone: data.contato1_telefone.replace(/\D/g, ""),
-      contato2_nome: paraBanco(data.contato2_nome),
-      contato2_telefone: data.contato2_telefone.replace(/\D/g, ""),
-      endereco_rua: paraBanco(data.endereco_rua),
-      endereco_bairro: paraBanco(data.endereco_bairro),
+      escolaId: escolaIdAtiva,
+      unidadeid: escolaIdAtiva,
+      unidade: paraBanco(usuarioLogado?.unidade || usuarioLogado?.escola),
+      contato1_telefone: (data.contato1_telefone || "").replace(/\D/g, ""),
+      contato2_telefone: (data.contato2_telefone || "").replace(/\D/g, ""),
       updatedAt: serverTimestamp()
     };
     
@@ -183,7 +221,7 @@ export const useFormCadastroAluno = (props) => {
       batch.set(doc(db, "alunos", idGerado), { ...payload, createdAt: serverTimestamp() }, { merge: true });
       
       await batch.commit();
-      toast.success("salvo com sucesso!");
+      toast.success("registro atualizado!");
       
       if (onSucesso) onSucesso();
       if (modoPastaDigital) {
@@ -193,7 +231,6 @@ export const useFormCadastroAluno = (props) => {
       }
     } catch (e) { 
       toast.error("erro ao salvar");
-      console.error(e);
     }
   };
 

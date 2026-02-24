@@ -18,12 +18,22 @@ const aplicarMascaraTelefone = (valor) => {
   return n.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
 };
 
-const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDigital = !!(dadosEdicao || alunoParaEditar), onClose, onSucesso }) => {
+const FormCadastroAluno = ({ 
+  onVoltar, 
+  dadosEdicao, 
+  alunoParaEditar, 
+  modoPastaDigital = !!(dadosEdicao || alunoParaEditar), 
+  onClose, 
+  onSucesso,
+  usuarioLogado // Prop vital para filtrar por colégio
+}) => {
   const navigate = useNavigate();
   const [buscando, setBuscando] = useState(false);
   const [sugestoes, setSugestoes] = useState([]);
 
   const dadosIniciais = alunoParaEditar || dadosEdicao;
+  
+  // LÓGICA R S: Normalização para minúsculas
   const paraBanco = (txt) => txt ? String(txt).toLowerCase().trim() : "";
 
   const defaultValues = {
@@ -47,9 +57,9 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     defaultValues
   });
 
+  // Observadores
   const watchDataNasc = watch("dataNascimento");
   const naoSabeMatricula = watch("naoSabeMatricula");
-  const naoSabeEndereco = watch("naoSabeEndereco");
   const watchTemAlergia = watch("temAlergia");
   const watchIsPCD = watch("isPCD");
   const watchCategoriasPCD = watch("categoriasPCD") || [];
@@ -61,20 +71,19 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
   const watchNaoSabePeso = watch("naoSabePeso");
   const watchNaoSabeAltura = watch("naoSabeAltura");
 
-  // LÓGICA R S: CALCULO DE IDADE AUTOMÁTICO
+  // 1. Cálculo de Idade
   useEffect(() => {
     if (watchDataNasc) {
       const hoje = new Date();
       const nasc = new Date(watchDataNasc);
       let idadeCalculada = hoje.getFullYear() - nasc.getFullYear();
       const m = hoje.getMonth() - nasc.getMonth();
-      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) {
-        idadeCalculada--;
-      }
+      if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idadeCalculada--;
       setValue("idade", idadeCalculada >= 0 ? idadeCalculada : "");
     }
   }, [watchDataNasc, setValue]);
 
+  // 2. Busca de CEP
   useEffect(() => {
     const cepLimpo = watchCep?.replace(/\D/g, "");
     if (cepLimpo?.length === 8) {
@@ -86,25 +95,31 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             setValue("endereco_rua", paraBanco(data.logradouro));
             setValue("endereco_bairro", paraBanco(`${data.bairro} - ${data.localidade}/${data.uf}`));
             toast.success("endereço localizado!");
-          } else { toast.error("cep não encontrado."); }
-        } catch (e) { toast.error("erro ao buscar cep."); }
+          }
+        } catch (e) { console.error("Erro CEP"); }
       };
       buscarCep();
     }
   }, [watchCep, setValue]);
 
+  // 3. Carregar Sugestões (FILTRADO POR UNIDADE)
   useEffect(() => {
     const carregarNomes = async () => {
+      if (!usuarioLogado?.unidadeid) return;
       try {
-        const q = query(collection(db, "alunos"));
+        const q = query(
+          collection(db, "alunos"), 
+          where("unidadeid", "==", paraBanco(usuarioLogado.unidadeid))
+        );
         const snap = await getDocs(q);
         const nomes = snap.docs.map(doc => doc.data().nome).filter(Boolean);
         setSugestoes([...new Set(nomes)]);
-      } catch (e) { console.error("Erro ao carregar sugestões", e); }
+      } catch (e) { console.error(e); }
     };
     carregarNomes();
-  }, []);
+  }, [usuarioLogado]);
 
+  // 4. Efeito de Edição
   useEffect(() => {
     if (dadosIniciais) {
       reset({
@@ -121,93 +136,59 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
     toast.success("formulário resetado!", { icon: '🧹' });
   };
 
+  // 5. Busca Cruzada (FILTRADO POR UNIDADE)
   const buscarAluno = async () => {
     const nomeAtual = watch("nome");
     const nomeBusca = paraBanco(nomeAtual);
-    if (nomeBusca.length < 3) {
-      toast.error("digite ao menos 3 letras para buscar");
-      return;
-    }
+    if (nomeBusca.length < 3) return toast.error("digite ao menos 3 letras");
+    if (!usuarioLogado?.unidadeid) return toast.error("unidade não identificada");
+
     setBuscando(true);
     const toastId = toast.loading("sincronizando dados...");
     try {
       let pacienteId = null;
-      const qPasta = query(collection(db, "pastas_digitais"), where("nomeBusca", "==", nomeBusca), where("tipoPerfil", "==", "aluno"), limit(1));
+      // Busca apenas na unidade do usuário
+      const qPasta = query(
+        collection(db, "pastas_digitais"), 
+        where("nomeBusca", "==", nomeBusca), 
+        where("unidadeid", "==", paraBanco(usuarioLogado.unidadeid)),
+        limit(1)
+      );
       const snapId = await getDocs(qPasta);
       
-      if (!snapId.empty) pacienteId = snapId.docs[0].id;
-      else {
-        const qAlu = query(collection(db, "alunos"), where("nomeBusca", "==", nomeBusca), limit(1));
-        const snapAluOnly = await getDocs(qAlu);
-        if (!snapAluOnly.empty) pacienteId = snapAluOnly.docs[0].id;
-      }
-
-      if (!pacienteId) {
-        toast.error("aluno não localizado.", { id: toastId });
+      if (!snapId.empty) {
+        pacienteId = snapId.docs[0].id;
+      } else {
+        toast.error("aluno não localizado nesta unidade.", { id: toastId });
         setBuscando(false);
         return;
       }
 
-      const qAtend = query(collection(db, "atendimentos_enfermagem"), where("pacienteId", "==", pacienteId), orderBy("createdAt", "desc"), limit(1));
-      const [snapQuest, snapPasta, snapAlu, snapAtend] = await Promise.all([
+      const [snapQuest, snapPasta, snapAlu] = await Promise.all([
         getDoc(doc(db, "questionarios_saude", pacienteId)),
         getDoc(doc(db, "pastas_digitais", pacienteId)),
-        getDoc(doc(db, "alunos", pacienteId)),
-        getDocs(qAtend)
+        getDoc(doc(db, "alunos", pacienteId))
       ]);
 
       const dQuest = snapQuest.exists() ? snapQuest.data() : {};
       const dPasta = snapPasta.exists() ? snapPasta.data() : {};
       const dAlu = snapAlu.exists() ? snapAlu.data() : {};
-      const dAtend = !snapAtend.empty ? snapAtend.docs[0].data() : {};
 
       reset({
+        ...defaultValues, ...dAlu, ...dQuest, ...dPasta,
         pacienteId: pacienteId,
-        nome: dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || nomeAtual,
-        nomeMae: dPasta.nomeMae || dQuest.filiacaoMae || "",
-        nomePai: dPasta.nomePai || dQuest.filiacaoPai || "",
-        dataNascimento: dQuest.dataNascimento || dAtend.dataNascimento || dPasta.dataNascimento || dAlu.dataNascimento || "",
-        turma: dQuest.turma || dAtend.turma || dPasta.turma || dAlu.turma || "",
-        sexo: dQuest.sexo || dAtend.sexo || dPasta.sexo || "",
-        estaGestante: dPasta.estaGestante || "não",
-        semanasGestacao: dPasta.semanasGestacao || "",
-        etnia: dQuest.etnia || dAtend.etnia || dPasta.etnia || "",
-        peso: dQuest.peso || dAtend.peso || dPasta.peso || "",
-        altura: dQuest.altura || dAtend.altura || dPasta.altura || "",
-        isPCD: dPasta.isPCD || dQuest.isPCD || 'não',
-        tipoDeficiencia: dPasta.tipoDeficiencia || "",
-        categoriasPCD: dPasta.categoriasPCD || [],
-        detalheTEA: dPasta.detalheTEA || "",
-        detalheTDAH: dPasta.detalheTDAH || dPasta.tipoNecessidade || "",
-        detalheIntelectual: dPasta.detalheIntelectual || "",
-        detalheFisico: dPasta.detalheFisico || "andante sem auxílio",
-        outrosDiagnosticos: dPasta.outrosDiagnosticos || "",
-        numeroCid: dPasta.numeroCid || dQuest.numeroCid || "",
-        tomaMedicao: dPasta.tomaMedicao || dQuest.tomaMedicao || 'não',
-        detalhesMedicao: dPasta.detalhesMedicao || dQuest.detalhesMedicao || "",
-        cartaoSus: dPasta.cartaoSus || dAtend.cartaoSus || "",
-        matriculaInteligente: dPasta.matriculaInteligente || dAlu.matriculaInteligente || "",
-        temAlergia: dQuest.alergias?.possui || dAtend.alunoPossuiAlergia || dPasta.alunoPossuiAlergia || "não",
-        historicoMedico: dQuest.alergias?.detalhes || dAtend.qualAlergia || dPasta.qualAlergia || "",
-        observacoesAlergia: dPasta.observacoesAlergia || "",
-        contato1_nome: dPasta.contato1_nome || dPasta.responsavel || dAlu.contato1_nome || dAlu.responsavel || dQuest.contatos?.[0]?.nome || "",
-        contato1_telefone: aplicarMascaraTelefone(dPasta.contato1_telefone || dPasta.contato || dAlu.contato1_telefone || dAlu.contato || dQuest.contatos?.[0]?.telefone || ""),
-        contato1_parentesco: dPasta.contato1_parentesco || dAlu.contato1_parentesco || "mãe",
-        contato2_nome: dPasta.contato2_nome || dAlu.contato2_nome || dQuest.contatos?.[1]?.nome || "",
-        contato2_telefone: aplicarMascaraTelefone(dPasta.contato2_telefone || dAlu.contato2_telefone || dQuest.contatos?.[1]?.telefone || ""),
-        contato2_parentesco: dPasta.contato2_parentesco || dAlu.contato2_parentesco || "pai",
-        endereco_rua: dPasta.endereco_rua || "",
-        endereco_bairro: dPasta.endereco_bairro || "",
-        endereco_cep: dPasta.endereco_cep || "",
-        tipoPerfil: 'aluno'
+        contato1_telefone: aplicarMascaraTelefone(dPasta.contato1_telefone || ""),
+        contato2_telefone: aplicarMascaraTelefone(dPasta.contato2_telefone || ""),
       });
       toast.success("perfil sincronizado!", { id: toastId });
-    } catch (error) {
-      toast.error("erro ao cruzar dados.", { id: toastId });
-    } finally { setBuscando(false); }
+    } catch (error) { toast.error("erro ao sincronizar."); } 
+    finally { setBuscando(false); }
   };
 
+  // 6. Envio do Formulário (SALVAMENTO COM VÍNCULO DE UNIDADE)
   const onSubmit = async (data) => {
+    if (!usuarioLogado?.unidadeid) return toast.error("erro: unidade não identificada!");
+
     const saveAction = async () => {
       const nomeNormalizado = paraBanco(data.nome);
       const dataNascLimpa = data.dataNascimento ? data.dataNascimento.replace(/-/g, '') : 'sem-data';
@@ -215,20 +196,24 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
       
       const payload = { 
         ...data, 
-        nome: nomeNormalizado,
+        nome: nomeNormalizado, 
         nomeBusca: nomeNormalizado,
+        // Trava de unidade do usuário logado
+        unidadeid: paraBanco(usuarioLogado.unidadeid),
+        unidade: paraBanco(usuarioLogado.unidade),
+        escolaid: paraBanco(usuarioLogado.escolaid),
+        escola: paraBanco(usuarioLogado.escola),
+        
         nomeMae: paraBanco(data.nomeMae),
         nomePai: paraBanco(data.nomePai),
         matriculaInteligente: paraBanco(data.matriculaInteligente),
         cartaoSus: paraBanco(data.cartaoSus),
         contato1_nome: paraBanco(data.contato1_nome),
-        contato1_telefone: data.contato1_telefone.replace(/\D/g, ""),
+        contato1_telefone: (data.contato1_telefone || "").replace(/\D/g, ""),
         contato2_nome: paraBanco(data.contato2_nome),
-        contato2_telefone: data.contato2_telefone.replace(/\D/g, ""),
+        contato2_telefone: (data.contato2_telefone || "").replace(/\D/g, ""),
         endereco_rua: paraBanco(data.endereco_rua),
         endereco_bairro: paraBanco(data.endereco_bairro),
-        peso: paraBanco(data.peso),
-        altura: paraBanco(data.altura),
         updatedAt: serverTimestamp()
       };
       
@@ -256,11 +241,11 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             <h2 className="text-2xl font-black text-slate-800 uppercase italic tracking-tighter">
               {dadosIniciais ? 'Atualizar Pasta' : 'Cadastro de Aluno'}
             </h2>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">R S • SALVAMENTO EM MINÚSCULAS</p>
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest italic">R S • UNIDADE: {usuarioLogado?.unidade || 'NÃO IDENTIFICADA'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button type="button" onClick={limparFormulario} title="Limpar formulário" className="p-2 hover:bg-amber-50 text-amber-500 rounded-full transition-all">
+          <button type="button" onClick={limparFormulario} title="Limpar" className="p-2 hover:bg-amber-50 text-amber-500 rounded-full transition-all">
             <Eraser size={26} />
           </button>
           <button type="button" onClick={() => (onClose ? onClose() : onVoltar())} className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-full transition-all"><X size={28} /></button>
@@ -329,7 +314,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         </div>
 
-        {/* DADOS FÍSICOS E TURMA - INCLUINDO ALTURA */}
+        {/* DADOS FÍSICOS */}
         <div className="md:col-span-2 grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Sexo</label>
@@ -350,7 +335,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
             <input {...register("peso")} disabled={watchNaoSabePeso} placeholder={watchNaoSabePeso ? "N/P" : "0.0"} className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600" />
           </div>
-          
           <div className="space-y-2">
             <div className="flex justify-between items-center px-1">
               <label className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Altura (m)</label>
@@ -358,7 +342,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
             </div>
             <input {...register("altura")} disabled={watchNaoSabeAltura} placeholder={watchNaoSabeAltura ? "N/S" : "0.00"} className="w-full px-5 py-4 bg-blue-50 border-2 border-blue-100 rounded-2xl font-bold outline-none focus:border-blue-600 text-blue-900" />
           </div>
-
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Turma</label>
             <input {...register("turma")} placeholder="Ex: 5º A" className="w-full px-5 py-4 bg-slate-50 rounded-2xl font-bold outline-none border-2 border-transparent focus:border-blue-600" />
@@ -383,7 +366,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           </div>
         )}
 
-        {/* PCD E CONDIÇÕES ESPECÍFICAS */}
+        {/* PCD */}
         <div className="md:col-span-2 p-6 bg-purple-50 rounded-[35px] border-2 border-purple-100 space-y-4 shadow-sm">
           <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Stethoscope size={14}/> Condição PCD & Acessibilidade</label>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -398,7 +381,7 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
           
           {watchIsPCD === 'sim' && (
             <div className="space-y-4">
-               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 {[
                   { id: 'tea', label: 'tea (autismo)', icon: <Brain size={16}/> },
                   { id: 'tdah', label: 'tdah / tod', icon: <Zap size={16}/> },
@@ -419,29 +402,6 @@ const FormCadastroAluno = ({ onVoltar, dadosEdicao, alunoParaEditar, modoPastaDi
                   )
                 })}
               </div>
-
-              {(watchCategoriasPCD.some(c => ['tea', 'tdah', 'intelectual'].includes(c))) && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-white/50 p-4 rounded-2xl border border-purple-100">
-                  {watchCategoriasPCD.includes('tea') && (
-                    <select {...register("detalheTEA")} className="w-full px-4 py-3 rounded-xl border-2 border-purple-50 bg-white font-bold text-xs outline-none">
-                      <option value="">nível tea...</option>
-                      <option value="nível 1">nível 1</option><option value="nível 2">nível 2</option><option value="nível 3">nível 3</option>
-                    </select>
-                  )}
-                  {watchCategoriasPCD.includes('tdah') && (
-                    <select {...register("detalheTDAH")} className="w-full px-4 py-3 rounded-xl border-2 border-purple-50 bg-white font-bold text-xs outline-none">
-                      <option value="">tipo tdah...</option>
-                      <option value="tdah - desatento">desatento</option><option value="tdah - hiperativo">hiperativo</option><option value="tdah - misto">misto</option><option value="tod">tod</option>
-                    </select>
-                  )}
-                  {watchCategoriasPCD.includes('intelectual') && (
-                    <select {...register("detalheIntelectual")} className="w-full px-4 py-3 rounded-xl border-2 border-purple-50 bg-white font-bold text-xs outline-none">
-                      <option value="">grau...</option>
-                      <option value="leve">leve</option><option value="moderada">moderada</option><option value="severa">severa</option>
-                    </select>
-                  )}
-                </div>
-              )}
 
               <div className="p-5 bg-white rounded-[25px] border-2 border-purple-100 space-y-3">
                 <label className="text-[10px] font-black text-purple-600 uppercase flex items-center gap-2 italic"><Accessibility size={16}/> Locomoção</label>

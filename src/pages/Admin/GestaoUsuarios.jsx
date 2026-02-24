@@ -6,7 +6,7 @@ import {
   Users, Trash2, CheckCircle, XCircle, Search, 
   LayoutDashboard, UserRound, Stethoscope, ClipboardList, Lock, FolderSearch,
   LogOut, HeartPulse, BarChart3, KeyRound, Contact,
-  Accessibility // ✅ Ícone adicionado
+  Accessibility, Building2, Eraser 
 } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -79,7 +79,6 @@ const GestaoUsuarios = () => {
         currentSessionId: usuarioAlvo?.currentSessionId || ""
       };
       
-      // Limpeza de campos legados para manter o banco limpo
       if (modulo === 'relatorios') { updates['modulosSidebar.triagem'] = deleteField(); }
       if (modulo === 'auditoria_pro') { updates['modulosSidebar.auditoria'] = deleteField(); }
       
@@ -109,7 +108,7 @@ const GestaoUsuarios = () => {
         "modulosSidebar.saude_escolar": liberado,
         "modulosSidebar.espelho": liberado, 
         "modulosSidebar.auditoria_pro": liberado, 
-        "modulosSidebar.saude_inclusiva": liberado, // ✅ Novo módulo adicionado ao alternar status
+        "modulosSidebar.saude_inclusiva": liberado,
         "modulosSidebar.auditoria": deleteField(), 
         "modulosSidebar.triagem": deleteField() 
       });
@@ -142,22 +141,48 @@ const GestaoUsuarios = () => {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <Toaster position="top-right" />
       
-      {/* Header */}
-      <div className="flex flex-col md:flex-row items-center justify-between bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 gap-6">
-        <div className="flex items-center gap-5">
-          <div className="bg-slate-900 text-white p-4 rounded-2xl"><Users size={28} /></div>
-          <div>
-            <h2 className="text-2xl font-black text-slate-800 uppercase italic">Controle de Acessos</h2>
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gestão de Sessões e Permissões</p>
+      {/* Header Expandido com Filtros */}
+      <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 space-y-6">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-5">
+            <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-lg"><Users size={28} /></div>
+            <div>
+              <h2 className="text-2xl font-black text-slate-800 uppercase italic">Controle de Acessos</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">Gestão de Sessões e Permissões</p>
+            </div>
+          </div>
+          <div className="relative w-full md:w-96">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <input 
+              type="text" placeholder="Buscar profissional ou unidade..."
+              className="w-full pl-12 pr-4 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-xs shadow-inner focus:ring-2 ring-blue-100 transition-all"
+              value={filtro} onChange={(e) => setFiltro(e.target.value)}
+            />
           </div>
         </div>
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" placeholder="Buscar profissional..."
-            className="w-full pl-12 pr-4 py-4 bg-slate-50 rounded-2xl outline-none font-bold text-xs shadow-inner"
-            value={filtro} onChange={(e) => setFiltro(e.target.value)}
-          />
+
+        {/* ✅ Filtros Rápidos Unidades */}
+        <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-50">
+          <button 
+            onClick={() => setFiltro('cept')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${filtro.toLowerCase() === 'cept' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            <Building2 size={14} /> Unidade CEPT
+          </button>
+          <button 
+            onClick={() => setFiltro('joana')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-[10px] font-black uppercase transition-all ${filtro.toLowerCase() === 'joana' ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+          >
+            <Building2 size={14} /> Unidade JOANA
+          </button>
+          {filtro && (
+            <button 
+              onClick={() => setFiltro('')}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-[10px] font-black uppercase text-rose-500 hover:bg-rose-50 transition-all"
+            >
+              <Eraser size={14} /> Limpar
+            </button>
+          )}
         </div>
       </div>
 
@@ -174,7 +199,7 @@ const GestaoUsuarios = () => {
             </thead>
             <tbody className="divide-y divide-slate-50">
               {loading ? (
-                <tr><td colSpan="3" className="p-20 text-center text-slate-400">Carregando base...</td></tr>
+                <tr><td colSpan="3" className="p-20 text-center text-slate-400 uppercase font-black text-xs animate-pulse">Carregando base...</td></tr>
               ) : usuariosFiltrados.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                   <td className="p-6">
@@ -194,27 +219,12 @@ const GestaoUsuarios = () => {
                     <div className="flex justify-center gap-1.5 flex-wrap max-w-[450px] mx-auto">
                       <ModuloBtn label="Dash" icon={<LayoutDashboard size={14} />} ativo={u.modulosSidebar?.dashboard} onClick={() => toggleModulo(u.id, 'dashboard', u.modulosSidebar?.dashboard)} />
                       <ModuloBtn label="Atend" icon={<Stethoscope size={14} />} ativo={u.modulosSidebar?.atendimento} onClick={() => toggleModulo(u.id, 'atendimento', u.modulosSidebar?.atendimento)} />
-                      
-                      {/* ✅ NOVO MÓDULO SAÚDE INCLUSIVA ADICIONADO AQUI */}
-                      <ModuloBtn 
-                        label="Inclusiva" 
-                        icon={<Accessibility size={14} />} 
-                        ativo={u.modulosSidebar?.saude_inclusiva} 
-                        onClick={() => toggleModulo(u.id, 'saude_inclusiva', u.modulosSidebar?.saude_inclusiva)} 
-                      />
-
+                      <ModuloBtn label="Inclusiva" icon={<Accessibility size={14} />} ativo={u.modulosSidebar?.saude_inclusiva} onClick={() => toggleModulo(u.id, 'saude_inclusiva', u.modulosSidebar?.saude_inclusiva)} />
                       <ModuloBtn label="Contato" icon={<Contact size={14} />} ativo={u.modulosSidebar?.espelho} onClick={() => toggleModulo(u.id, 'espelho', u.modulosSidebar?.espelho)} />
                       <ModuloBtn label="Saúde" icon={<HeartPulse size={14} />} ativo={u.modulosSidebar?.saude_escolar} onClick={() => toggleModulo(u.id, 'saude_escolar', u.modulosSidebar?.saude_escolar)} />
                       <ModuloBtn label="Pasta" icon={<FolderSearch size={14} />} ativo={u.modulosSidebar?.pasta_digital} onClick={() => toggleModulo(u.id, 'pasta_digital', u.modulosSidebar?.pasta_digital)} />
                       <ModuloBtn label="Cads" icon={<UserRound size={14} />} ativo={u.modulosSidebar?.pacientes} onClick={() => toggleModulo(u.id, 'pacientes', u.modulosSidebar?.pacientes)} />
-                      
-                      <ModuloBtn 
-                        label="Auditoria" 
-                        icon={<BarChart3 size={14} />} 
-                        ativo={u.modulosSidebar?.auditoria_pro} 
-                        onClick={() => toggleModulo(u.id, 'auditoria_pro', u.modulosSidebar?.auditoria_pro)} 
-                      />
-                      
+                      <ModuloBtn label="Audit" icon={<BarChart3 size={14} />} ativo={u.modulosSidebar?.auditoria_pro} onClick={() => toggleModulo(u.id, 'auditoria_pro', u.modulosSidebar?.auditoria_pro)} />
                       <ModuloBtn label="BAENF" icon={<ClipboardList size={14} />} ativo={u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem} onClick={() => toggleModulo(u.id, 'relatorios', u.modulosSidebar?.relatorios ?? u.modulosSidebar?.triagem)} />
                     </div>
                   </td>
@@ -224,7 +234,7 @@ const GestaoUsuarios = () => {
                       <button 
                         onClick={() => resetarSenha(u.email, u.nome)}
                         className="p-2.5 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                        title="Enviar Reset de Senha por E-mail"
+                        title="Reset Senha"
                       >
                         <KeyRound size={16} />
                       </button>
@@ -233,7 +243,7 @@ const GestaoUsuarios = () => {
                         disabled={!u.currentSessionId}
                         onClick={() => derrubarSessao(u.id, u.nome)}
                         className={`p-2.5 rounded-xl transition-all ${u.currentSessionId ? 'bg-orange-100 text-orange-600 hover:bg-orange-600 hover:text-white shadow-sm' : 'bg-slate-50 text-slate-200 cursor-not-allowed'}`}
-                        title="Desconectar Máquina"
+                        title="Derrubar Sessão"
                       >
                         <LogOut size={16} />
                       </button>

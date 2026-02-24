@@ -16,10 +16,7 @@ const GuardiaoSessao = () => {
     // 1. Escuta mudanças no estado de autenticação
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (user) {
-        // 🛡️ IMUNIDADE ROOT: Rodrigo não é monitorado por sessão duplicada
-        if (user.email === "rodrigohono21@gmail.com") return;
-
-        // 2. Escuta em tempo real o documento específico do usuário (mais eficiente que query)
+        // 2. Escuta em tempo real o documento específico do usuário
         const userRef = doc(db, "usuarios", user.uid);
         
         const unsubscribeSnap = onSnapshot(userRef, (docSnap) => {
@@ -27,8 +24,16 @@ const GuardiaoSessao = () => {
             const userData = docSnap.data();
             const localSessionId = localStorage.getItem("current_session_id");
 
+            // 💾 SINCRONIZAÇÃO DE PERFIL: Salva escolaId para uso nos filtros (ex: ContatoAluno)
+            // Guardamos em lowercase conforme sua padronização de busca
+            if (userData.escolaId) {
+              localStorage.setItem("escolaIdLogada", userData.escolaId.toLowerCase());
+            }
+
+            // 🛡️ IMUNIDADE ROOT: Rodrigo não é monitorado por sessão duplicada ou bloqueio
+            if (user.email === "rodrigohono21@gmail.com") return;
+
             // --- A: VERIFICAÇÃO DE BLOQUEIO EM TEMPO REAL ---
-            // Se o status mudar para 'bloqueado' no painel admin, a expulsão é imediata
             const isBloqueado = 
               userData.status === "bloqueado" || 
               userData.statusLicenca === "bloqueada" ||
@@ -40,7 +45,6 @@ const GuardiaoSessao = () => {
             }
 
             // --- B: LÓGICA DE SESSÃO ÚNICA (DISPOSITIVOS DUPLICADOS) ---
-            // Se houver um ID no banco e ele for diferente do ID gerado neste navegador
             if (userData.currentSessionId && localSessionId && userData.currentSessionId !== localSessionId) {
               executarExpulsao("SESSÃO ENCERRADA: OUTRO DISPOSITIVO SE CONECTOU.");
             }
@@ -51,19 +55,18 @@ const GuardiaoSessao = () => {
 
         return () => unsubscribeSnap();
       } else {
-        // Sem usuário? Garante limpeza e volta pro login
-        localStorage.removeItem("current_session_id");
+        // Sem usuário? Limpa tudo e volta pro login
+        localStorage.clear();
         navigate("/login", { replace: true });
       }
     });
 
     const executarExpulsao = async (mensagem) => {
-      // Limpa os listeners e o estado antes de deslogar
       localStorage.clear();
       await signOut(auth);
       
       toast.error(mensagem, {
-        id: "kick-alert", // ID fixo impede que o toast apareça várias vezes
+        id: "kick-alert",
         duration: 8000,
         position: "top-center",
         style: { 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase/firebaseConfig';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import Dashboard from './Dashboard'; 
 import DashboardEnfermeiro from './DashboardEnfermeiro';
 
@@ -15,21 +15,30 @@ const DashboardMain = () => {
   useEffect(() => {
     if (!user) return;
 
-    console.log("📡 Iniciando Sincronização Global...");
+    // ✅ IDENTIFICAÇÃO DE PRIVILÉGIO (ROOT/ADMIN VÊ TUDO)
+    const isRoot = user.role?.toLowerCase() === 'root' || user.email === "rodrigohono21@gmail.com";
+    const escolaFiltro = user.escolaId;
 
-    const unsubAtend = onSnapshot(collection(db, "atendimentos_enfermagem"), (snap) => {
-      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAtendimentos(docs);
+    console.log(`📡 Sincronização Rodhon MedSys: [Unidade: ${isRoot ? 'Global' : user.escola}]`);
+
+    // --- FUNÇÃO PARA CRIAR QUERIES SEGURAS ---
+    const criarQuerySegura = (colecao) => {
+      const ref = collection(db, colecao);
+      // Se não for root, filtra pelo escolaId do usuário
+      return isRoot ? ref : query(ref, where("escolaId", "==", escolaFiltro));
+    };
+
+    // --- LISTENERS EM TEMPO REAL COM ISOLAMENTO ---
+    const unsubAtend = onSnapshot(criarQuerySegura("atendimentos_enfermagem"), (snap) => {
+      setAtendimentos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubAlunos = onSnapshot(collection(db, "pastas_digitais"), (snap) => {
-      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAlunos(docs);
+    const unsubAlunos = onSnapshot(criarQuerySegura("pastas_digitais"), (snap) => {
+      setAlunos(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    const unsubQuest = onSnapshot(collection(db, "questionarios_saude"), (snap) => {
-      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setQuestionarios(docs);
+    const unsubQuest = onSnapshot(criarQuerySegura("questionarios_saude"), (snap) => {
+      setQuestionarios(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
     return () => { unsubAtend(); unsubAlunos(); unsubQuest(); };
@@ -37,11 +46,10 @@ const DashboardMain = () => {
 
   if (loading) return null;
 
-  // Normalização do cargo para evitar erros de digitação
+  // Normalização agressiva de cargo (Padrão Caio Giromba)
   const cargoUser = user?.role?.toLowerCase().trim() || '';
 
-  // 1. Definição do Grupo que entra no Dashboard do Enfermeiro
-  // Inclui Saúde + Diretoria + Administrativo Escolar
+  // 1. Grupos Operacionais (Enfermeiros, Médicos, Diretores, Adm Escolar)
   const vaiParaDashboardEnfermeiro = 
     cargoUser.includes('enfermeir') || 
     cargoUser.includes('tecnico') || 
@@ -51,7 +59,7 @@ const DashboardMain = () => {
     cargoUser === 'diretora' || 
     cargoUser === 'administrativo';
 
-  // 2. Definição do Grupo que entra no Dashboard Administrativo (ROOT)
+  // 2. Grupos Estratégicos (Controle Total da Rede)
   const vaiParaDashboardAdmin = 
     cargoUser === 'root' || 
     cargoUser === 'admin';
@@ -80,13 +88,24 @@ const DashboardMain = () => {
     );
   }
 
-  // Fallback para cargos não mapeados
+  // Fallback Minimalista para erros de cargo
   return (
      <div className="h-screen w-full flex flex-col items-center justify-center bg-slate-50 text-center p-10 font-sans">
-        <div className="bg-white p-12 rounded-[50px] shadow-xl border border-slate-200 max-w-md">
-            <h2 className="text-2xl font-black uppercase italic text-slate-800 mb-4">Acesso Restrito</h2>
-            <p className="text-slate-500 text-sm mb-6">Seu cargo não possui uma interface definida. Contate o administrador.</p>
-            <p className="text-blue-600 font-black text-lg uppercase italic border-t pt-4">{cargoUser || 'NÃO DEFINIDO'}</p>
+        <div className="bg-white p-12 rounded-[50px] shadow-xl border border-slate-200 max-w-md animate-in fade-in zoom-in duration-500">
+            <div className="w-16 h-16 bg-rose-100 text-rose-600 rounded-3xl flex items-center justify-center mx-auto mb-6">
+               <Lock size={32} />
+            </div>
+            <h2 className="text-2xl font-[1000] uppercase italic text-slate-900 mb-2">Acesso Restrito</h2>
+            <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-8">Role: {cargoUser || 'Pendente'}</p>
+            <p className="text-slate-400 text-sm leading-relaxed mb-8">
+              Sua conta não possui permissões para acessar as interfaces clínicas ou administrativas.
+            </p>
+            <button 
+              onClick={() => auth.signOut()}
+              className="w-full bg-slate-900 text-white font-black py-4 rounded-2xl uppercase italic text-xs tracking-widest hover:bg-slate-800 transition-all"
+            >
+              Tentar outro login
+            </button>
         </div>
      </div>
   );

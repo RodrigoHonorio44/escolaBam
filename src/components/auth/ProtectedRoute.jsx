@@ -23,22 +23,26 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // 🛡️ NORMALIZAÇÃO PARA PADRÃO "R S" (Lowercase)
+  const userRole = user.role?.toLowerCase().trim();
+  const userStatus = user.status?.toLowerCase().trim();
+  const licencaStatus = user.licencaStatus?.toLowerCase().trim() || user.statusLicenca?.toLowerCase().trim();
+
   // 3. IMUNIDADE ROOT (Rodrigo pula as travas de bloqueio e expiração aqui)
-  const isRoot = user.role === 'root' || user.email === "rodrigohono21@gmail.com";
+  const isRoot = userRole === 'root' || user.email === "rodrigohono21@gmail.com";
 
   if (!isRoot) {
     // 🛡️ VERIFICAÇÃO DE BLOQUEIO / EXPIRAÇÃO REFORÇADA
     const isBloqueado = 
-      user.status === 'bloqueado' || 
-      user.licencaStatus === 'bloqueada' || 
-      user.statusLicenca === 'bloqueada';
+      userStatus === 'bloqueado' || 
+      licencaStatus === 'bloqueada' || 
+      licencaStatus === 'expirada';
 
     if (isBloqueado) {
       return <Navigate to="/login" replace />;
     }
 
     // 🛡️ TRAVA DE PRIMEIRO ACESSO (Obriga a trocar senha)
-    // Importante: Verifique se a rota no seu App.js é '/trocar-senha' ou '/alterar-senha'
     const rotaSeguranca = '/trocar-senha'; 
     
     if (user.primeiroAcesso === true && location.pathname !== rotaSeguranca) {
@@ -47,9 +51,12 @@ export const ProtectedRoute = ({ children, allowedRoles }) => {
   }
 
   // 4. VERIFICAÇÃO DE PERMISSÕES (ROLES)
-  if (allowedRoles && !isRoot && !allowedRoles.includes(user.role)) {
-    // Se não tiver permissão, volta para a home
-    return <Navigate to="/" replace />; 
+  // Comparamos sempre em lowercase para evitar erro de "Admin" vs "admin"
+  if (allowedRoles && !isRoot) {
+    const rolesPermitidas = allowedRoles.map(r => r.toLowerCase());
+    if (!rolesPermitidas.includes(userRole)) {
+      return <Navigate to="/" replace />; 
+    }
   }
 
   // 5. SE PASSOU POR TUDO, LIBERA O ACESSO

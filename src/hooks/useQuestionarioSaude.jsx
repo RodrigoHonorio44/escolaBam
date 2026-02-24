@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { db } from '../firebase/firebaseConfig';
 import { 
   doc, getDoc, serverTimestamp, collection, 
   query, orderBy, getDocs, limit, startAt, endAt, writeBatch, where 
 } from 'firebase/firestore';
 import toast from 'react-hot-toast';
+import { useAuth } from '../context/AuthContext';
 
 export const useQuestionarioSaude = (onSucesso) => {
   const [loading, setLoading] = useState(false);
@@ -13,11 +14,21 @@ export const useQuestionarioSaude = (onSucesso) => {
   const [sugestoes, setSugestoes] = useState([]);
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const campoBuscaRef = useRef(null);
+  const { user } = useAuth();
 
-  const formatarNomeRS = (str) => {
+  // 🛡️ NORMALIZAÇÃO DE UNIDADE (Padrão R S)
+  const escolaUsuarioId = user?.escolaId?.toLowerCase().trim();
+  const isRoot = user?.role?.toLowerCase() === 'root' || user?.email === "rodrigohono21@gmail.com";
+
+  // --- HELPERS DE FORMATAÇÃO ---
+  const formatarNomeRS = useCallback((str) => {
     if (!str) return '';
-    return str.toLowerCase().split(' ').map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-  };
+    const excessoes = ['de', 'do', 'da', 'dos', 'das', 'e'];
+    return str.toLowerCase().split(' ').map(p => {
+      if (p.length <= 2 && excessoes.includes(p)) return p;
+      return p.charAt(0).toUpperCase() + p.slice(1);
+    }).join(' ');
+  }, []);
 
   const normalizeParaBanco = (val) => {
     if (typeof val !== 'string') return val;
@@ -26,20 +37,14 @@ export const useQuestionarioSaude = (onSucesso) => {
 
   const formatarTelefone = (valor) => {
     const tel = (valor || "").replace(/\D/g, "").slice(0, 11);
-    if (tel.length > 10) {
-      return tel.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
-    } else if (tel.length > 6) {
-      return tel.replace(/^(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
-    } else if (tel.length > 2) {
-      return tel.replace(/^(\d{2})(\d)/, "($1) $2");
-    } else if (tel.length > 0) {
-      return tel.replace(/^(\d)/, "($1");
-    }
-    return tel;
+    if (tel.length > 10) return tel.replace(/^(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
+    if (tel.length > 6) return tel.replace(/^(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
+    if (tel.length > 2) return tel.replace(/^(\d{2})(\d)/, "($1) $2");
+    return tel.length > 0 ? tel.replace(/^(\d)/, "($1") : tel;
   };
 
   const estadoInicial = useMemo(() => ({
-    tipoEntidade: 'aluno', // 'aluno' ou 'funcionario'
+    tipoEntidade: 'aluno',
     alunoNome: '',
     dataNascimento: '',
     turma: '',
@@ -75,18 +80,14 @@ export const useQuestionarioSaude = (onSucesso) => {
     dentistaUltimaConsulta: '', 
     tipoParto: '', 
     viverCom: '', 
-    dificuldades: {
-      enxergar: false, falar: false, ouvir: false, andar: false, movimentarMembros: false
-    },
+    dificuldades: { enxergar: false, falar: false, ouvir: false, andar: false, movimentarMembros: false },
     caminharDificuldade: 'não',
     problemaVisao: 'não',
     contatoEmergenciaPrioridade: '',
-    contatos: [
-      { nome: '', telefone: '' },
-      { nome: '', telefone: '' }
-    ],
+    contatos: [{ nome: '', telefone: '' }, { nome: '', telefone: '' }],
     autorizacaoEmergencia: false,
     pacienteId: '',
+    escolaId: '', 
   }), []);
 
   const [formData, setFormData] = useState(estadoInicial);
@@ -106,27 +107,27 @@ export const useQuestionarioSaude = (onSucesso) => {
     toast.success("formulário resetado");
   };
 
+  // --- 1. BUSCA DE SUGESTÕES (Trava de Unidade) ---
   const buscarSugestoes = async (valor) => {
     const termo = normalizeParaBanco(valor);
     if (termo.length < 3) { setSugestoes([]); setMostrarSugestoes(false); return; }
+    
     setBuscandoNome(true);
     try {
-      const q = query(
-        collection(db, "pastas_digitais"), 
-        orderBy("nomeBusca"), 
-        startAt(termo), 
-        endAt(termo + '\uf8ff'), 
-        limit(6)
-      );
+      const ref = collection(db, "pastas_digitais");
+      let q;
+      if (isRoot) {
+        q = query(ref, orderBy("nomeBusca"), startAt(termo), endAt(termo + '\uf8ff'), limit(6));
+      } else {
+        q = query(ref, where("escolaId", "==", escolaUsuarioId), orderBy("nomeBusca"), startAt(termo), endAt(termo + '\uf8ff'), limit(6));
+      }
+
       const snap = await getDocs(q);
-      setSugestoes(snap.docs.map(d => {
-        const data = d.data();
-        return { 
-          id: d.id, 
-          ...data,
-          nomeExibicao: formatarNomeRS(data.nome || data.nomeBusca)
-        };
-      }));
+      setSugestoes(snap.docs.map(d => ({ 
+        id: d.id, 
+        ...d.data(),
+        nomeExibicao: formatarNomeRS(d.data().nome || d.data().nomeBusca)
+      })));
       setMostrarSugestoes(true);
     } catch (error) { 
       console.error("Erro na busca:", error); 
@@ -135,12 +136,20 @@ export const useQuestionarioSaude = (onSucesso) => {
     }
   };
 
+  // --- 2. SELEÇÃO E CRUZAMENTO (Muro de Berlim) ---
   const selecionarPaciente = async (paciente) => {
     setMostrarSugestoes(false);
     setFetching(true);
     const toastId = toast.loading("sincronizando dados...");
     
     try {
+      const escolaDono = paciente.escolaId?.toLowerCase().trim();
+      if (!isRoot && escolaDono && escolaDono !== escolaUsuarioId) {
+        toast.error("Este perfil pertence a outra unidade.", { id: toastId });
+        setFetching(false);
+        return;
+      }
+
       const qAtend = query(
         collection(db, "atendimentos_enfermagem"),
         where("pacienteId", "==", paciente.id),
@@ -148,7 +157,6 @@ export const useQuestionarioSaude = (onSucesso) => {
         limit(1)
       );
 
-      // Inteligência: Tenta buscar também na coleção de funcionários
       const [questSnap, pastaSnap, alunoSnap, atendSnap, funcSnap] = await Promise.all([
         getDoc(doc(db, "questionarios_saude", paciente.id)),
         getDoc(doc(db, "pastas_digitais", paciente.id)),
@@ -163,11 +171,10 @@ export const useQuestionarioSaude = (onSucesso) => {
       const dAtend = !atendSnap.empty ? atendSnap.docs[0].data() : {};
       const dFunc = funcSnap.exists() ? funcSnap.data() : {};
 
-      // Inteligência: Identifica se é funcionário
-      const ehFuncionario = funcSnap.exists() || dPasta.cargo || dPasta.tipo === 'funcionario';
+      const ehFuncionario = funcSnap.exists() || dPasta.cargo || dPasta.tipoPerfil === 'funcionario';
 
       const mapHealthField = (field, fallbackPossui = 'não', fallbackDet = '') => ({
-        possui: dQuest[field]?.possui || fallbackPossui,
+        possui: dQuest[field]?.possui || (dAtend[field] ? 'sim' : null) || fallbackPossui,
         detalhes: dQuest[field]?.detalhes || dQuest[field]?.qual || dQuest[field]?.motivo || fallbackDet,
         motivo: dQuest[field]?.motivo || dQuest[field]?.detalhes || fallbackDet,
         qual: dQuest[field]?.qual || dQuest[field]?.detalhes || fallbackDet
@@ -177,6 +184,7 @@ export const useQuestionarioSaude = (onSucesso) => {
         ...estadoInicial,
         ...dQuest,
         pacienteId: paciente.id,
+        escolaId: dPasta.escolaId || escolaUsuarioId, 
         tipoEntidade: ehFuncionario ? 'funcionario' : 'aluno',
         alunoNome: formatarNomeRS(dQuest.alunoNome || dAtend.nomePaciente || dPasta.nomeBusca || dAlu.nome || dFunc.nome || paciente.nome || ''),
         cargo: dFunc.cargo || dPasta.cargo || dQuest.cargo || '',
@@ -216,6 +224,56 @@ export const useQuestionarioSaude = (onSucesso) => {
     }
   };
 
+  // --- 3. SUBMIT (Carimbo Final R S) ---
+  const handleSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!formData.pacienteId) return toast.error("selecione uma pessoa primeiro.");
+    
+    setLoading(true);
+    const toastId = toast.loading("sincronizando prontuário...");
+    
+    try {
+      const batch = writeBatch(db);
+      
+      // ✅ Normalização para Lowercase em todos os campos de texto
+      const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
+        typeof value === 'string' && key !== 'pacienteId' ? normalizeParaBanco(value) : value
+      );
+
+      const escolaFinal = isRoot && formData.escolaId ? formData.escolaId : escolaUsuarioId;
+      payload.updatedAt = serverTimestamp();
+      payload.statusFicha = 'concluída';
+      payload.escolaId = escolaFinal;
+
+      batch.set(doc(db, "questionarios_saude", formData.pacienteId), payload, { merge: true });
+
+      batch.set(doc(db, "pastas_digitais", formData.pacienteId), {
+        nomeBusca: payload.alunoNome, 
+        tipoEntidade: payload.tipoEntidade,
+        temQuestionarioSaude: true,
+        statusSaude: 'preenchido',
+        ultimaAtualizacao: serverTimestamp(),
+        escolaId: escolaFinal
+      }, { merge: true });
+
+      const colecaoDestino = formData.tipoEntidade === 'funcionario' ? "funcionarios" : "alunos";
+      batch.set(doc(db, colecaoDestino, formData.pacienteId), {
+        nome: payload.alunoNome,
+        escolaId: escolaFinal,
+        ultimaAtualizacao: serverTimestamp()
+      }, { merge: true });
+
+      await batch.commit();
+      toast.success("questionário salvo!", { id: toastId });
+      if (onSucesso) onSucesso();
+    } catch (error) { 
+      console.error(error);
+      toast.error("erro ao salvar.", { id: toastId }); 
+    } finally { 
+      setLoading(false); 
+    }
+  };
+
   const handleChange = (path, value) => {
     const keys = path.split('.');
     setFormData(prev => {
@@ -223,6 +281,8 @@ export const useQuestionarioSaude = (onSucesso) => {
         const rootKey = keys[0];
         const childKey = keys[1];
         const rootObj = prev[rootKey] || {};
+        
+        // Sincroniza campos de detalhes
         if (['detalhes', 'motivo', 'qual'].includes(childKey)) {
           return { 
             ...prev, 
@@ -231,8 +291,7 @@ export const useQuestionarioSaude = (onSucesso) => {
         }
         return { ...prev, [rootKey]: { ...rootObj, [childKey]: value } };
       }
-      const finalValue = path === 'alunoNome' ? formatarNomeRS(value) : value;
-      return { ...prev, [path]: finalValue ?? '' };
+      return { ...prev, [path]: path === 'alunoNome' ? formatarNomeRS(value) : (value ?? '') };
     });
   };
 
@@ -247,67 +306,6 @@ export const useQuestionarioSaude = (onSucesso) => {
       ...prev,
       dificuldades: { ...prev.dificuldades, [campo]: !prev.dificuldades[campo] }
     }));
-  };
-
-  const validarCampos = () => {
-    if (!formData.pacienteId) return "selecione uma pessoa primeiro.";
-    if (!formData.alunoNome) return "o nome é obrigatório.";
-    if (!formData.dataNascimento) return "data de nascimento é obrigatória.";
-    
-    // Inteligência: Só exige turma se for aluno
-    if (formData.tipoEntidade === 'aluno' && !formData.turma) return "selecione a turma.";
-    
-    const tel = (formData.contatos[0].telefone || "").replace(/\D/g, "");
-    if (tel.length < 10) return "o telefone principal deve ter no mínimo 10 dígitos.";
-    
-    return null;
-  };
-
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
-    
-    const erro = validarCampos();
-    if (erro) return toast.error(erro);
-    
-    setLoading(true);
-    const toastId = toast.loading("sincronizando prontuário...");
-    
-    try {
-      const batch = writeBatch(db);
-
-      const payload = JSON.parse(JSON.stringify(formData), (key, value) => 
-        typeof value === 'string' ? normalizeParaBanco(value) : value
-      );
-
-      payload.updatedAt = serverTimestamp();
-      payload.statusFicha = 'concluída';
-
-      batch.set(doc(db, "questionarios_saude", formData.pacienteId), payload, { merge: true });
-
-      batch.set(doc(db, "pastas_digitais", formData.pacienteId), {
-        nomeBusca: payload.alunoNome, 
-        tipoEntidade: payload.tipoEntidade,
-        temQuestionarioSaude: true,
-        statusSaude: 'preenchido',
-        ultimaAtualizacao: serverTimestamp()
-      }, { merge: true });
-
-      // Atualiza coleção de origem dependendo do tipo
-      const colecaoDestino = formData.tipoEntidade === 'funcionario' ? "funcionarios" : "alunos";
-      batch.set(doc(db, colecaoDestino, formData.pacienteId), {
-        nome: payload.alunoNome,
-        ultimaAtualizacao: serverTimestamp()
-      }, { merge: true });
-
-      await batch.commit();
-      toast.success("dados sincronizados!", { id: toastId });
-      if (onSucesso) onSucesso();
-    } catch (error) { 
-      console.error(error);
-      toast.error("erro ao salvar.", { id: toastId }); 
-    } finally { 
-      setLoading(false); 
-    }
   };
 
   return {
